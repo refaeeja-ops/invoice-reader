@@ -31,6 +31,9 @@
 Tesseract.js (Apache-2.0)، jsQR (Apache-2.0)، PDF.js (Apache-2.0)، بيانات اللغة tessdata_best و tessdata_fast/script/Arabic (Apache-2.0).
 مصنّف الأرقام دُرّب على خطوط Google Fonts المجانية (OFL)؛ أدوات التدريب في مجلد `tools/`.
 
+- يظهر اسم الملف ومساره (داخل المجلد المختار) تحت اسم المورّد، ويُصدَّر في عمود «الملف»، ويُرسل إلى الشيت (عمود FilePath إن وُجد، وإلا في InvNote).
+- لا يُقبل نفس الملف مرتين: يُتجاهل الملف إذا سبق اختياره (نفس الاسم والحجم والتاريخ) أو إذا كان محتواه مطابقًا لملف آخر حتى لو تغيّر اسمه.
+
 ## الربط مع Google Sheet (مجاني)
 1. ارفع ملف «نموذج الفواتير» إلى Google Drive وافتحه كـ Google Sheet.
 2. Extensions ← Apps Script، والصق محتوى `apps-script/Code.gs` واحفظ.

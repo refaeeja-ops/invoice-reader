@@ -189,7 +189,7 @@
       const v = cands.sort((a, b) => clean(b) - clean(a))[0]; if (v) d.vendor_name = v;
     }
     d.qr_raw = qRaw || ''; d._qr = q; d._raw = raw.slice(0, 20000);
-    d.file = pathOf(file) || 'صورة من الكاميرا';
+    d.file = pathOf(file) || 'صورة من الكاميرا'; d.file_name = file.name || '';
     return { d, pages: list.map(p => toUrl(p.canvas)) };
   }
   function toUrl(c) { // صورة للعرض فقط، بحجم أصغر لتوفير الذاكرة
@@ -202,14 +202,26 @@
   // ---------- طابور الدفعة ----------
   const isInv = f => /^image\/|pdf/.test(f.type) || /\.(pdf|jpe?g|png|webp|heic)$/i.test(f.name || '');
   const pathOf = f => f.webkitRelativePath || f._path || f.name || '';
+  // بصمة الملف: الاسم + الحجم + تاريخ التعديل (لمنع اختيار نفس الملف أكثر من مرة)
+  const sigOf = f => [String(f.name || '').toLowerCase(), f.size || 0, f.lastModified || 0].join('|');
+  const isCam = f => !f.webkitRelativePath && !f._path && /^image\.(jpe?g|png)$/i.test(f.name || '');
+  async function hashOf(f) {
+    try { const b = await crypto.subtle.digest('SHA-256', await f.arrayBuffer()); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); } catch { return ''; }
+  }
   function addFiles(files, fromFolder) {
     const allF = [...(files || [])];
     files = allF.filter(f => isInv(f) && !/^\./.test(f.name || ''));
+    // منع التكرار: ملف سبق اختياره (في الملخص أو الدفعة الحالية) أو مكرر في نفس الاختيار
+    const seen = new Set([...all().map(x => x._sig).filter(Boolean), ...queue.map(j => j.sig), ...Object.values(live).map(v => v.sig).filter(Boolean)]);
+    const dupF = [];
+    files = files.filter(f => { const g = sigOf(f); if (!isCam(f) && seen.has(g)) { dupF.push(pathOf(f)); return false; } seen.add(g); return true; });
+    if (dupF.length) setTimeout(() => toast(`تم تجاهل ${dupF.length} ملف سبق اختياره: ${dupF.slice(0, 3).join('، ')}${dupF.length > 3 ? '…' : ''}`), fromFolder ? 1500 : 50);
+    if (!files.length && dupF.length) return;
     if (fromFolder) files.sort((a, b) => pathOf(a).localeCompare(pathOf(b), 'ar', { numeric: true }));
     const skipped = allF.length - files.length;
     if (!files.length) { if (allF.length || fromFolder) toast(fromFolder ? 'لا توجد صور أو ملفات PDF في هذا المجلد' : 'الملف ليس صورة أو PDF'); return; }
     if (fromFolder) setTimeout(() => toast(`وُجدت ${files.length} فاتورة في المجلد` + (skipped ? ` (تُجوهل ${skipped} ملف ليس صورة أو PDF)` : '')), 50);
-    files.forEach((f, i) => { const id = Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6); queue.push({ id, file: f }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا' }; });
+    files.forEach((f, i) => { const id = Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6); const sig = sigOf(f); queue.push({ id, file: f, sig }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا', sig }; });
     drawList(); if (files.length > 1 && !fromFolder) toast(`أُضيفت ${files.length} فواتير إلى الدفعة`);
     pump();
   }
@@ -224,9 +236,12 @@
       const say = m => status(N > 1 ? `فاتورة ${n} من ${N}: ${m}` : m);
       setProg = p => progress(((n - 1) + Math.min(1, p)) / N);
       setProg(0.02); say('جارٍ فتح الملف…');
+      const hash = await hashOf(job.file);
+      const twin = hash && all().find(x => x._hash === hash);
+      if (twin) { live[job.id].status = 'dup'; live[job.id].err = 'نفس محتوى الملف «' + (twin.file || '') + '»'; done++; drawList(); continue; }
       try {
         const { d, pages: urls } = await processFile(job.file, say);
-        d._id = job.id; d._at = new Date().toISOString(); d._warnings = P.checks(d, d._qr);
+        d._id = job.id; d._at = new Date().toISOString(); d._sig = job.sig; d._hash = hash; d._warnings = P.checks(d, d._qr);
         imgs[job.id] = urls; delete live[job.id];
         store(d); batch.push(job.id);
         if (N === 1) open(job.id, true); // الدفعة لا تفتح شاشة المراجعة تلقائيًا؛ النتائج تظهر في الملخص
@@ -485,7 +500,7 @@
     if (!appr.length) return toast('لا توجد فواتير معتمدة جديدة للإرسال');
     const ready = appr.filter(x => x._supId != null && x.project_id != null && x.product_id != null), missing = appr.length - ready.length;
     if (!ready.length) return status(`لم يُرسل شيء: ${missing} فاتورة معتمدة ينقصها المورّد المسجل أو المشروع أو المنتج. اخترها من القوائم الحمراء.`, true);
-    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '' })) };
+    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '', FilePath: x.file || '' })) };
     $('gsSend').disabled = true; status(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
     try {
       const r = await fetch(gs.url, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' }); const j = await r.json();
@@ -516,14 +531,14 @@
     $('filters').hidden = !h.length;
     $('filters').innerHTML = [['all', 'الكل', h.length], ['pending', 'بانتظار الاعتماد', nP], ['approved', 'معتمدة', nA]]
       .map(([k, l, n]) => `<button data-filter="${k}" aria-pressed="${filter === k}">${l} (${n})</button>`).join('');
-    const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة' };
-    const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="6">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
+    const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة', dup: 'تم تجاهله: الملف مختار سابقًا' };
+    const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="6">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' || v.status === 'dup' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
     const shown = shownList();
     const rows = shown.map(x => {
       const id = esc(x._id), dup = dm.get(x._id), w = x._warnings || [];
       const notes = [...(dup ? ['<span class="dupb">مكررة</span>'] : []), ...refNotes(x).map(([c, m]) => `<span class="${c}">• ${esc(m)}</span>`), ...w.map(m => `<span class="wn">• ${esc(m)}</span>`)].join('');
       return `<tr class="${cur && cur._id === x._id ? 'sel' : ''}${dup ? ' dup' : ''}${x._approved ? ' appr' : ''}"${dup ? ` title="${esc(x._dup)}"` : ''}>
-        <td data-l="المورّد"><b>${esc(x.vendor_name || 'بدون اسم')}</b><small>${esc(x.file || '')}</small>${supCell(x)}</td>
+        <td data-l="المورّد"><b>${esc(x.vendor_name || 'بدون اسم')}</b><small class="fpath" title="${esc(x.file || '')}">📄 ${esc(x.file || '')}</small>${supCell(x)}</td>
         <td data-l="الرقم الضريبي" class="mono">${esc(x.vendor_tax_number || '—')}</td>
         <td data-l="رقم الفاتورة" class="nw">${esc(x.invoice_number || '—')}</td>
         <td data-l="التاريخ" class="nw">${esc(x.invoice_date || '—')}</td>

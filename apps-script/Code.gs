@@ -124,7 +124,8 @@ function doPost(e) {
       const vals = {
         InvID: ++maxId, InvoiceNo: d.InvoiceNo, SupID: d.SupID === '' ? '' : d.SupID, ProjectID: d.ProjectID, InvDate: date, Date: date,
         Invamount: d.Invamount, invVat: d.invVat, Product: d.ProductID, ProductID: d.ProductID, ProductName: d.ProductName,
-        SupfName: d.SupfName, ProjectName: d.ProjectName, InvEnteryDate: today, EnteredBy: who, InvNote: d.Note || ''
+        SupfName: d.SupfName, ProjectName: d.ProjectName, InvEnteryDate: today, EnteredBy: who, FilePath: d.FilePath || '', FileName: d.FilePath || '',
+        InvNote: [d.Note || '', ih.indexOf('FilePath') < 0 && ih.indexOf('FileName') < 0 && d.FilePath ? 'الملف: ' + d.FilePath : ''].filter(Boolean).join(' | ')
       };
       invRows.push(ih.map(h => vals[h] !== undefined && vals[h] !== null ? vals[h] : ''));
       // VatReport: «ProductName» المكرر بعد ProjectID = اسم المشروع
