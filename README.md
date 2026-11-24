@@ -30,3 +30,12 @@
 ## المكتبات (كلها مجانية ومفتوحة المصدر)
 Tesseract.js (Apache-2.0)، jsQR (Apache-2.0)، PDF.js (Apache-2.0)، بيانات اللغة tessdata_best و tessdata_fast/script/Arabic (Apache-2.0).
 مصنّف الأرقام دُرّب على خطوط Google Fonts المجانية (OFL)؛ أدوات التدريب في مجلد `tools/`.
+
+## الربط مع Google Sheet (مجاني)
+1. ارفع ملف «نموذج الفواتير» إلى Google Drive وافتحه كـ Google Sheet.
+2. Extensions ← Apps Script، والصق محتوى `apps-script/Code.gs` واحفظ.
+3. Deploy ← New deployment ← Web app، و Execute as: Me، و Who has access: Anyone ← Deploy، وانسخ الرابط.
+4. أعد فتح الشيت، ومن قائمة «قارئ الفواتير» ← «عرض رمز الربط» انسخ الرمز.
+5. في التطبيق: «ربط Google Sheet» والصق الرابط والرمز. بعدها:
+   - زر «إرسال المعتمدة إلى Google Sheet» يضيف الفواتير المعتمدة (التي حُدد لها المورّد والمشروع والمنتج) إلى InvoiceT و VatReport، ويتجاهل المكرر.
+   - زر «تحديث البيانات من Google Sheet» يقرأ الموردين والمشاريع والمنتجات من الشيت مباشرة.

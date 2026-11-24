@@ -135,6 +135,11 @@ table.qd td.hi{color:var(--stamp);font-weight:700}table.qd td.lo{color:var(--ok)
 .vhead{display:flex;flex-direction:column;gap:2px;margin-bottom:10px;font-size:14px;color:var(--mute)}.vhead b{color:var(--ink);font-size:16px}
 table.list select.unset{background:light-dark(#fff1f3,#3a1820);border:2px solid var(--stamp);color:var(--stamp);font-weight:700}
 table.list select.unset option{color:var(--ink);font-weight:400;background:var(--paper)}
+.gs{margin:0 0 12px;border:1px solid var(--line);border-radius:6px;padding:4px 12px}.gs summary{font-weight:500;color:var(--ink)}
+.gs[open]{padding-bottom:12px}.gsf{display:flex;flex-wrap:wrap;gap:8px}.gsf input{flex:1 1 220px}
+#gsState.on{color:var(--ok)}
+.gsbtn{border-color:#188038;color:#188038;font-weight:700}
+.sent{display:block;font-size:12px;color:#188038;text-align:center}
 .dupnote{margin:12px 0 0;background:light-dark(#fff1f3,#3a1820);color:var(--stamp);border-radius:4px;padding:8px 12px}
 .dupb{display:inline-block;font-size:12px;font-weight:700;color:var(--paper);background:var(--stamp);border-radius:3px;padding:0 6px;margin-inline-end:6px}
 table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{color:var(--ok)}
@@ -219,13 +224,19 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
     <p class="dupnote" id="dupNote" hidden></p>
     <div class="refbar" id="refbar">
       <div class="refi"><b>بياناتك المرجعية</b><span id="refInfo">لم يُحمَّل ملف بعد. حمّل ملف Excel الذي فيه أوراق SuppliersT و ProjectsT و ProductsT و SupplierProductT لمطابقة الموردين واختيار المشروع والمنتج. يُقرأ الملف داخل جهازك ولا يُرفع لأي مكان.</span></div>
-      <div class="refb"><label class="btn"><input type="file" id="refFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">تحميل ملف البيانات</label><button id="refClear" hidden>إزالة الملف</button></div>
+      <div class="refb"><button id="gsLoad" hidden>تحديث البيانات من Google Sheet</button><label class="btn"><input type="file" id="refFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">تحميل ملف البيانات</label><button id="refClear" hidden>إزالة الملف</button></div>
     </div>
+    <details class="gs" id="gsBox">
+      <summary>ربط Google Sheet <span id="gsState">(غير مربوط)</span></summary>
+      <p class="note">الصق رابط Web app ورمز الربط من الشيت (قائمة «قارئ الفواتير» ← «عرض رمز الربط»). بعدها يرسل زر «إرسال المعتمدة إلى Google Sheet» الفواتير المعتمدة إلى InvoiceT و VatReport بدون تكرار، ويمكنك تحميل الموردين والمشاريع والمنتجات من الشيت مباشرة.</p>
+      <div class="gsf"><input id="gsUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" aria-label="رابط Web app" dir="ltr"><input id="gsToken" placeholder="رمز الربط" aria-label="رمز الربط" dir="ltr"><button class="primary" id="gsSave">حفظ واختبار الربط</button><button id="gsForget" hidden>إلغاء الربط</button></div>
+    </details>
     <div class="exp" id="exportBar" hidden>
       <button class="primary" id="xAll">تصدير الكل إلى Excel</button>
       <button id="cAll">الفواتير CSV</button>
       <button id="cItems">البنود CSV</button>
       <button id="xVat">VatReport</button>
+      <button id="gsSend" class="gsbtn" hidden>إرسال المعتمدة إلى Google Sheet</button>
       <button id="clearAll" class="danger">حذف الكل</button>
     </div>
     <div class="filters" id="filters" role="group" aria-label="تصفية الفواتير" hidden></div>

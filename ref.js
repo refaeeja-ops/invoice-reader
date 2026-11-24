@@ -134,5 +134,15 @@
   }
   const existsInvoice = (ref, supId, invNo) => ref && supId != null && invKey(invNo) ? ref.inv[supId + '|' + invKey(invNo)] || null : null;
 
-  root.InvoiceRef = { load, readXlsx, build, matchSupplier, supplier, project, product, activeProjects, productsFor, existsInvoice, digits, int };
+  // من مصفوفات Google Sheet (الصف الأول عناوين) إلى نفس شكل قراءة ملف Excel
+  function fromSheets(sheets, title) {
+    const book = {};
+    Object.entries(sheets || {}).forEach(([name, rows]) => {
+      const head = (rows[0] || []).map(h => String(h ?? '').trim());
+      book['#' + name] = head;
+      book[name] = rows.slice(1).filter(r => r.some(v => v !== '' && v != null)).map(r => { const o = {}; head.forEach((h, i) => { if (h) o[h] = r[i] === '' ? null : r[i]; }); return o; });
+    });
+    const ref = build(book, title || 'Google Sheet'); ref.fromSheet = true; return ref;
+  }
+  root.InvoiceRef = { fromSheets, load, readXlsx, build, matchSupplier, supplier, project, product, activeProjects, productsFor, existsInvoice, digits, int };
 })(typeof self !== 'undefined' ? self : this);

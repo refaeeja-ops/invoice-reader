@@ -394,7 +394,7 @@
   function refNotes(x) {
     if (!ref) return [];
     const n = [];
-    if (x._exists) n.push(['wn', `مسجلة سابقًا في InvoiceT${x._exists !== true ? ' (InvID ' + x._exists + ')' : ''}`]);
+    if (x._exists && String(x._exists) !== String(x._sent)) n.push(['wn', `مسجلة سابقًا في InvoiceT${x._exists !== true ? ' (InvID ' + x._exists + ')' : ''}`]);
     if (x._supId == null) n.push(['wn', 'المورّد غير موجود في SuppliersT: اختره من القائمة']);
     else if (x._supBy === 'name') n.push(['wn', 'طوبق المورّد بالاسم فقط، تأكد منه']);
     if (x.project_id == null) n.push(['todo', 'اختر المشروع']);
@@ -443,6 +443,59 @@
     persist(); drawList();
   });
 
+  // ---------- ربط Google Sheet (مجاني عبر Google Apps Script) ----------
+  const GKEY = 'invoice-reader-gsheet-v1';
+  let gs = null; try { gs = JSON.parse(localStorage.getItem(GKEY)) || null; } catch { gs = null; }
+  function gsUi() {
+    $('gsState').textContent = gs ? '(مربوط ✓)' : '(غير مربوط)'; $('gsState').classList.toggle('on', !!gs);
+    $('gsSend').hidden = !gs; $('gsLoad').hidden = !gs; $('gsForget').hidden = !gs;
+    if (gs) { $('gsUrl').value = gs.url; $('gsToken').value = gs.token; }
+  }
+  async function gsGet(cfg) {
+    const u = cfg.url + (cfg.url.includes('?') ? '&' : '?') + 'action=ref&token=' + encodeURIComponent(cfg.token);
+    const r = await fetch(u, { redirect: 'follow' }); const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'تعذّر الاتصال بالشيت'); return j;
+  }
+  async function gsLoadRef(cfg, quiet) {
+    const j = await gsGet(cfg);
+    const r = R.fromSheets(j.sheets, 'Google Sheet: ' + (j.title || ''));
+    ref = r; try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch { }
+    all().forEach(x => { if (!x._supManual) delete x._supId; }); persist(); refInfo(); drawList();
+    if (!quiet) toast('حُدّثت البيانات المرجعية من Google Sheet');
+  }
+  $('gsSave').onclick = async () => {
+    const url = $('gsUrl').value.trim(), token = $('gsToken').value.trim();
+    if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) return toast('الرابط يجب أن يكون رابط Web app من script.google.com');
+    if (!token) return toast('الصق رمز الربط');
+    $('gsSave').disabled = true; status('جارٍ اختبار الربط مع Google Sheet…');
+    try { await gsLoadRef({ url, token }, true); gs = { url, token }; localStorage.setItem(GKEY, JSON.stringify(gs)); gsUi(); $('gsBox').open = false; status('تم الربط مع Google Sheet، وحُمّلت منه البيانات المرجعية.'); }
+    catch (e) { console.error(e); status('تعذّر الربط: ' + ((e && e.message) || 'تحقق من الرابط والرمز، وأن النشر «Anyone»'), true); }
+    finally { $('gsSave').disabled = false; }
+  };
+  $('gsForget').onclick = () => { gs = null; localStorage.removeItem(GKEY); $('gsUrl').value = ''; $('gsToken').value = ''; gsUi(); toast('أُلغي الربط مع Google Sheet'); };
+  $('gsLoad').onclick = async () => { try { await gsLoadRef(gs); } catch (e) { toast((e && e.message) || 'تعذّر التحديث من الشيت'); } };
+  $('gsSend').onclick = async () => {
+    if (!gs) return;
+    const appr = all().filter(x => x._approved && !x._sent);
+    if (!appr.length) return toast('لا توجد فواتير معتمدة جديدة للإرسال');
+    const ready = appr.filter(x => x._supId != null && x.project_id != null && x.product_id != null), missing = appr.length - ready.length;
+    if (!ready.length) return status(`لم يُرسل شيء: ${missing} فاتورة معتمدة ينقصها المورّد المسجل أو المشروع أو المنتج. اخترها من القوائم الحمراء.`, true);
+    const payload = { token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '' })) };
+    $('gsSend').disabled = true; status(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
+    try {
+      const r = await fetch(gs.url, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' }); const j = await r.json();
+      if (!j.ok) throw new Error(j.error);
+      const h = all(), now = new Date().toISOString();
+      (j.added || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x) { x._sent = a.invId; x._sentAt = now; if (ref) ref.inv[x._supId + '|' + String(x.invoice_number).toLowerCase().replace(/[^0-9a-zء-ي]/g, '').replace(/^0+(?=.)/, '')] = a.invId; } });
+      (j.skipped || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x && a.invId) { x._sent = a.invId; x._sentAt = now; x._sentNote = 'كانت موجودة مسبقًا'; } });
+      persist(); try { localStorage.setItem(RKEY, JSON.stringify(ref)); } catch { } drawList();
+      const sk = (j.skipped || []).length;
+      toast(`أُرسلت ${(j.added || []).length} فاتورة إلى Google Sheet`);
+      status(`أُضيفت ${(j.added || []).length} فاتورة إلى InvoiceT و VatReport.` + (sk ? ` لم تُضف ${sk} لأنها موجودة مسبقًا أو بلا رقم.` : '') + (missing ? ` لم تُرسل ${missing} لأن المورّد أو المشروع أو المنتج غير محدد.` : ''), !!missing);
+    } catch (e) { console.error(e); status('تعذّر الإرسال: ' + ((e && e.message) || 'تحقق من الاتصال'), true); }
+    finally { $('gsSend').disabled = false; }
+  };
+
   let filter = 'all';
   const shownList = () => all().filter(x => filter === 'all' || (filter === 'approved') === !!x._approved);
   const money = x => x.total != null && x.total !== '' ? P.fmt(x.total) + ' ' + (x.currency || '') : '—';
@@ -472,7 +525,7 @@
         <td data-l="الإجمالي" class="n"><b>${esc(money(x))}</b><small>الضريبة: ${x.tax_amount != null && x.tax_amount !== '' ? esc(P.fmt(x.tax_amount)) : '—'}</small></td>
         <td data-l="المشروع والمنتج" class="lnk">${linkCell(x)}</td>
         <td data-l="الملاحظات" class="notes">${notes ? `<div class="auto">${notes}</div>` : '<div class="auto"><span class="ok">لا تنبيهات</span></div>'}<input class="unote" data-note="${id}" value="${esc(x.note || '')}" placeholder="أضف ملاحظتك…" aria-label="ملاحظتك على الفاتورة"></td>
-        <td class="act"><div class="st">${x._approved ? `<span class="okb">معتمدة</span>${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}</div>${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
+        <td class="act"><div class="st">${x._approved ? `<span class="okb">معتمدة</span>${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}${x._sent ? `<span class="sent">في الشيت (InvID ${esc(x._sent)})</span>` : ''}</div>${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
     }).join('');
     $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="8" class="empty">${h.length ? 'لا توجد فواتير في هذا التصنيف.' : 'لا توجد فواتير بعد. يمكنك اختيار عدة ملفات أو مجلد كامل.'}</td></tr>`;
     const nd = dm.size;
@@ -592,6 +645,6 @@
     else addFiles(e.dataTransfer.files);
   });
   document.addEventListener('paste', e => { const f = e.clipboardData?.files; if (f && f.length) addFiles(f); });
-  refInfo(); drawList();
+  refInfo(); gsUi(); drawList();
   window.__invoiceApp = { addFiles, get cur() { return cur; }, get qr() { return qr; }, get raw() { return rawText; }, get busy() { return busy || queue.length > 0; }, all, dupMap };
 })();
