@@ -447,12 +447,12 @@
   const GKEY = 'invoice-reader-gsheet-v1';
   let gs = null; try { gs = JSON.parse(localStorage.getItem(GKEY)) || null; } catch { gs = null; }
   function gsUi() {
-    $('gsState').textContent = gs ? '(مربوط ✓)' : '(غير مربوط)'; $('gsState').classList.toggle('on', !!gs);
+    $('gsState').textContent = gs ? `(مربوط باسم ${gs.email || '—'} ✓)` : '(غير مربوط)'; $('gsState').classList.toggle('on', !!gs);
     $('gsSend').hidden = !gs; $('gsLoad').hidden = !gs; $('gsForget').hidden = !gs;
-    if (gs) { $('gsUrl').value = gs.url; $('gsToken').value = gs.token; }
+    if (gs) { $('gsUrl').value = gs.url; $('gsEmail').value = gs.email || ''; $('gsToken').value = gs.token; }
   }
   async function gsGet(cfg) {
-    const u = cfg.url + (cfg.url.includes('?') ? '&' : '?') + 'action=ref&token=' + encodeURIComponent(cfg.token);
+    const u = cfg.url + (cfg.url.includes('?') ? '&' : '?') + 'action=ref&email=' + encodeURIComponent(cfg.email || '') + '&token=' + encodeURIComponent(cfg.token);
     const r = await fetch(u, { redirect: 'follow' }); const j = await r.json();
     if (!j.ok) throw new Error(j.error || 'تعذّر الاتصال بالشيت'); return j;
   }
@@ -464,15 +464,15 @@
     if (!quiet) toast('حُدّثت البيانات المرجعية من Google Sheet');
   }
   $('gsSave').onclick = async () => {
-    const url = $('gsUrl').value.trim(), token = $('gsToken').value.trim();
+    const url = $('gsUrl').value.trim(), email = $('gsEmail').value.trim().toLowerCase(), token = $('gsToken').value.trim();
     if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) return toast('الرابط يجب أن يكون رابط Web app من script.google.com');
-    if (!token) return toast('الصق رمز الربط');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('اكتب بريدك الإلكتروني'); if (!token) return toast('الصق رمز الدخول');
     $('gsSave').disabled = true; status('جارٍ اختبار الربط مع Google Sheet…');
-    try { await gsLoadRef({ url, token }, true); gs = { url, token }; localStorage.setItem(GKEY, JSON.stringify(gs)); gsUi(); $('gsBox').open = false; status('تم الربط مع Google Sheet، وحُمّلت منه البيانات المرجعية.'); }
-    catch (e) { console.error(e); status('تعذّر الربط: ' + ((e && e.message) || 'تحقق من الرابط والرمز، وأن النشر «Anyone»'), true); }
+    try { await gsLoadRef({ url, email, token }, true); gs = { url, email, token }; localStorage.setItem(GKEY, JSON.stringify(gs)); gsUi(); $('gsBox').open = false; status('تم الربط مع Google Sheet، وحُمّلت منه البيانات المرجعية.'); }
+    catch (e) { console.error(e); status('تعذّر الربط: ' + ((e && e.message) || 'تحقق من الرابط والبريد والرمز، وأن النشر «Anyone»'), true); }
     finally { $('gsSave').disabled = false; }
   };
-  $('gsForget').onclick = () => { gs = null; localStorage.removeItem(GKEY); $('gsUrl').value = ''; $('gsToken').value = ''; gsUi(); toast('أُلغي الربط مع Google Sheet'); };
+  $('gsForget').onclick = () => { gs = null; localStorage.removeItem(GKEY); $('gsUrl').value = ''; $('gsEmail').value = ''; $('gsToken').value = ''; gsUi(); toast('أُلغي الربط مع Google Sheet'); };
   $('gsLoad').onclick = async () => { try { await gsLoadRef(gs); } catch (e) { toast((e && e.message) || 'تعذّر التحديث من الشيت'); } };
   $('gsSend').onclick = async () => {
     if (!gs) return;
@@ -480,7 +480,7 @@
     if (!appr.length) return toast('لا توجد فواتير معتمدة جديدة للإرسال');
     const ready = appr.filter(x => x._supId != null && x.project_id != null && x.product_id != null), missing = appr.length - ready.length;
     if (!ready.length) return status(`لم يُرسل شيء: ${missing} فاتورة معتمدة ينقصها المورّد المسجل أو المشروع أو المنتج. اخترها من القوائم الحمراء.`, true);
-    const payload = { token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '' })) };
+    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '' })) };
     $('gsSend').disabled = true; status(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
     try {
       const r = await fetch(gs.url, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' }); const j = await r.json();

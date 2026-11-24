@@ -228,8 +228,8 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
     </div>
     <details class="gs" id="gsBox">
       <summary>ربط Google Sheet <span id="gsState">(غير مربوط)</span></summary>
-      <p class="note">الصق رابط Web app ورمز الربط من الشيت (قائمة «قارئ الفواتير» ← «عرض رمز الربط»). بعدها يرسل زر «إرسال المعتمدة إلى Google Sheet» الفواتير المعتمدة إلى InvoiceT و VatReport بدون تكرار، ويمكنك تحميل الموردين والمشاريع والمنتجات من الشيت مباشرة.</p>
-      <div class="gsf"><input id="gsUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" aria-label="رابط Web app" dir="ltr"><input id="gsToken" placeholder="رمز الربط" aria-label="رمز الربط" dir="ltr"><button class="primary" id="gsSave">حفظ واختبار الربط</button><button id="gsForget" hidden>إلغاء الربط</button></div>
+      <p class="note">التحديث مسموح فقط للأشخاص الذين أضافهم مالك الشيت (قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له»)، ولكل بريد رمز خاص. الصق الرابط وبريدك ورمزك. بعدها يرسل زر «إرسال المعتمدة إلى Google Sheet» الفواتير المعتمدة إلى InvoiceT و VatReport بدون تكرار، ويمكنك تحميل الموردين والمشاريع والمنتجات من الشيت مباشرة.</p>
+      <div class="gsf"><input id="gsUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" aria-label="رابط Web app" dir="ltr"><input id="gsEmail" type="email" placeholder="بريدك الإلكتروني" aria-label="بريدك الإلكتروني" dir="ltr"><input id="gsToken" placeholder="رمز الدخول" aria-label="رمز الدخول" dir="ltr"><button class="primary" id="gsSave">حفظ واختبار الربط</button><button id="gsForget" hidden>إلغاء الربط</button></div>
     </details>
     <div class="exp" id="exportBar" hidden>
       <button class="primary" id="xAll">تصدير الكل إلى Excel</button>

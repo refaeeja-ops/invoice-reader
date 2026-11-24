@@ -4,42 +4,64 @@
  * يُلصق هذا الملف في الشيت: Extensions (الإضافات) ← Apps Script.
  * - يستقبل الفواتير المعتمدة من التطبيق ويضيفها إلى InvoiceT و VatReport (بدون تكرار).
  * - يعطي التطبيق البيانات المرجعية (الموردين والمشاريع والمنتجات) ليقرأها مباشرة من الشيت.
- * - قائمة «قارئ الفواتير» في الشيت تعرض رمز الربط وطريقة الإعداد.
+ * - التحديث مسموح فقط لبريد إلكتروني أضافه المالك من قائمة «قارئ الفواتير» (لكل بريد رمز خاص)، ويُسجَّل البريد في EnteredBy.
  */
 
 const REF_SHEETS = ['SuppliersT', 'ProjectsT', 'ProductsT', 'SupplierProductT'];
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('قارئ الفواتير')
-    .addItem('عرض رمز الربط', 'showToken')
-    .addItem('إنشاء رمز ربط جديد', 'resetToken')
+    .addItem('إضافة مستخدم مسموح له', 'addUser')
+    .addItem('عرض المستخدمين المسموح لهم', 'listUsers')
+    .addItem('إيقاف مستخدم', 'removeUser')
+    .addSeparator()
     .addItem('طريقة الإعداد', 'showHelp')
     .addToUi();
 }
 
-function getToken_() {
-  const p = PropertiesService.getScriptProperties();
-  let t = p.getProperty('TOKEN');
-  if (!t) { t = Utilities.getUuid().replace(/-/g, '').slice(0, 20); p.setProperty('TOKEN', t); }
-  return t;
+// المستخدمون المسموح لهم بالتحديث: {email: {token, added}} محفوظة في خصائص السكربت (لا تظهر في الشيت)
+function users_() { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('USERS') || '{}'); } catch (e) { return {}; } }
+function saveUsers_(u) { PropertiesService.getScriptProperties().setProperty('USERS', JSON.stringify(u)); }
+const normEmail_ = e => String(e || '').trim().toLowerCase();
+function auth_(email, token) {
+  const u = users_()[normEmail_(email)];
+  return !!(u && token && u.token === String(token).trim());
 }
-function showToken() {
-  SpreadsheetApp.getUi().alert('رمز الربط',
-    'انسخ هذا الرمز والصقه في التطبيق (ربط Google Sheet):\n\n' + getToken_() +
-    '\n\nلا تشاركه مع أحد: من يملكه مع رابط السكربت يستطيع إضافة فواتير إلى هذا الشيت.',
+function addUser() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('إضافة مستخدم', 'اكتب البريد الإلكتروني للشخص المسموح له بتحديث الشيت:', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const email = normEmail_(r.getResponseText());
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { ui.alert('البريد غير صحيح'); return; }
+  const u = users_(); const token = Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+  u[email] = { token, added: new Date().toISOString() }; saveUsers_(u);
+  ui.alert('تمت الإضافة',
+    'أرسل هذه البيانات إلى ' + email + ' ليضعها في التطبيق (ربط Google Sheet):\n\n' +
+    'البريد: ' + email + '\nرمز الدخول: ' + token + '\nالرابط: ' + (ScriptApp.getService().getUrl() || '(رابط Web app بعد النشر)') +
+    '\n\nالرمز خاص بهذا الشخص. إن أضفته مرة أخرى يتغير رمزه ويتوقف القديم.', ui.ButtonSet.OK);
+}
+function listUsers() {
+  const u = users_(), list = Object.keys(u);
+  SpreadsheetApp.getUi().alert('المستخدمون المسموح لهم (' + list.length + ')',
+    list.length ? list.map(e => '• ' + e + '  —  الرمز: ' + u[e].token).join('\n') : 'لا يوجد أحد بعد. أضف المستخدمين من «إضافة مستخدم مسموح له».',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
-function resetToken() {
-  PropertiesService.getScriptProperties().deleteProperty('TOKEN');
-  showToken();
+function removeUser() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('إيقاف مستخدم', 'اكتب البريد الإلكتروني الذي تريد إيقافه:', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const u = users_(), email = normEmail_(r.getResponseText());
+  if (!u[email]) { ui.alert('هذا البريد غير موجود في القائمة'); return; }
+  delete u[email]; saveUsers_(u); ui.alert('أُوقف ' + email + '. لن يستطيع التحديث بعد الآن.');
 }
 function showHelp() {
   SpreadsheetApp.getUi().alert('طريقة الإعداد (مرة واحدة)',
     '1) من محرر Apps Script: Deploy (نشر) ← New deployment (عملية نشر جديدة).\n' +
-    '2) النوع: Web app (تطبيق ويب). Execute as: Me. Who has access: Anyone.\n' +
+    '2) النوع: Web app. Execute as: Me. Who has access: Anyone.\n' +
     '3) اضغط Deploy ووافق على الصلاحيات، ثم انسخ رابط Web app.\n' +
-    '4) من قائمة «قارئ الفواتير» ← «عرض رمز الربط» وانسخ الرمز.\n' +
-    '5) في التطبيق: «ربط Google Sheet» والصق الرابط والرمز.',
+    '4) من قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له» لكل بريد (ابدأ ببريدك).\n' +
+    '5) كل شخص يضع في التطبيق: الرابط + بريده + رمزه.\n' +
+    'وللحماية الكاملة: شارك الشيت نفسه (زر Share) مع نفس الأشخاص فقط.',
     SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -56,10 +78,10 @@ function values_(sh) {
 const str_ = v => String(v == null ? '' : v).trim().replace(/\.0+$/, '');
 const invKey_ = s => str_(s).toLowerCase().replace(/[^0-9a-zء-ي]/g, '').replace(/^0+(?=.)/, '');
 
-// التطبيق يطلب البيانات المرجعية: GET ?token=...&action=ref
+// التطبيق يطلب البيانات المرجعية: GET ?email=...&token=...&action=ref
 function doGet(e) {
   const p = (e && e.parameter) || {};
-  if (p.token !== getToken_()) return json_({ ok: false, error: 'رمز الربط غير صحيح' });
+  if (!auth_(p.email, p.token)) return json_({ ok: false, error: 'هذا البريد غير مسموح له أو الرمز غير صحيح' });
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const out = { ok: true, title: ss.getName(), sheets: {} };
   REF_SHEETS.forEach(n => { out.sheets[n] = values_(sheet_(ss, n)).map(r => r.map(v => v instanceof Date ? Utilities.formatDate(v, 'GMT', 'yyyy-MM-dd') : v)); });
@@ -73,11 +95,12 @@ function doGet(e) {
   return json_(out);
 }
 
-// التطبيق يرسل الفواتير المعتمدة: POST {token, invoices:[...]}
+// التطبيق يرسل الفواتير المعتمدة: POST {email, token, invoices:[...]}
 function doPost(e) {
   let body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'بيانات غير صالحة' }); }
-  if (body.token !== getToken_()) return json_({ ok: false, error: 'رمز الربط غير صحيح' });
+  if (!auth_(body.email, body.token)) return json_({ ok: false, error: 'هذا البريد غير مسموح له أو الرمز غير صحيح' });
+  const who = normEmail_(body.email);
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -101,7 +124,7 @@ function doPost(e) {
       const vals = {
         InvID: ++maxId, InvoiceNo: d.InvoiceNo, SupID: d.SupID === '' ? '' : d.SupID, ProjectID: d.ProjectID, InvDate: date, Date: date,
         Invamount: d.Invamount, invVat: d.invVat, Product: d.ProductID, ProductID: d.ProductID, ProductName: d.ProductName,
-        SupfName: d.SupfName, ProjectName: d.ProjectName, InvEnteryDate: today, EnteredBy: 'قارئ الفواتير', InvNote: d.Note || ''
+        SupfName: d.SupfName, ProjectName: d.ProjectName, InvEnteryDate: today, EnteredBy: who, InvNote: d.Note || ''
       };
       invRows.push(ih.map(h => vals[h] !== undefined && vals[h] !== null ? vals[h] : ''));
       // VatReport: «ProductName» المكرر بعد ProjectID = اسم المشروع
