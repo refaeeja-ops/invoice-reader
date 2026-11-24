@@ -226,10 +226,10 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
       <div class="refi"><b>بياناتك المرجعية</b><span id="refInfo">لم يُحمَّل ملف بعد. حمّل ملف Excel الذي فيه أوراق SuppliersT و ProjectsT و ProductsT و SupplierProductT لمطابقة الموردين واختيار المشروع والمنتج. يُقرأ الملف داخل جهازك ولا يُرفع لأي مكان.</span></div>
       <div class="refb"><button id="gsLoad" hidden>تحديث البيانات من Google Sheet</button><label class="btn"><input type="file" id="refFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">تحميل ملف البيانات</label><button id="refClear" hidden>إزالة الملف</button></div>
     </div>
-    <details class="gs" id="gsBox">
+    <details class="gs" id="gsBox" hidden>
       <summary>ربط Google Sheet <span id="gsState">(غير مربوط)</span></summary>
-      <p class="note">التحديث مسموح فقط للأشخاص الذين أضافهم مالك الشيت (قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له»)، ولكل بريد رمز خاص. الصق الرابط وبريدك ورمزك. بعدها يرسل زر «إرسال المعتمدة إلى Google Sheet» الفواتير المعتمدة إلى InvoiceT و VatReport بدون تكرار، ويمكنك تحميل الموردين والمشاريع والمنتجات من الشيت مباشرة.</p>
-      <div class="gsf"><input id="gsUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" aria-label="رابط Web app" dir="ltr"><input id="gsEmail" type="email" placeholder="بريدك الإلكتروني" aria-label="بريدك الإلكتروني" dir="ltr"><input id="gsToken" placeholder="رمز الدخول" aria-label="رمز الدخول" dir="ltr"><button class="primary" id="gsSave">حفظ واختبار الربط</button><button id="gsForget" hidden>إلغاء الربط</button></div>
+      <p class="note">التحديث مسموح فقط للأشخاص الذين أضافهم مالك الشيت (قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له»)، ولكل بريد رمز خاص. اكتب بريدك ورمزك. رابط الشيت يحدده مالك التطبيق فقط ولا يمكن تغييره من هنا. بعدها يرسل زر «إرسال المعتمدة إلى Google Sheet» الفواتير المعتمدة إلى InvoiceT و VatReport بدون تكرار، ويمكنك تحميل الموردين والمشاريع والمنتجات من الشيت مباشرة.</p>
+      <div class="gsf"><input id="gsEmail" type="email" placeholder="بريدك الإلكتروني" aria-label="بريدك الإلكتروني" dir="ltr"><input id="gsToken" placeholder="رمز الدخول" aria-label="رمز الدخول" dir="ltr"><button class="primary" id="gsSave">حفظ واختبار الربط</button><button id="gsForget" hidden>إلغاء الربط</button></div>
     </details>
     <div class="exp" id="exportBar" hidden>
       <button class="primary" id="xAll">تصدير الكل إلى Excel</button>
@@ -264,6 +264,7 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
 <script src="parse.js"></script>
 <script src="export.js"></script>
 <script src="digits.js"></script>
+<script src="config.js"></script>
 <script src="ref.js"></script>
 <script src="app.js"></script>
 </body>
