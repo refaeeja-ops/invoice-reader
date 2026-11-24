@@ -101,7 +101,7 @@ table.list tr.pend td{color:var(--mute)}table.list tr.pend.working td{color:var(
 .filters button{min-height:38px;padding:4px 14px;border-radius:20px;font-size:14px}
 .filters button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .twrap{overflow-x:auto}
-@media(min-width:601px){table.list{min-width:900px}table.list td.act{white-space:normal;width:120px}table.list td.act button{width:100%;margin:2px 0;min-height:36px}}
+@media(min-width:601px){table.list{min-width:960px}table.list td.act{white-space:normal;width:120px}table.list td.act button{width:100%;margin:2px 0;min-height:36px}}
 table.list td:first-child{min-width:140px}table.list td.nw{white-space:nowrap}
 table.list td.mono{direction:ltr;text-align:end;font-variant-numeric:tabular-nums;font-size:14px}
 table.list td.notes{min-width:170px;max-width:260px}
@@ -112,6 +112,17 @@ table.list td small{display:block}
 .okb{background:var(--ok);color:var(--paper)}.pendb{background:var(--soft);color:var(--mute);border:1px solid var(--line)}
 table.list tr.appr td:first-child{box-shadow:inset -4px 0 0 var(--ok)}
 table.list td.act button.del{color:var(--stamp)}
+.refbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;background:var(--soft);border-radius:6px;padding:12px 14px;margin:12px 0}
+.refi{display:flex;flex-direction:column;gap:2px;font-size:14px;color:var(--mute);flex:1 1 320px}.refi b{color:var(--ink);font-size:15px}
+.refi.ok b::after{content:" ✓";color:var(--ok)}
+.refb{display:flex;gap:8px;flex-wrap:wrap}
+table.list select{width:100%;font:inherit;font-size:14px;min-height:36px;padding:4px 6px;border-radius:4px;border:1px solid var(--line);background:var(--paper);color:var(--ink);margin:2px 0}
+table.list td.lnk{min-width:170px;max-width:230px}
+table.list td.lnk label{display:block;font-size:12px;color:var(--mute)}
+.supok{color:var(--ok)!important}.supname{color:var(--blue)!important}
+button.linkb{min-height:28px;padding:0 8px;font-size:12px;border:0;background:none;color:var(--blue);text-decoration:underline}
+.todo{color:var(--mute)}
+table.list td.act .st{margin-bottom:4px;text-align:center}table.list td.act .st small{text-align:center}
 .dupnote{margin:12px 0 0;background:light-dark(#fff1f3,#3a1820);color:var(--stamp);border-radius:4px;padding:8px 12px}
 .dupb{display:inline-block;font-size:12px;font-weight:700;color:var(--paper);background:var(--stamp);border-radius:3px;padding:0 6px;margin-inline-end:6px}
 table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{color:var(--ok)}
@@ -124,7 +135,7 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
  #items td[data-l]::before{content:attr(data-l);display:block;font-size:12px;color:var(--mute)}
  .total{white-space:normal}
  table.list thead{display:none}table.list tr{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;padding:10px 0;border-bottom:1px solid var(--line)}
- table.list td{border:0;padding:2px 0}table.list td:first-child,table.list td.act,table.list td.notes{grid-column:1/-1}table.list td.notes{max-width:none}table.list td.mono{text-align:start}table.list td.n{text-align:start}
+ table.list td{border:0;padding:2px 0}table.list td:first-child,table.list td.act,table.list td.notes,table.list td.lnk{grid-column:1/-1}table.list td.lnk{max-width:none}table.list td.notes{max-width:none}table.list td.mono{text-align:start}table.list td.n{text-align:start}
  table.list td[data-l]:not(:first-child)::before{content:attr(data-l);display:block;font-size:12px;color:var(--mute)}
  table.list td.act{text-align:start}table.list td.act button{margin:0 0 0 8px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -193,14 +204,19 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
   <section class="slip hist" aria-labelledby="ht">
     <div class="lhead"><h3 id="ht">ملخص الفواتير <span id="count"></span></h3><span class="note" id="sumAll"></span></div>
     <p class="dupnote" id="dupNote" hidden></p>
+    <div class="refbar" id="refbar">
+      <div class="refi"><b>بياناتك المرجعية</b><span id="refInfo">لم يُحمَّل ملف بعد. حمّل ملف Excel الذي فيه أوراق SuppliersT و ProjectsT و ProductsT و SupplierProductT لمطابقة الموردين واختيار المشروع والمنتج. يُقرأ الملف داخل جهازك ولا يُرفع لأي مكان.</span></div>
+      <div class="refb"><label class="btn"><input type="file" id="refFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">تحميل ملف البيانات</label><button id="refClear" hidden>إزالة الملف</button></div>
+    </div>
     <div class="exp" id="exportBar" hidden>
       <button class="primary" id="xAll">تصدير الكل إلى Excel</button>
       <button id="cAll">الفواتير CSV</button>
       <button id="cItems">البنود CSV</button>
+      <button id="xVat">VatReport</button>
       <button id="clearAll" class="danger">حذف الكل</button>
     </div>
     <div class="filters" id="filters" role="group" aria-label="تصفية الفواتير" hidden></div>
-    <div class="twrap"><table id="hist" class="list"><thead><tr><th>المورّد</th><th>الرقم الضريبي</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الضريبة</th><th class="n">الإجمالي</th><th>الملاحظات</th><th>الحالة</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="twrap"><table id="hist" class="list"><thead><tr><th>المورّد</th><th>الرقم الضريبي</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الإجمالي</th><th>المشروع والمنتج</th><th>الملاحظات</th><th>الحالة والإجراء</th></tr></thead><tbody></tbody></table></div>
     <p class="note">اعتمد الفاتورة بعد مراجعتها، واكتب ملاحظتك في خانة الملاحظات. الحالة والملاحظات تُصدَّر مع Excel و CSV. تُحفظ البيانات في هذا المتصفح فقط (حتى 200 فاتورة)، ولا تُحفظ الصور.</p>
   </section>
 </main>
@@ -212,6 +228,7 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
 <script src="parse.js"></script>
 <script src="export.js"></script>
 <script src="digits.js"></script>
+<script src="ref.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

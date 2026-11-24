@@ -375,7 +375,75 @@
     clearTimeout(store.t); store.t = setTimeout(persist, quiet ? 400 : 0);
     if (quiet) { clearTimeout(store.h); store.h = setTimeout(drawList, 500); } else drawList();
   }
+  // ---------- البيانات المرجعية (الموردين والمشاريع والمنتجات) ----------
+  const R = window.InvoiceRef, RKEY = 'invoice-reader-ref-v1';
+  let ref = null; try { ref = JSON.parse(localStorage.getItem(RKEY)) || null; } catch { ref = null; }
+  let supEdit = null; // فاتورة يجري تغيير مورّدها يدويًا
+  function link(x) {
+    if (!ref) return;
+    if (!x._supManual) { const m = R.matchSupplier(ref, x); x._supId = m ? m.id : null; x._supBy = m ? m.by : null; }
+    const s = R.supplier(ref, x._supId); x._supName = s ? s.name : '';
+    const prods = x._supId != null ? R.productsFor(ref, x._supId) : [];
+    if (x.product_id != null && prods.length && !prods.some(p => p.id === x.product_id) && !x._prodAny) { x.product_id = null; }
+    if (x.product_id == null && prods.length === 1) x.product_id = prods[0].id;
+    const pr = R.project(ref, x.project_id), pd = R.product(ref, x.product_id);
+    x.project_name = pr ? pr.name : ''; x.product_name = pd ? pd.name : '';
+    const ex = R.existsInvoice(ref, x._supId, x.invoice_number); x._exists = ex || null;
+  }
+  function refNotes(x) {
+    if (!ref) return [];
+    const n = [];
+    if (x._exists) n.push(['wn', `مسجلة سابقًا في InvoiceT${x._exists !== true ? ' (InvID ' + x._exists + ')' : ''}`]);
+    if (x._supId == null) n.push(['wn', 'المورّد غير موجود في SuppliersT: اختره من القائمة']);
+    else if (x._supBy === 'name') n.push(['wn', 'طوبق المورّد بالاسم فقط، تأكد منه']);
+    if (x.project_id == null) n.push(['todo', 'اختر المشروع']);
+    if (x.product_id == null) n.push(['todo', 'اختر المنتج']);
+    return n;
+  }
+  const opt = (v, label, sel) => `<option value="${esc(v)}"${sel ? ' selected' : ''}>${esc(label)}</option>`;
+  function supCell(x) {
+    if (!ref) return '';
+    const id = esc(x._id);
+    if (x._supId != null && supEdit !== x._id) return `<small class="${x._supBy === 'name' ? 'supname' : 'supok'}">SupID ${x._supId}: ${esc(x._supName)}${x._supBy === 'name' ? ' (بالاسم)' : x._supBy === 'manual' ? ' (يدوي)' : ''}</small><button class="linkb" data-supedit="${id}">تغيير</button>`;
+    const list = ref.suppliers.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    return `<select data-sup="${id}" aria-label="اختر المورّد المسجل">${opt('', '— اختر المورّد المسجل —', x._supId == null)}${x._supManual ? opt('auto', '↺ مطابقة تلقائية', false) : ''}${list.map(s => opt(s.id, s.id + ' - ' + s.name, s.id === x._supId)).join('')}</select>`;
+  }
+  function linkCell(x) {
+    if (!ref) return '<span class="todo">حمّل ملف البيانات</span>';
+    const id = esc(x._id);
+    const projs = R.activeProjects(ref).slice(); const cp = R.project(ref, x.project_id); if (cp && !cp.active) projs.unshift(cp);
+    let prods = x._supId != null ? R.productsFor(ref, x._supId) : [], all = false;
+    if (!prods.length || x._prodAny) { prods = ref.products.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar')); all = true; }
+    const cpd = R.product(ref, x.product_id); if (cpd && !prods.some(p => p.id === cpd.id)) prods.unshift(cpd);
+    return `<label>المشروع<select data-proj="${id}">${opt('', '— اختر المشروع —', x.project_id == null)}${projs.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.project_id)).join('')}</select></label>
+      <label>المنتج${all && x._supId != null && !x._prodAny ? ' (لا منتجات مرتبطة بالمورّد)' : ''}<select data-prod="${id}">${opt('', '— اختر المنتج —', x.product_id == null)}${prods.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.product_id)).join('')}${!all ? opt('any', '… كل المنتجات', false) : ''}</select></label>`;
+  }
+  function refInfo() {
+    $('refClear').hidden = !ref;
+    $('refInfo').parentNode.classList.toggle('ok', !!ref);
+    $('refInfo').textContent = ref ? `${ref.fileName}: ${ref.suppliers.length} مورّد، ${R.activeProjects(ref).length} مشاريع فعّالة، ${ref.products.length} منتج، ${Object.keys(ref.inv).length} فاتورة سابقة للتحقق من التكرار. محفوظ في هذا المتصفح فقط.` : 'لم يُحمَّل ملف بعد. حمّل ملف Excel الذي فيه أوراق SuppliersT و ProjectsT و ProductsT و SupplierProductT لمطابقة الموردين واختيار المشروع والمنتج. يُقرأ الملف داخل جهازك ولا يُرفع لأي مكان.';
+  }
+  $('refFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const r = await R.load(f); ref = r;
+      try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch { toast('الملف كبير على ذاكرة المتصفح: سيُستخدم حتى إغلاق الصفحة فقط'); }
+      all().forEach(x => { if (!x._supManual) delete x._supId; }); persist();
+      refInfo(); drawList(); toast('تم تحميل ملف البيانات ومطابقة الفواتير');
+    } catch (err) { console.error(err); toast((err && err.message) || 'تعذّرت قراءة الملف'); }
+  };
+  $('refClear').onclick = () => { ref = null; localStorage.removeItem(RKEY); refInfo(); drawList(); toast('أُزيل ملف البيانات من هذا المتصفح'); };
+  $('hist').addEventListener('change', e => {
+    const t = e.target, d = t.dataset, id = d.sup || d.proj || d.prod; if (!id) return;
+    const x = all().find(v => v._id === id); if (!x) return;
+    if (d.sup) { if (t.value === 'auto') { x._supManual = false; } else { x._supManual = true; x._supId = t.value ? +t.value : null; x._supBy = 'manual'; } x._prodAny = false; supEdit = null; }
+    if (d.proj) x.project_id = t.value ? +t.value : null;
+    if (d.prod) { if (t.value === 'any') { x._prodAny = true; } else x.product_id = t.value ? +t.value : null; }
+    persist(); drawList();
+  });
+
   let filter = 'all';
+  const shownList = () => all().filter(x => filter === 'all' || (filter === 'approved') === !!x._approved);
   const money = x => x.total != null && x.total !== '' ? P.fmt(x.total) + ' ' + (x.currency || '') : '—';
   const sumBy = list => Object.entries(list.reduce((a, x) => { const c = x.currency || '—'; a[c] = (a[c] || 0) + (+x.total || 0); return a; }, {})).map(([c, v]) => P.fmt(v) + ' ' + c).join(' · ');
   function drawList() {
@@ -383,29 +451,29 @@
     $('count').textContent = h.length ? `(${h.length})` : '';
     $('exportBar').hidden = !h.length;
     const dm = dupMap();
-    h.forEach(x => { const d = dm.get(x._id); if (d) x._dup = dupMsg(d); else delete x._dup; });
+    h.forEach(x => { const d = dm.get(x._id); if (d) x._dup = dupMsg(d); else delete x._dup; link(x); });
+    $('xVat').textContent = `VatReport (${filter === 'all' ? 'الكل' : filter === 'approved' ? 'المعتمدة' : 'بانتظار الاعتماد'})`;
     const nA = h.filter(x => x._approved).length, nP = h.length - nA;
     $('filters').hidden = !h.length;
     $('filters').innerHTML = [['all', 'الكل', h.length], ['pending', 'بانتظار الاعتماد', nP], ['approved', 'معتمدة', nA]]
       .map(([k, l, n]) => `<button data-filter="${k}" aria-pressed="${filter === k}">${l} (${n})</button>`).join('');
     const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة' };
-    const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="7">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
-    const shown = h.filter(x => filter === 'all' || (filter === 'approved') === !!x._approved);
+    const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="6">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
+    const shown = shownList();
     const rows = shown.map(x => {
       const id = esc(x._id), dup = dm.get(x._id), w = x._warnings || [];
-      const notes = [...(dup ? ['<span class="dupb">مكررة</span>'] : []), ...w.map(m => `<span class="wn">• ${esc(m)}</span>`)].join('');
+      const notes = [...(dup ? ['<span class="dupb">مكررة</span>'] : []), ...refNotes(x).map(([c, m]) => `<span class="${c}">• ${esc(m)}</span>`), ...w.map(m => `<span class="wn">• ${esc(m)}</span>`)].join('');
       return `<tr class="${cur && cur._id === x._id ? 'sel' : ''}${dup ? ' dup' : ''}${x._approved ? ' appr' : ''}"${dup ? ` title="${esc(x._dup)}"` : ''}>
-        <td data-l="المورّد"><b>${esc(x.vendor_name || 'بدون اسم')}</b><small>${esc(x.file || '')}</small></td>
+        <td data-l="المورّد"><b>${esc(x.vendor_name || 'بدون اسم')}</b><small>${esc(x.file || '')}</small>${supCell(x)}</td>
         <td data-l="الرقم الضريبي" class="mono">${esc(x.vendor_tax_number || '—')}</td>
         <td data-l="رقم الفاتورة" class="nw">${esc(x.invoice_number || '—')}</td>
         <td data-l="التاريخ" class="nw">${esc(x.invoice_date || '—')}</td>
-        <td data-l="الضريبة" class="n">${x.tax_amount != null && x.tax_amount !== '' ? esc(P.fmt(x.tax_amount)) : '—'}</td>
-        <td data-l="الإجمالي" class="n"><b>${esc(money(x))}</b></td>
+        <td data-l="الإجمالي" class="n"><b>${esc(money(x))}</b><small>الضريبة: ${x.tax_amount != null && x.tax_amount !== '' ? esc(P.fmt(x.tax_amount)) : '—'}</small></td>
+        <td data-l="المشروع والمنتج" class="lnk">${linkCell(x)}</td>
         <td data-l="الملاحظات" class="notes">${notes ? `<div class="auto">${notes}</div>` : '<div class="auto"><span class="ok">لا تنبيهات</span></div>'}<input class="unote" data-note="${id}" value="${esc(x.note || '')}" placeholder="أضف ملاحظتك…" aria-label="ملاحظتك على الفاتورة"></td>
-        <td data-l="الحالة">${x._approved ? `<span class="okb">معتمدة</span>${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}</td>
-        <td class="act">${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
+        <td class="act"><div class="st">${x._approved ? `<span class="okb">معتمدة</span>${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}</div>${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
     }).join('');
-    $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="9" class="empty">${h.length ? 'لا توجد فواتير في هذا التصنيف.' : 'لا توجد فواتير بعد. يمكنك اختيار عدة ملفات أو مجلد كامل.'}</td></tr>`;
+    $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="8" class="empty">${h.length ? 'لا توجد فواتير في هذا التصنيف.' : 'لا توجد فواتير بعد. يمكنك اختيار عدة ملفات أو مجلد كامل.'}</td></tr>`;
     const nd = dm.size;
     $('dupNote').hidden = !nd;
     $('dupNote').textContent = nd ? `تنبيه: ${nd} فواتير في القائمة مكررة (نفس المورّد ورقم الفاتورة والتاريخ). هي معلّمة بكلمة «مكررة»؛ راجعها واحذف الزائد منها.` : '';
@@ -418,6 +486,7 @@
     x.note = e.target.value; clearTimeout(store.t); store.t = setTimeout(persist, 400); // بدون إعادة رسم حتى لا يضيع المؤشر
   });
   $('hist').addEventListener('click', e => {
+    if (e.target.dataset.supedit) { supEdit = e.target.dataset.supedit; drawList(); const s = document.querySelector(`select[data-sup="${CSS.escape(supEdit)}"]`); if (s) s.focus(); return; }
     const a = e.target.dataset.approve, u = e.target.dataset.unapprove;
     if (!a && !u) return;
     const x = all().find(v => v._id === (a || u)); if (!x) return;
@@ -441,6 +510,7 @@
     clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on', 'act'), 5000);
   }
   $('xAll').onclick = () => all().length && download(`فواتير-${stamp()}.xlsx`, X.toXlsx(all()));
+  $('xVat').onclick = () => { const l = shownList(); if (!l.length) return toast('لا توجد فواتير في هذا التصنيف'); if (!ref) toast('تنبيه: لم يُحمَّل ملف البيانات، فستكون SupID و ProjectID فارغة'); download(`VatReport-${stamp()}.xlsx`, X.vatXlsx(l)); };
   $('cAll').onclick = () => all().length && download(`فواتير-${stamp()}.csv`, X.invoicesCsv(all()), 'text/csv;charset=utf-8');
   $('cItems').onclick = () => all().length && download(`بنود-${stamp()}.csv`, X.itemsCsv(all()), 'text/csv;charset=utf-8');
   $('clearAll').onclick = () => {
@@ -477,6 +547,6 @@
     else addFiles(e.dataTransfer.files);
   });
   document.addEventListener('paste', e => { const f = e.clipboardData?.files; if (f && f.length) addFiles(f); });
-  drawList();
+  refInfo(); drawList();
   window.__invoiceApp = { addFiles, get cur() { return cur; }, get qr() { return qr; }, get raw() { return rawText; }, get busy() { return busy || queue.length > 0; }, all, dupMap };
 })();
