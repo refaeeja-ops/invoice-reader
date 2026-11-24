@@ -386,7 +386,7 @@
     const s = R.supplier(ref, x._supId); x._supName = s ? s.name : '';
     const prods = x._supId != null ? R.productsFor(ref, x._supId) : [];
     if (x.product_id != null && prods.length && !prods.some(p => p.id === x.product_id) && !x._prodAny) { x.product_id = null; }
-    if (x.product_id == null && prods.length === 1) x.product_id = prods[0].id;
+    if (x.product_id == null && prods.length === 1 && !x._prodCleared) x.product_id = prods[0].id; // لا نعيد الاختيار التلقائي إذا مسحه المستخدم
     const pr = R.project(ref, x.project_id), pd = R.product(ref, x.product_id);
     x.project_name = pr ? pr.name : ''; x.product_name = pd ? pd.name : '';
     const ex = R.existsInvoice(ref, x._supId, x.invoice_number); x._exists = ex || null;
@@ -439,7 +439,7 @@
     const x = all().find(v => v._id === id); if (!x) return;
     if (d.sup) { if (t.value === 'auto') { x._supManual = false; } else { x._supManual = true; x._supId = t.value ? +t.value : null; x._supBy = 'manual'; } x._prodAny = false; supEdit = null; }
     if (d.proj) x.project_id = t.value ? +t.value : null;
-    if (d.prod) { if (t.value === 'any') { x._prodAny = true; } else x.product_id = t.value ? +t.value : null; }
+    if (d.prod) { if (t.value === 'any') { x._prodAny = true; } else { x.product_id = t.value ? +t.value : null; x._prodCleared = !t.value; } }
     persist(); drawList();
   });
 
