@@ -215,12 +215,15 @@
     const seen = new Set([...all().map(x => x._sig).filter(Boolean), ...queue.map(j => j.sig), ...Object.values(live).map(v => v.sig).filter(Boolean)]);
     const dupF = [];
     files = files.filter(f => { const g = sigOf(f); if (!isCam(f) && seen.has(g)) { dupF.push(pathOf(f)); return false; } seen.add(g); return true; });
-    if (dupF.length) setTimeout(() => toast(`تم تجاهل ${dupF.length} ملف سبق اختياره: ${dupF.slice(0, 3).join('، ')}${dupF.length > 3 ? '…' : ''}`), fromFolder ? 1500 : 50);
-    if (!files.length && dupF.length) return;
+    const notInv = allF.length - files.length - dupF.length;
+    const dupTxt = dupF.length ? `تم تجاهل ${dupF.length} ملف سبق رفعه (${dupF.slice(0, 3).join('، ')}${dupF.length > 3 ? '…' : ''})` : '';
     if (fromFolder) files.sort((a, b) => pathOf(a).localeCompare(pathOf(b), 'ar', { numeric: true }));
-    const skipped = allF.length - files.length;
-    if (!files.length) { if (allF.length || fromFolder) toast(fromFolder ? 'لا توجد صور أو ملفات PDF في هذا المجلد' : 'الملف ليس صورة أو PDF'); return; }
-    if (fromFolder) setTimeout(() => toast(`وُجدت ${files.length} فاتورة في المجلد` + (skipped ? ` (تُجوهل ${skipped} ملف ليس صورة أو PDF)` : '')), 50);
+    if (!files.length) {
+      if (dupF.length) return toast(fromFolder ? `لا توجد ملفات جديدة في المجلد. ${dupTxt}` : dupTxt);
+      if (allF.length || fromFolder) toast(fromFolder ? 'لا توجد صور أو ملفات PDF في هذا المجلد' : 'الملف ليس صورة أو PDF'); return;
+    }
+    if (fromFolder) setTimeout(() => toast(`وُجدت ${files.length} فاتورة جديدة في المجلد` + (dupF.length ? `، و${dupTxt}` : '') + (notInv ? ` (وتُجوهل ${notInv} ملف ليس صورة أو PDF)` : '')), 50);
+    else if (dupF.length) setTimeout(() => toast(dupTxt), 50);
     files.forEach((f, i) => { const id = Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6); const sig = sigOf(f); queue.push({ id, file: f, sig }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا', sig }; });
     drawList(); if (files.length > 1 && !fromFolder) toast(`أُضيفت ${files.length} فواتير إلى الدفعة`);
     pump();
