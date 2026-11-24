@@ -407,7 +407,7 @@
     const id = esc(x._id);
     if (x._supId != null && supEdit !== x._id) return `<small class="${x._supBy === 'name' ? 'supname' : 'supok'}">SupID ${x._supId}: ${esc(x._supName)}${x._supBy === 'name' ? ' (بالاسم)' : x._supBy === 'manual' ? ' (يدوي)' : ''}</small><button class="linkb" data-supedit="${id}">تغيير</button>`;
     const list = ref.suppliers.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-    return `<select data-sup="${id}" aria-label="اختر المورّد المسجل">${opt('', '— اختر المورّد المسجل —', x._supId == null)}${x._supManual ? opt('auto', '↺ مطابقة تلقائية', false) : ''}${list.map(s => opt(s.id, s.id + ' - ' + s.name, s.id === x._supId)).join('')}</select>`;
+    return `<select data-sup="${id}" aria-label="اختر المورّد المسجل"${x._supId == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المورّد المسجل —', x._supId == null)}${x._supManual ? opt('auto', '↺ مطابقة تلقائية', false) : ''}${list.map(s => opt(s.id, s.id + ' - ' + s.name, s.id === x._supId)).join('')}</select>`;
   }
   function linkCell(x) {
     if (!ref) return '<span class="todo">حمّل ملف البيانات</span>';
@@ -416,8 +416,8 @@
     let prods = x._supId != null ? R.productsFor(ref, x._supId) : [], all = false;
     if (!prods.length || x._prodAny) { prods = ref.products.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar')); all = true; }
     const cpd = R.product(ref, x.product_id); if (cpd && !prods.some(p => p.id === cpd.id)) prods.unshift(cpd);
-    return `<label>المشروع<select data-proj="${id}">${opt('', '— اختر المشروع —', x.project_id == null)}${projs.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.project_id)).join('')}</select></label>
-      <label>المنتج${all && x._supId != null && !x._prodAny ? ' (لا منتجات مرتبطة بالمورّد)' : ''}<select data-prod="${id}">${opt('', '— اختر المنتج —', x.product_id == null)}${prods.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.product_id)).join('')}${!all ? opt('any', '… كل المنتجات', false) : ''}</select></label>`;
+    return `<label>المشروع<select data-proj="${id}"${x.project_id == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المشروع —', x.project_id == null)}${projs.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.project_id)).join('')}</select></label>
+      <label>المنتج${all && x._supId != null && !x._prodAny ? ' (لا منتجات مرتبطة بالمورّد)' : ''}<select data-prod="${id}"${x.product_id == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المنتج —', x.product_id == null)}${prods.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.product_id)).join('')}${!all ? opt('any', '… كل المنتجات', false) : ''}</select></label>`;
   }
   function refInfo() {
     $('refClear').hidden = !ref;
