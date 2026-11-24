@@ -375,24 +375,55 @@
     clearTimeout(store.t); store.t = setTimeout(persist, quiet ? 400 : 0);
     if (quiet) { clearTimeout(store.h); store.h = setTimeout(drawList, 500); } else drawList();
   }
+  let filter = 'all';
+  const money = x => x.total != null && x.total !== '' ? P.fmt(x.total) + ' ' + (x.currency || '') : '—';
+  const sumBy = list => Object.entries(list.reduce((a, x) => { const c = x.currency || '—'; a[c] = (a[c] || 0) + (+x.total || 0); return a; }, {})).map(([c, v]) => P.fmt(v) + ' ' + c).join(' · ');
   function drawList() {
     const h = all(), pend = Object.entries(live);
     $('count').textContent = h.length ? `(${h.length})` : '';
     $('exportBar').hidden = !h.length;
-    const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة' };
-    const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="4">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
     const dm = dupMap();
-    const rows = h.map(x => {
-      const w = (x._warnings || []).length, dup = dm.get(x._id);
-      return `<tr class="${cur && cur._id === x._id ? 'sel' : ''}${dup ? ' dup' : ''}"${dup ? ` title="${esc(dupMsg(dup))}"` : ''}><td data-l="المورّد"><b>${esc(x.vendor_name || 'بدون اسم')}</b><small>${esc(x.file || '')}</small></td><td data-l="رقم الفاتورة">${esc(x.invoice_number || '—')}</td><td data-l="التاريخ">${esc(x.invoice_date || '—')}</td><td data-l="الإجمالي" class="n">${x.total != null && x.total !== '' ? esc(P.fmt(x.total) + ' ' + (x.currency || '')) : '—'}</td><td data-l="الحالة">${dup ? '<span class="dupb">مكررة</span>' : ''}${w ? `<span class="wn">${w} تنبيه</span>` : (dup ? '' : '<span class="ok">سليمة</span>')}</td><td class="act"><button data-open="${esc(x._id)}">مراجعة</button><button data-rm="${esc(x._id)}" aria-label="حذف">حذف</button></td></tr>`;
+    h.forEach(x => { const d = dm.get(x._id); if (d) x._dup = dupMsg(d); else delete x._dup; });
+    const nA = h.filter(x => x._approved).length, nP = h.length - nA;
+    $('filters').hidden = !h.length;
+    $('filters').innerHTML = [['all', 'الكل', h.length], ['pending', 'بانتظار الاعتماد', nP], ['approved', 'معتمدة', nA]]
+      .map(([k, l, n]) => `<button data-filter="${k}" aria-pressed="${filter === k}">${l} (${n})</button>`).join('');
+    const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة' };
+    const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="7">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
+    const shown = h.filter(x => filter === 'all' || (filter === 'approved') === !!x._approved);
+    const rows = shown.map(x => {
+      const id = esc(x._id), dup = dm.get(x._id), w = x._warnings || [];
+      const notes = [...(dup ? ['<span class="dupb">مكررة</span>'] : []), ...w.map(m => `<span class="wn">• ${esc(m)}</span>`)].join('');
+      return `<tr class="${cur && cur._id === x._id ? 'sel' : ''}${dup ? ' dup' : ''}${x._approved ? ' appr' : ''}"${dup ? ` title="${esc(x._dup)}"` : ''}>
+        <td data-l="المورّد"><b>${esc(x.vendor_name || 'بدون اسم')}</b><small>${esc(x.file || '')}</small></td>
+        <td data-l="الرقم الضريبي" class="mono">${esc(x.vendor_tax_number || '—')}</td>
+        <td data-l="رقم الفاتورة" class="nw">${esc(x.invoice_number || '—')}</td>
+        <td data-l="التاريخ" class="nw">${esc(x.invoice_date || '—')}</td>
+        <td data-l="الضريبة" class="n">${x.tax_amount != null && x.tax_amount !== '' ? esc(P.fmt(x.tax_amount)) : '—'}</td>
+        <td data-l="الإجمالي" class="n"><b>${esc(money(x))}</b></td>
+        <td data-l="الملاحظات" class="notes">${notes ? `<div class="auto">${notes}</div>` : '<div class="auto"><span class="ok">لا تنبيهات</span></div>'}<input class="unote" data-note="${id}" value="${esc(x.note || '')}" placeholder="أضف ملاحظتك…" aria-label="ملاحظتك على الفاتورة"></td>
+        <td data-l="الحالة">${x._approved ? `<span class="okb">معتمدة</span>${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}</td>
+        <td class="act">${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
     }).join('');
-    $('hist').tBodies[0].innerHTML = rowsP + rows || '<tr><td colspan="6" class="empty">لا توجد فواتير بعد. يمكنك اختيار عدة ملفات دفعة واحدة.</td></tr>';
-    const sum = h.reduce((a, x) => { const c = x.currency || '—'; a[c] = (a[c] || 0) + (+x.total || 0); return a; }, {});
+    $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="9" class="empty">${h.length ? 'لا توجد فواتير في هذا التصنيف.' : 'لا توجد فواتير بعد. يمكنك اختيار عدة ملفات أو مجلد كامل.'}</td></tr>`;
     const nd = dm.size;
     $('dupNote').hidden = !nd;
     $('dupNote').textContent = nd ? `تنبيه: ${nd} فواتير في القائمة مكررة (نفس المورّد ورقم الفاتورة والتاريخ). هي معلّمة بكلمة «مكررة»؛ راجعها واحذف الزائد منها.` : '';
-    $('sumAll').textContent = h.length ? 'مجموع الإجماليات: ' + Object.entries(sum).map(([c, v]) => P.fmt(v) + ' ' + c).join(' · ') : '';
+    $('sumAll').textContent = h.length ? `مجموع الكل: ${sumBy(h)}` + (nA ? ` · المعتمد: ${sumBy(h.filter(x => x._approved))}` : '') : '';
   }
+  $('filters').addEventListener('click', e => { const f = e.target.dataset.filter; if (f) { filter = f; drawList(); } });
+  $('hist').addEventListener('input', e => {
+    const id = e.target.dataset.note; if (!id) return;
+    const x = all().find(v => v._id === id); if (!x) return;
+    x.note = e.target.value; clearTimeout(store.t); store.t = setTimeout(persist, 400); // بدون إعادة رسم حتى لا يضيع المؤشر
+  });
+  $('hist').addEventListener('click', e => {
+    const a = e.target.dataset.approve, u = e.target.dataset.unapprove;
+    if (!a && !u) return;
+    const x = all().find(v => v._id === (a || u)); if (!x) return;
+    x._approved = !!a; if (a) x._approvedAt = new Date().toISOString(); else delete x._approvedAt;
+    persist(); drawList(); toast(a ? 'اعتُمدت الفاتورة' : 'أُلغي الاعتماد');
+  });
   $('hist').addEventListener('click', e => {
     const o = e.target.dataset.open, r = e.target.dataset.rm, ds = e.target.dataset.dismiss;
     if (o) open(o, true);

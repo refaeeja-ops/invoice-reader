@@ -53,7 +53,7 @@
     ['file', 'الملف', 22], ['vendor_name', 'المورّد', 28], ['vendor_tax_number', 'الرقم الضريبي', 18], ['invoice_number', 'رقم الفاتورة', 16],
     ['invoice_date', 'التاريخ', 12], ['due_date', 'الاستحقاق', 12], ['customer_name', 'العميل', 22], ['currency', 'العملة', 8],
     ['subtotal', 'قبل الضريبة', 13, 1], ['discount', 'الخصم', 10, 1], ['tax_rate', 'نسبة الضريبة %', 10, 1], ['tax_amount', 'الضريبة', 12, 1], ['total', 'الإجمالي', 13, 1],
-    ['payment_method', 'طريقة الدفع', 12], ['items_count', 'عدد البنود', 9, 1], ['qr', 'رمز QR', 8], ['warnings', 'تنبيهات', 40]];
+    ['payment_method', 'طريقة الدفع', 12], ['items_count', 'عدد البنود', 9, 1], ['qr', 'رمز QR', 8], ['status', 'الحالة', 16], ['approved_at', 'تاريخ الاعتماد', 12], ['warnings', 'تنبيهات', 40], ['note', 'ملاحظات', 30]];
   const ITEM_COLS = [['invoice_number', 'رقم الفاتورة', 16], ['vendor_name', 'المورّد', 26], ['invoice_date', 'التاريخ', 12], ['n', '#', 5, 1],
     ['description', 'الوصف', 34], ['quantity', 'الكمية', 9, 1], ['unit_price', 'سعر الوحدة', 12, 1], ['total', 'المجموع', 12, 1], ['currency', 'العملة', 8]];
 
@@ -61,7 +61,9 @@
     return [INV_COLS.map(c => c[1]), ...list.map(d => INV_COLS.map(([k, , , isNum]) => {
       if (k === 'items_count') return (d.items || []).length;
       if (k === 'qr') return d.src && d.src.vendor_tax_number === 'qr' || d._qr ? 'نعم' : 'لا';
-      if (k === 'warnings') return (d._warnings || []).join(' | ');
+      if (k === 'warnings') return [d._dup, ...(d._warnings || [])].filter(Boolean).join(' | ').replace(/[\u2068\u2069]/g, '');
+      if (k === 'status') return d._approved ? 'معتمدة' : 'بانتظار الاعتماد';
+      if (k === 'approved_at') return d._approved && d._approvedAt ? String(d._approvedAt).slice(0, 10) : '';
       return isNum ? num(d[k]) : (d[k] ?? '');
     }))];
   }
