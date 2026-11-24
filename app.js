@@ -477,8 +477,51 @@
     const nd = dm.size;
     $('dupNote').hidden = !nd;
     $('dupNote').textContent = nd ? `تنبيه: ${nd} فواتير في القائمة مكررة (نفس المورّد ورقم الفاتورة والتاريخ). هي معلّمة بكلمة «مكررة»؛ راجعها واحذف الزائد منها.` : '';
+    drawQty();
     $('sumAll').textContent = h.length ? `مجموع الكل: ${sumBy(h)}` + (nA ? ` · المعتمد: ${sumBy(h.filter(x => x._approved))}` : '') : '';
   }
+  // ---------- جدول الكميات (مستقل) ----------
+  const qOpen = new Set();
+  const f2 = v => v == null ? '—' : P.fmt(v);
+  function drawQty() {
+    const h = all(), groups = X.qtyGroups(h);
+    $('qtySec').hidden = !groups.length;
+    if (!groups.length) return;
+    const nd = groups.filter(g => g.diff).length;
+    $('qcount').textContent = `(${groups.length} صنف)`;
+    $('qsum').textContent = 'إجمالي البنود: ' + P.fmt(groups.reduce((a, g) => a + g.total, 0));
+    $('qwarn').hidden = !nd;
+    $('qwarn').textContent = nd ? `تنبيه: ${nd === 1 ? 'صنف واحد اختلف سعره' : nd + ' أصناف اختلف سعرها'} من فاتورة إلى أخرى. هي في أعلى الجدول باللون الأحمر.` : '';
+    const only = $('qOnlyDiff').checked, q = $('qSearch').value.trim().toLowerCase();
+    const shown = groups.filter(g => (!only || g.diff) && (!q || g.name.toLowerCase().includes(q) || g.key.includes(q)));
+    $('qty').tBodies[0].innerHTML = shown.map(g => {
+      const k = esc(g.key), open = qOpen.has(g.key);
+      const price = g.min == null ? '—' : g.diff ? `${f2(g.min)} – ${f2(g.max)}` : f2(g.min);
+      const det = open ? `<tr class="det"><td colspan="8"><table class="qd"><thead><tr><th>المورّد</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الكمية</th><th class="n">سعر الوحدة</th><th class="n">المجموع</th><th></th></tr></thead><tbody>${g.lines.map(l => `<tr>
+          <td data-l="المورّد">${esc(l.inv._supName || l.inv.vendor_name || '—')}</td><td data-l="رقم الفاتورة">${esc(l.inv.invoice_number || l.inv.file || '—')}</td><td data-l="التاريخ">${esc(l.inv.invoice_date || '—')}</td>
+          <td data-l="الكمية" class="n">${f2(l.qty)}</td><td data-l="سعر الوحدة" class="n ${g.diff && l.price === g.max ? 'hi' : g.diff && l.price === g.min ? 'lo' : ''}">${f2(l.price)}</td><td data-l="المجموع" class="n">${f2(l.total)}</td>
+          <td><button class="linkb" data-open="${esc(l.inv._id)}">فتح الفاتورة</button></td></tr>`).join('')}</tbody></table></td></tr>` : '';
+      return `<tr class="${g.diff ? 'pdiff' : ''}">
+        <td data-l="الصنف"><b>${esc(g.name)}</b>${g.products.length ? `<small>${esc(g.products.join('، '))}</small>` : ''}</td>
+        <td data-l="الفواتير" class="n">${g.invs}</td>
+        <td data-l="الكمية" class="n">${f2(g.qty)}</td>
+        <td data-l="سعر الوحدة" class="n pr">${price}${g.diff ? `<small>المتوسط ${f2(g.avg)}</small>` : ''}</td>
+        <td data-l="الإجمالي" class="n"><b>${f2(g.total)}</b></td>
+        <td data-l="الموردون">${esc(g.vendors.join('، ') || '—')}</td>
+        <td data-l="تنبيه السعر">${g.diff ? `<span class="wn">اختلف السعر بفرق ${f2(g.diff)} (${g.pct}%)</span>` : (g.lines.length > 1 ? '<span class="ok">السعر ثابت</span>' : '<span class="todo">فاتورة واحدة</span>')}</td>
+        <td class="act"><button data-qdet="${k}" aria-expanded="${open}">${open ? 'إخفاء' : 'التفاصيل'}</button></td></tr>${det}`;
+    }).join('') || '<tr><td colspan="8" class="empty">لا توجد أصناف مطابقة.</td></tr>';
+  }
+  $('qty').addEventListener('click', e => {
+    const k = e.target.dataset.qdet, o = e.target.dataset.open;
+    if (k != null) { qOpen.has(k) ? qOpen.delete(k) : qOpen.add(k); drawQty(); }
+    if (o) open(o, true);
+  });
+  $('qOnlyDiff').onchange = drawQty;
+  $('qSearch').oninput = drawQty;
+  $('qXlsx').onclick = () => all().length && download(`الكميات-${stamp()}.xlsx`, X.qtyXlsx(all()));
+  $('qCsv').onclick = () => all().length && download(`الكميات-${stamp()}.csv`, X.qtyCsv(all()), 'text/csv;charset=utf-8');
+
   $('filters').addEventListener('click', e => { const f = e.target.dataset.filter; if (f) { filter = f; drawList(); } });
   $('hist').addEventListener('input', e => {
     const id = e.target.dataset.note; if (!id) return;

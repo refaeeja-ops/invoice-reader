@@ -123,6 +123,15 @@ table.list td.lnk label{display:block;font-size:12px;color:var(--mute)}
 button.linkb{min-height:28px;padding:0 8px;font-size:12px;border:0;background:none;color:var(--blue);text-decoration:underline}
 .todo{color:var(--mute)}
 table.list td.act .st{margin-bottom:4px;text-align:center}table.list td.act .st small{text-align:center}
+@media(min-width:601px){table.list.qty{min-width:860px}}
+table.list.qty td.pr{white-space:nowrap;font-variant-numeric:tabular-nums}
+table.list.qty tr.pdiff td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}
+table.list.qty tr.det td{background:var(--soft);padding:8px 12px}
+table.qd{width:100%;font-size:14px}table.qd td,table.qd th{padding:4px 6px;border-bottom:1px solid var(--line)}
+table.qd td.hi{color:var(--stamp);font-weight:700}table.qd td.lo{color:var(--ok);font-weight:700}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:14px}.chk input{width:auto;min-height:0}
+#qSearch{max-width:220px;min-height:40px}
+@media(max-width:600px){table.list.qty tr.det{display:block}table.list.qty tr.det td{display:block}table.qd thead{display:none}table.qd tr{display:grid!important;grid-template-columns:1fr 1fr;gap:0 8px;padding:6px 0!important}table.qd td{border:0!important;padding:2px 0!important;text-align:start!important}table.qd td[data-l]::before{content:attr(data-l);display:block;font-size:12px;color:var(--mute);font-weight:400}}
 .dupnote{margin:12px 0 0;background:light-dark(#fff1f3,#3a1820);color:var(--stamp);border-radius:4px;padding:8px 12px}
 .dupb{display:inline-block;font-size:12px;font-weight:700;color:var(--paper);background:var(--stamp);border-radius:3px;padding:0 6px;margin-inline-end:6px}
 table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{color:var(--ok)}
@@ -218,6 +227,18 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
     <div class="filters" id="filters" role="group" aria-label="تصفية الفواتير" hidden></div>
     <div class="twrap"><table id="hist" class="list"><thead><tr><th>المورّد</th><th>الرقم الضريبي</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الإجمالي</th><th>المشروع والمنتج</th><th>الملاحظات</th><th>الحالة والإجراء</th></tr></thead><tbody></tbody></table></div>
     <p class="note">اعتمد الفاتورة بعد مراجعتها، واكتب ملاحظتك في خانة الملاحظات. الحالة والملاحظات تُصدَّر مع Excel و CSV. تُحفظ البيانات في هذا المتصفح فقط (حتى 200 فاتورة)، ولا تُحفظ الصور.</p>
+  </section>
+  <section class="slip hist" aria-labelledby="qt" id="qtySec" hidden>
+    <div class="lhead"><h3 id="qt">جدول الكميات <span id="qcount"></span></h3><span class="note" id="qsum"></span></div>
+    <p class="dupnote" id="qwarn" hidden></p>
+    <div class="exp">
+      <label class="chk"><input type="checkbox" id="qOnlyDiff"> إظهار الأصناف المختلفة السعر فقط</label>
+      <input id="qSearch" type="search" placeholder="ابحث عن صنف…" aria-label="ابحث عن صنف">
+      <button class="primary" id="qXlsx">تصدير الكميات Excel</button>
+      <button id="qCsv">الكميات CSV</button>
+    </div>
+    <div class="twrap"><table id="qty" class="list qty"><thead><tr><th>الصنف</th><th class="n">الفواتير</th><th class="n">الكمية</th><th class="n">سعر الوحدة</th><th class="n">الإجمالي</th><th>الموردون</th><th>تنبيه السعر</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p class="note">يجمع بنود كل الفواتير حسب اسم الصنف. إذا اختلف سعر الوحدة لنفس الصنف بين فاتورة وأخرى يظهر تنبيه، واضغط «التفاصيل» لترى السعر في كل فاتورة. صحّح اسم الصنف في شاشة المراجعة إن قُرئ بشكل مختلف.</p>
   </section>
 </main>
 <div class="toast" id="toast" aria-live="polite"></div>

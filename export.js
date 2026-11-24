@@ -81,6 +81,43 @@
     }))));
     return rows;
   }
+  // ---------- جدول الكميات: تجميع البنود حسب الصنف وكشف اختلاف سعر الوحدة ----------
+  const nItem = s => String(s || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).toLowerCase()
+    .replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[ً-ْـ]/g, '')
+    .replace(/[^0-9a-zء-ي]+/g, ' ').trim();
+  const r2 = v => Math.round(v * 100) / 100;
+  function qtyGroups(list) {
+    const g = new Map();
+    list.forEach(d => (d.items || []).forEach(it => {
+      const key = nItem(it.description); if (!key) return;
+      const q = isFinite(+it.quantity) && it.quantity !== '' && it.quantity != null ? +it.quantity : null;
+      const t = isFinite(+it.total) && it.total !== '' && it.total != null ? +it.total : null;
+      let p = isFinite(+it.unit_price) && it.unit_price !== '' && it.unit_price != null ? +it.unit_price : null;
+      if (p == null && t != null && q) p = r2(t / q);
+      if (!g.has(key)) g.set(key, { key, name: String(it.description).trim(), lines: [] });
+      g.get(key).lines.push({ inv: d, qty: q, price: p, total: t != null ? t : (q != null && p != null ? r2(q * p) : null) });
+    }));
+    return [...g.values()].map(x => {
+      const prices = x.lines.map(l => l.price).filter(v => v != null);
+      const min = prices.length ? Math.min(...prices) : null, max = prices.length ? Math.max(...prices) : null;
+      const qty = x.lines.reduce((a, l) => a + (l.qty || 0), 0), total = x.lines.reduce((a, l) => a + (l.total || 0), 0);
+      const invs = new Set(x.lines.map(l => l.inv._id)).size;
+      return {
+        ...x, qty: r2(qty), total: r2(total), min, max, avg: qty ? r2(total / qty) : null, invs,
+        vendors: [...new Set(x.lines.map(l => l.inv._supName || l.inv.vendor_name || '').filter(Boolean))],
+        products: [...new Set(x.lines.map(l => l.inv.product_name || '').filter(Boolean))],
+        diff: min != null && max - min > 0.009 ? r2(max - min) : 0, pct: min ? Math.round((max - min) / min * 100) : 0
+      };
+    }).sort((a, b) => (b.diff > 0) - (a.diff > 0) || b.total - a.total);
+  }
+  function qtyRows(list) {
+    return [['الصنف', 'التصنيف', 'عدد الفواتير', 'إجمالي الكمية', 'أقل سعر', 'أعلى سعر', 'متوسط السعر', 'الإجمالي', 'الموردون', 'تنبيه السعر'],
+      ...qtyGroups(list).map(x => [x.name, x.products.join('، '), x.invs, x.qty, num(x.min), num(x.max), num(x.avg), x.total, x.vendors.join('، '),
+        x.diff ? `اختلف السعر بين ${x.lines.filter(l => l.price != null).map(l => P2(l.price) + ' (' + (l.inv.invoice_number || l.inv.file || '') + ')').join(' و ')}` : ''])];
+  }
+  const P2 = v => (+v).toFixed(2);
+  const QTY_W = [34, 18, 10, 12, 11, 11, 11, 13, 30, 50];
+  function qtyXlsx(list) { return xlsx([{ name: 'الكميات', rows: qtyRows(list), widths: QTY_W }]); }
   // ورقة VatReport بنفس أعمدة ملف المستخدم: InvoiceNo, SupID, ProjectID, Date, Invamount (شامل الضريبة), invVat
   const serial = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '')); return m ? (Date.UTC(+m[1], m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 864e5 : null; };
   const VAT_DEFAULT = ['InvoiceNo', 'ProductName', 'SupfName', 'SupID', 'ProjectID', 'ProjectName', 'Date', 'Invamount', 'invVat'];
@@ -99,12 +136,12 @@
   const vatW = cols => (cols && cols.length ? cols : VAT_DEFAULT).map(c => (VAT_MAP[String(c).toLowerCase()] || [0, 12])[1]);
   function vatXlsx(list, cols) { return xlsx([{ name: 'VatReport', rows: vatRows(list, cols), widths: vatW(cols) }]); }
   function toXlsx(list, cols) {
-    return xlsx([{ name: 'الفواتير', rows: invRows(list), widths: INV_COLS.map(c => c[2]) }, { name: 'البنود', rows: itemRows(list), widths: ITEM_COLS.map(c => c[2]) }, { name: 'VatReport', rows: vatRows(list, cols), widths: vatW(cols) }]);
+    return xlsx([{ name: 'الفواتير', rows: invRows(list), widths: INV_COLS.map(c => c[2]) }, { name: 'البنود', rows: itemRows(list), widths: ITEM_COLS.map(c => c[2]) }, { name: 'الكميات', rows: qtyRows(list), widths: QTY_W }, { name: 'VatReport', rows: vatRows(list, cols), widths: vatW(cols) }]);
   }
   function csv(rows) {
     const q = v => { if (v && typeof v === 'object') v = v.s === 3 ? new Date(Date.UTC(1899, 11, 30) + v.n * 864e5).toISOString().slice(0, 10) : v.n; const s = String(v ?? ''); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     return '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
   }
-  const api = { toXlsx, vatXlsx, vatRows, vatCsv: (list, cols) => csv(vatRows(list, cols)), invoicesCsv: list => csv(invRows(list)), itemsCsv: list => csv(itemRows(list)), xlsx, zip, crc32 };
+  const api = { qtyGroups, qtyXlsx, qtyCsv: list => csv(qtyRows(list)), toXlsx, vatXlsx, vatRows, vatCsv: (list, cols) => csv(vatRows(list, cols)), invoicesCsv: list => csv(invRows(list)), itemsCsv: list => csv(itemRows(list)), xlsx, zip, crc32 };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.InvoiceExport = api;
 })(typeof self !== 'undefined' ? self : this);
