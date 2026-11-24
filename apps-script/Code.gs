@@ -8,6 +8,16 @@
  */
 
 const REF_SHEETS = ['SuppliersT', 'ProjectsT', 'ProductsT', 'SupplierProductT'];
+// ورقة بصمات الملفات (تُنشأ تلقائيًا): تمنع إرسال نفس ملف الفاتورة مرتين من أي جهاز أو مستخدم
+const HASH_SHEET = 'FileHashes', HASH_HEAD = ['FileHash', 'InvID', 'FilePath', 'EnteredBy', 'EnteredAt'];
+function hashSheet_(ss) {
+  let sh = sheet_(ss, HASH_SHEET);
+  if (!sh) { sh = ss.insertSheet(HASH_SHEET); sh.getRange(1, 1, 1, HASH_HEAD.length).setValues([HASH_HEAD]); }
+  return sh;
+}
+function hashes_(ss) { // {hash: InvID}
+  const out = {}; values_(sheet_(ss, HASH_SHEET)).slice(1).forEach(r => { const h = str_(r[0]).toLowerCase(); if (h) out[h] = r[1]; }); return out;
+}
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('قارئ الفواتير')
@@ -83,7 +93,8 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   if (!auth_(p.email, p.token)) return json_({ ok: false, error: 'هذا البريد غير مسموح له أو الرمز غير صحيح' });
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const out = { ok: true, title: ss.getName(), sheets: {} };
+  if (p.action === 'hashes') return json_({ ok: true, hashes: hashes_(ss) });
+  const out = { ok: true, title: ss.getName(), sheets: {}, hashes: hashes_(ss) };
   REF_SHEETS.forEach(n => { out.sheets[n] = values_(sheet_(ss, n)).map(r => r.map(v => v instanceof Date ? Utilities.formatDate(v, 'GMT', 'yyyy-MM-dd') : v)); });
   const inv = values_(sheet_(ss, 'InvoiceT'));
   if (inv.length) {
@@ -115,10 +126,13 @@ function doPost(e) {
     });
     const vh = values_(vatSh)[0].map(str_);
     const today = new Date();
+    const known = hashes_(ss), hashRows = [];
     const added = [], skipped = [], invRows = [], vatRows = [];
     (body.invoices || []).forEach(d => {
       const key = str_(d.SupID) + '|' + invKey_(d.InvoiceNo);
       if (!d.InvoiceNo) { skipped.push({ id: d.id, reason: 'بدون رقم فاتورة' }); return; }
+      const fh = str_(d.FileHash).toLowerCase();
+      if (fh && known[fh]) { skipped.push({ id: d.id, reason: 'نفس ملف الفاتورة أُرسل سابقًا (InvID ' + known[fh] + ')', invId: known[fh], byFile: true }); return; }
       if (existing[key]) { skipped.push({ id: d.id, reason: 'موجودة مسبقًا (InvID ' + existing[key] + ')', invId: existing[key] }); return; }
       const date = d.Date && /^\d{4}-\d{2}-\d{2}$/.test(d.Date) ? new Date(d.Date + 'T00:00:00') : (d.Date || '');
       const vals = {
@@ -131,11 +145,13 @@ function doPost(e) {
       // VatReport: «ProductName» المكرر بعد ProjectID = اسم المشروع
       vatRows.push(vh.map((h, i) => (h === 'ProductName' && vh[i - 1] === 'ProjectID') ? (d.ProjectName || '') : (vals[h] !== undefined && vals[h] !== null ? vals[h] : '')));
       existing[key] = maxId;
+      if (fh) { known[fh] = maxId; hashRows.push([fh, maxId, d.FilePath || '', who, today]); }
       added.push({ id: d.id, invId: maxId });
     });
     // رقم الفاتورة نص (حتى لا تضيع الأصفار في أوله مثل 03337)
     if (invRows.length) { const r0 = invSh.getLastRow() + 1; if (col('InvoiceNo') >= 0) invSh.getRange(r0, col('InvoiceNo') + 1, invRows.length, 1).setNumberFormat('@'); invSh.getRange(r0, 1, invRows.length, ih.length).setValues(invRows); }
     if (vatRows.length) { const r0 = vatSh.getLastRow() + 1; const vi = vh.indexOf('InvoiceNo'); if (vi >= 0) vatSh.getRange(r0, vi + 1, vatRows.length, 1).setNumberFormat('@'); vatSh.getRange(r0, 1, vatRows.length, vh.length).setValues(vatRows); }
+    if (hashRows.length) { const hs = hashSheet_(ss); hs.getRange(hs.getLastRow() + 1, 1, hashRows.length, HASH_HEAD.length).setValues(hashRows); }
     return json_({ ok: true, added, skipped });
   } finally { lock.releaseLock(); }
 }

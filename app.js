@@ -226,8 +226,14 @@
     pump();
   }
   let setProg = () => { };
+  async function sheetHashes() { // بصمات الملفات المرسلة إلى الشيت من كل الأجهزة والمستخدمين
+    if (!gs) return (ref && ref.hashes) || {};
+    try { const r = await fetch(gs.url + (gs.url.includes('?') ? '&' : '?') + 'action=hashes&email=' + encodeURIComponent(gs.email || '') + '&token=' + encodeURIComponent(gs.token), { redirect: 'follow' }); const j = await r.json(); if (j.ok && j.hashes) { if (ref) { ref.hashes = j.hashes; try { localStorage.setItem(RKEY, JSON.stringify(ref)); } catch { } } return j.hashes; } } catch { }
+    return (ref && ref.hashes) || {};
+  }
   async function pump() {
     if (busy) return; busy = true;
+    status('جارٍ التحقق من الملفات المرسلة سابقًا…'); const sh = await sheetHashes();
     let done = 0; const batch = [];
     const total = () => done + queue.length;
     while (queue.length) {
@@ -238,6 +244,7 @@
       setProg(0.02); say('جارٍ فتح الملف…');
       const hash = await hashOf(job.file);
       const twin = hash && all().find(x => x._hash === hash);
+      if (hash && sh[hash] && !twin) { live[job.id].status = 'dup'; live[job.id].err = 'هذا الملف أُرسل سابقًا إلى Google Sheet (InvID ' + sh[hash] + ')'; done++; drawList(); continue; }
       if (twin) { live[job.id].status = 'dup'; live[job.id].err = 'نفس محتوى الملف «' + (twin.file || '') + '»'; done++; drawList(); continue; }
       try {
         const { d, pages: urls } = await processFile(job.file, say);
@@ -478,7 +485,7 @@
   }
   async function gsLoadRef(cfg, quiet) {
     const j = await gsGet(cfg);
-    const r = R.fromSheets(j.sheets, 'Google Sheet: ' + (j.title || ''));
+    const r = R.fromSheets(j.sheets, 'Google Sheet: ' + (j.title || '')); r.hashes = j.hashes || {};
     ref = r; try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch { }
     all().forEach(x => { if (!x._supManual) delete x._supId; }); persist(); refInfo(); drawList();
     if (!quiet) toast('حُدّثت البيانات المرجعية من Google Sheet');
@@ -500,14 +507,14 @@
     if (!appr.length) return toast('لا توجد فواتير معتمدة جديدة للإرسال');
     const ready = appr.filter(x => x._supId != null && x.project_id != null && x.product_id != null), missing = appr.length - ready.length;
     if (!ready.length) return status(`لم يُرسل شيء: ${missing} فاتورة معتمدة ينقصها المورّد المسجل أو المشروع أو المنتج. اخترها من القوائم الحمراء.`, true);
-    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '', FilePath: x.file || '' })) };
+    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '', FilePath: x.file || '', FileHash: x._hash || '' })) };
     $('gsSend').disabled = true; status(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
     try {
       const r = await fetch(gs.url, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' }); const j = await r.json();
       if (!j.ok) throw new Error(j.error);
       const h = all(), now = new Date().toISOString();
-      (j.added || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x) { x._sent = a.invId; x._sentAt = now; if (ref) ref.inv[x._supId + '|' + String(x.invoice_number).toLowerCase().replace(/[^0-9a-zء-ي]/g, '').replace(/^0+(?=.)/, '')] = a.invId; } });
-      (j.skipped || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x && a.invId) { x._sent = a.invId; x._sentAt = now; x._sentNote = 'كانت موجودة مسبقًا'; } });
+      (j.added || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x) { x._sent = a.invId; x._sentAt = now; if (ref && x._hash) (ref.hashes = ref.hashes || {})[x._hash] = a.invId; if (ref) ref.inv[x._supId + '|' + String(x.invoice_number).toLowerCase().replace(/[^0-9a-zء-ي]/g, '').replace(/^0+(?=.)/, '')] = a.invId; } });
+      (j.skipped || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x && a.invId) { x._sent = a.invId; x._sentAt = now; x._sentNote = a.byFile ? 'نفس الملف أُرسل سابقًا' : 'كانت موجودة مسبقًا'; } });
       persist(); try { localStorage.setItem(RKEY, JSON.stringify(ref)); } catch { } drawList();
       const sk = (j.skipped || []).length;
       toast(`أُرسلت ${(j.added || []).length} فاتورة إلى Google Sheet`);
