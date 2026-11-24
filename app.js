@@ -446,9 +446,10 @@
   // ---------- ربط Google Sheet (مجاني عبر Google Apps Script) ----------
   const GKEY = 'invoice-reader-gsheet-v1';
   // رابط الشيت ثابت من config.js (يحدده المالك في GitHub)، والمستخدم يُدخل بريده ورمزه فقط
-  const GURL = String((window.APP_CONFIG || {}).gsheetUrl || '').trim();
   let gs = null; try { gs = JSON.parse(localStorage.getItem(GKEY)) || null; } catch { gs = null; }
-  if (gs) gs.url = GURL; if (!GURL) gs = null;
+  // إن لم يُضبط الرابط في config.js بعد، نستمر بالرابط المحفوظ سابقًا في هذا المتصفح (بدون أي خانة لتغييره)
+  const GURL = String((window.APP_CONFIG || {}).gsheetUrl || '').trim() || String((gs && gs.url) || '').trim();
+  if (gs) { gs.url = GURL; if (!GURL || !gs.token) gs = null; }
   function gsUi() {
     $('gsBox').hidden = !GURL;
     $('gsState').textContent = gs ? `(مربوط باسم ${gs.email || '—'} ✓)` : '(غير مربوط)'; $('gsState').classList.toggle('on', !!gs);
@@ -472,11 +473,11 @@
     if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) return toast('الرابط يجب أن يكون رابط Web app من script.google.com');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('اكتب بريدك الإلكتروني'); if (!token) return toast('الصق رمز الدخول');
     $('gsSave').disabled = true; status('جارٍ اختبار الربط مع Google Sheet…');
-    try { await gsLoadRef({ url, email, token }, true); gs = { url, email, token }; localStorage.setItem(GKEY, JSON.stringify({ email, token })); gsUi(); $('gsBox').open = false; status('تم الربط مع Google Sheet، وحُمّلت منه البيانات المرجعية.'); }
+    try { await gsLoadRef({ url, email, token }, true); gs = { url, email, token }; localStorage.setItem(GKEY, JSON.stringify({ url, email, token })); gsUi(); $('gsBox').open = false; status('تم الربط مع Google Sheet، وحُمّلت منه البيانات المرجعية.'); }
     catch (e) { console.error(e); status('تعذّر الربط: ' + ((e && e.message) || 'تحقق من الرابط والبريد والرمز، وأن النشر «Anyone»'), true); }
     finally { $('gsSave').disabled = false; }
   };
-  $('gsForget').onclick = () => { gs = null; localStorage.removeItem(GKEY); $('gsEmail').value = ''; $('gsToken').value = ''; gsUi(); toast('أُلغي الربط مع Google Sheet'); };
+  $('gsForget').onclick = () => { gs = null; localStorage.setItem(GKEY, JSON.stringify({ url: GURL })); $('gsEmail').value = ''; $('gsToken').value = ''; gsUi(); toast('أُلغي الربط مع Google Sheet'); };
   $('gsLoad').onclick = async () => { try { await gsLoadRef(gs); } catch (e) { toast((e && e.message) || 'تعذّر التحديث من الشيت'); } };
   $('gsSend').onclick = async () => {
     if (!gs) return;
