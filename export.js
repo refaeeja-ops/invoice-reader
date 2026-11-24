@@ -83,21 +83,28 @@
   }
   // ورقة VatReport بنفس أعمدة ملف المستخدم: InvoiceNo, SupID, ProjectID, Date, Invamount (شامل الضريبة), invVat
   const serial = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '')); return m ? (Date.UTC(+m[1], m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 864e5 : null; };
-  function vatRows(list) {
-    return [['InvoiceNo', 'SupID', 'ProjectID', 'Date', 'Invamount', 'invVat'], ...list.map(d => {
-      const dt = serial(d.invoice_date);
-      return [String(d.invoice_number || ''), int(d._supId), int(d.project_id), dt != null ? { n: dt, s: 3 } : (d.invoice_date || ''), num(d.total), num(d.tax_amount)];
-    })];
+  const VAT_DEFAULT = ['InvoiceNo', 'ProductName', 'SupfName', 'SupID', 'ProjectID', 'ProjectName', 'Date', 'Invamount', 'invVat'];
+  const VAT_MAP = {
+    invoiceno: [d => String(d.invoice_number || ''), 16], supid: [d => int(d._supId), 8], supfname: [d => d._supName || d.vendor_name || '', 30],
+    projectid: [d => int(d.project_id), 10], projectname: [d => d.project_name || '', 22], productid: [d => int(d.product_id), 10], productname: [d => d.product_name || '', 24],
+    date: [d => { const dt = serial(d.invoice_date); return dt != null ? { n: dt, s: 3 } : (d.invoice_date || ''); }, 12], invdate: null,
+    invamount: [d => num(d.total), 14], invvat: [d => num(d.tax_amount), 12], vatid: [d => d.vendor_tax_number || '', 18], note: [d => d.note || '', 24]
+  };
+  VAT_MAP.invdate = VAT_MAP.date;
+  function vatRows(list, cols) {
+    cols = cols && cols.length ? cols : VAT_DEFAULT;
+    const f = cols.map(c => VAT_MAP[String(c).toLowerCase()] || [() => '', 12]);
+    return [cols, ...list.map(d => f.map(([g]) => g(d)))];
   }
-  const VAT_W = [16, 8, 10, 12, 14, 12];
-  function vatXlsx(list) { return xlsx([{ name: 'VatReport', rows: vatRows(list), widths: VAT_W }]); }
-  function toXlsx(list) {
-    return xlsx([{ name: 'الفواتير', rows: invRows(list), widths: INV_COLS.map(c => c[2]) }, { name: 'البنود', rows: itemRows(list), widths: ITEM_COLS.map(c => c[2]) }, { name: 'VatReport', rows: vatRows(list), widths: VAT_W }]);
+  const vatW = cols => (cols && cols.length ? cols : VAT_DEFAULT).map(c => (VAT_MAP[String(c).toLowerCase()] || [0, 12])[1]);
+  function vatXlsx(list, cols) { return xlsx([{ name: 'VatReport', rows: vatRows(list, cols), widths: vatW(cols) }]); }
+  function toXlsx(list, cols) {
+    return xlsx([{ name: 'الفواتير', rows: invRows(list), widths: INV_COLS.map(c => c[2]) }, { name: 'البنود', rows: itemRows(list), widths: ITEM_COLS.map(c => c[2]) }, { name: 'VatReport', rows: vatRows(list, cols), widths: vatW(cols) }]);
   }
   function csv(rows) {
     const q = v => { if (v && typeof v === 'object') v = v.s === 3 ? new Date(Date.UTC(1899, 11, 30) + v.n * 864e5).toISOString().slice(0, 10) : v.n; const s = String(v ?? ''); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     return '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
   }
-  const api = { toXlsx, vatXlsx, vatRows, vatCsv: list => csv(vatRows(list)), invoicesCsv: list => csv(invRows(list)), itemsCsv: list => csv(itemRows(list)), xlsx, zip, crc32 };
+  const api = { toXlsx, vatXlsx, vatRows, vatCsv: (list, cols) => csv(vatRows(list, cols)), invoicesCsv: list => csv(invRows(list)), itemsCsv: list => csv(itemRows(list)), xlsx, zip, crc32 };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.InvoiceExport = api;
 })(typeof self !== 'undefined' ? self : this);

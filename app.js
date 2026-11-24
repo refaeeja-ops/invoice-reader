@@ -359,7 +359,7 @@
   $('copyText').onclick = () => cur && copy(asText(cur));
   $('copyJson').onclick = () => cur && copy(asJson(cur));
   $('copyRaw').onclick = () => copy(rawText);
-  $('dlOneXlsx').onclick = () => cur && download(`فاتورة-${safe(cur.invoice_number || cur.vendor_name || cur._id)}.xlsx`, X.toXlsx([cur]));
+  $('dlOneXlsx').onclick = () => cur && download(`فاتورة-${safe(cur.invoice_number || cur.vendor_name || cur._id)}.xlsx`, X.toXlsx([cur], ref && ref.vatCols));
   $('dlOneCsv').onclick = () => cur && download(`بنود-${safe(cur.invoice_number || cur._id)}.csv`, X.itemsCsv([cur]), 'text/csv;charset=utf-8');
   $('dlJson').onclick = () => cur && download(`invoice-${safe(cur.invoice_number || cur._id)}.json`, asJson(cur), 'application/json');
 
@@ -509,8 +509,8 @@
     $('undoBtn').onclick = () => { fn(); t.classList.remove('on', 'act'); };
     clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on', 'act'), 5000);
   }
-  $('xAll').onclick = () => all().length && download(`فواتير-${stamp()}.xlsx`, X.toXlsx(all()));
-  $('xVat').onclick = () => { const l = shownList(); if (!l.length) return toast('لا توجد فواتير في هذا التصنيف'); if (!ref) toast('تنبيه: لم يُحمَّل ملف البيانات، فستكون SupID و ProjectID فارغة'); download(`VatReport-${stamp()}.xlsx`, X.vatXlsx(l)); };
+  $('xAll').onclick = () => all().length && download(`فواتير-${stamp()}.xlsx`, X.toXlsx(all(), ref && ref.vatCols));
+  $('xVat').onclick = () => { const l = shownList(); if (!l.length) return toast('لا توجد فواتير في هذا التصنيف'); if (!ref) toast('تنبيه: لم يُحمَّل ملف البيانات، فستكون SupID و ProjectID فارغة'); download(`VatReport-${stamp()}.xlsx`, X.vatXlsx(l, ref && ref.vatCols)); };
   $('cAll').onclick = () => all().length && download(`فواتير-${stamp()}.csv`, X.invoicesCsv(all()), 'text/csv;charset=utf-8');
   $('cItems').onclick = () => all().length && download(`بنود-${stamp()}.csv`, X.itemsCsv(all()), 'text/csv;charset=utf-8');
   $('clearAll').onclick = () => {

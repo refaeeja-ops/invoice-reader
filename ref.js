@@ -58,6 +58,7 @@
         rows[(+r.getAttribute('r') || rows.length + 1) - 1] = arr;
       });
       const head = (rows[0] || []).map(h => String(h ?? '').trim());
+      out['#' + name] = head;
       out[name] = rows.slice(1).filter(r => r && r.some(v => v != null && v !== '')).map(r => { const o = {}; head.forEach((h, i) => { if (h) o[h] = r[i] ?? null; }); return o; });
     }
     return out;
@@ -70,7 +71,7 @@
   const yes = v => v === true || /^(true|1|نعم)$/i.test(String(v ?? '').trim());
   const no = v => v === false || /^(false|0|لا)$/i.test(String(v ?? '').trim());
   const invKey = s => str(s).toLowerCase().replace(/[^0-9a-zء-ي]/g, '').replace(/^0+(?=.)/, '');
-  const pick = (book, name) => { const k = Object.keys(book).find(x => x.trim().toLowerCase() === name.toLowerCase()); return k ? book[k] : null; };
+  const pick = (book, name) => { const k = Object.keys(book).find(x => x[0] !== '#' && x.trim().toLowerCase() === name.toLowerCase()); return k ? book[k] : null; };
 
   function build(book, fileName) {
     const need = ['SuppliersT', 'ProjectsT', 'ProductsT', 'SupplierProductT'];
@@ -80,9 +81,17 @@
     const projects = pick(book, 'ProjectsT').map(r => ({ id: int(r.ProjectID), name: str(r.ProjectName), active: yes(r.ProjectStatus) })).filter(p => p.id != null);
     const products = pick(book, 'ProductsT').map(r => ({ id: int(r.ProductID), name: str(r.ProductName), merge: int(r.MergTargetProductID) })).filter(p => p.id != null);
     const supProd = pick(book, 'SupplierProductT').filter(r => !no(r.Active)).map(r => [int(r.SupID), int(r.ProductID)]).filter(x => x[0] != null && x[1] != null);
+    // أعمدة ورقة VatReport كما في ملف المستخدم. «ProductName» المكرر بعد ProjectID يُعامل كاسم المشروع.
+    let vatCols = null; const vk = Object.keys(book).find(k => k.trim().toLowerCase() === '#vatreport');
+    if (vk) {
+      vatCols = book[vk].filter(Boolean);
+      const pi = vatCols.findIndex(c => /^projectid$/i.test(c));
+      if (pi >= 0 && /^productname$/i.test(vatCols[pi + 1] || '') && vatCols.filter(c => /^productname$/i.test(c)).length > 1 && !vatCols.some(c => /^projectname$/i.test(c))) vatCols[pi + 1] = 'ProjectName';
+      if (!vatCols.length) vatCols = null;
+    }
     const inv = {};
     (pick(book, 'InvoiceT') || []).forEach(r => { const s = int(r.SupID), k = invKey(r.InvoiceNo); if (s != null && k) inv[s + '|' + k] = int(r.InvID) ?? true; });
-    return { fileName, loadedAt: new Date().toISOString(), suppliers, projects, products, supProd, inv };
+    return { fileName, loadedAt: new Date().toISOString(), suppliers, projects, products, supProd, inv, vatCols };
   }
 
   async function load(file) {
