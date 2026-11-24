@@ -132,6 +132,7 @@ table.qd td.hi{color:var(--stamp);font-weight:700}table.qd td.lo{color:var(--ok)
 .chk{display:inline-flex;align-items:center;gap:6px;font-size:14px}.chk input{width:auto;min-height:0}
 #qSearch{max-width:220px;min-height:40px}
 @media(max-width:600px){table.list.qty tr.det{display:block}table.list.qty tr.det td{display:block}table.qd thead{display:none}table.qd tr{display:grid!important;grid-template-columns:1fr 1fr;gap:0 8px;padding:6px 0!important}table.qd td{border:0!important;padding:2px 0!important;text-align:start!important}table.qd td[data-l]::before{content:attr(data-l);display:block;font-size:12px;color:var(--mute);font-weight:400}}
+.vhead{display:flex;flex-direction:column;gap:2px;margin-bottom:10px;font-size:14px;color:var(--mute)}.vhead b{color:var(--ink);font-size:16px}
 .dupnote{margin:12px 0 0;background:light-dark(#fff1f3,#3a1820);color:var(--stamp);border-radius:4px;padding:8px 12px}
 .dupb{display:inline-block;font-size:12px;font-weight:700;color:var(--paper);background:var(--stamp);border-radius:3px;padding:0 6px;margin-inline-end:6px}
 table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{color:var(--ok)}
@@ -177,8 +178,9 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
 
   <div id="review">
     <section class="slip viewer" aria-label="صورة الفاتورة">
+      <div class="vhead"><b>الفاتورة المفتوحة للمراجعة</b><span>هذه نسخة للمراجعة فقط، والفاتورة محسوبة في الملخص أدناه.</span></div>
       <div class="vtools">
-        <button id="zoom" aria-pressed="false">تكبير</button>
+        <button id="zoom" aria-pressed="false">تكبير</button><button id="closeV">إغلاق المراجعة</button>
         <button id="prevP" hidden>الصفحة السابقة</button><button id="nextP" hidden>الصفحة التالية</button>
         <span id="pinfo"></span>
       </div>

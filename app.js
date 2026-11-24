@@ -229,7 +229,7 @@
         d._id = job.id; d._at = new Date().toISOString(); d._warnings = P.checks(d, d._qr);
         imgs[job.id] = urls; delete live[job.id];
         store(d); batch.push(job.id);
-        if (!cur || N === 1 || n === 1) open(job.id, n === 1);
+        if (N === 1) open(job.id, true); // الدفعة لا تفتح شاشة المراجعة تلقائيًا؛ النتائج تظهر في الملخص
       } catch (e) {
         console.error(e); live[job.id].status = 'error';
         live[job.id].err = e && e.message === 'img' ? 'تعذّر فتح الصورة' : ((e && e.message) || 'خطأ');
@@ -241,6 +241,7 @@
     status((done > 1 ? `انتهت الدفعة: ${done} فواتير. افتح أي فاتورة من القائمة لمراجعتها.` : (cur && cur._qr ? 'تمت القراءة. وُجد رمز QR الضريبي.' : 'تمت القراءة. راجع الحقول وصحّح ما يلزم.'))
       + (nd ? ` تنبيه: ${nd === 1 ? 'فاتورة مكررة' : nd + ' فواتير مكررة'} (نفس المورّد والرقم والتاريخ)، انظر القائمة.` : ''), !!nd);
     if (cur) refresh();
+    if (done > 1) $('ht').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth' });
   }
 
   // ---------- كشف الفواتير المكررة: نفس المورّد (الرقم الضريبي أو الاسم) ونفس رقم الفاتورة ونفس التاريخ ----------
@@ -570,6 +571,7 @@
   $('zoom').onclick = () => { const z = $('stage').classList.toggle('zoom'); $('zoom').setAttribute('aria-pressed', z); $('zoom').textContent = z ? 'تصغير' : 'تكبير'; };
   $('prevP').onclick = () => { if (pageIdx > 0) { pageIdx--; showPage(); } };
   $('nextP').onclick = () => { if (pageIdx < pages.length - 1) { pageIdx++; showPage(); } };
+  $('closeV').onclick = () => $('again').click();
   $('again').onclick = () => { $('review').classList.remove('on'); cur = null; drawList(); status(''); window.scrollTo(0, 0); };
   const dz = $('drop');
   ['dragenter', 'dragover'].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.add('over'); }));
