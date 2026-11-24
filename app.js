@@ -189,7 +189,7 @@
       const v = cands.sort((a, b) => clean(b) - clean(a))[0]; if (v) d.vendor_name = v;
     }
     d.qr_raw = qRaw || ''; d._qr = q; d._raw = raw.slice(0, 20000);
-    d.file = file.name || 'صورة من الكاميرا';
+    d.file = pathOf(file) || 'صورة من الكاميرا';
     return { d, pages: list.map(p => toUrl(p.canvas)) };
   }
   function toUrl(c) { // صورة للعرض فقط، بحجم أصغر لتوفير الذاكرة
@@ -200,17 +200,23 @@
   }
 
   // ---------- طابور الدفعة ----------
-  function addFiles(files) {
-    files = [...(files || [])].filter(f => /^image\/|pdf/.test(f.type) || /\.(pdf|jpe?g|png|webp|heic)$/i.test(f.name || ''));
-    if (!files.length) return;
-    files.forEach((f, i) => { const id = Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6); queue.push({ id, file: f }); live[id] = { status: 'queued', file: f.name || 'صورة من الكاميرا' }; });
-    drawList(); if (files.length > 1) toast(`أُضيفت ${files.length} فواتير إلى الدفعة`);
+  const isInv = f => /^image\/|pdf/.test(f.type) || /\.(pdf|jpe?g|png|webp|heic)$/i.test(f.name || '');
+  const pathOf = f => f.webkitRelativePath || f._path || f.name || '';
+  function addFiles(files, fromFolder) {
+    const allF = [...(files || [])];
+    files = allF.filter(f => isInv(f) && !/^\./.test(f.name || ''));
+    if (fromFolder) files.sort((a, b) => pathOf(a).localeCompare(pathOf(b), 'ar', { numeric: true }));
+    const skipped = allF.length - files.length;
+    if (!files.length) { if (allF.length || fromFolder) toast(fromFolder ? 'لا توجد صور أو ملفات PDF في هذا المجلد' : 'الملف ليس صورة أو PDF'); return; }
+    if (fromFolder) setTimeout(() => toast(`وُجدت ${files.length} فاتورة في المجلد` + (skipped ? ` (تُجوهل ${skipped} ملف ليس صورة أو PDF)` : '')), 50);
+    files.forEach((f, i) => { const id = Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6); queue.push({ id, file: f }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا' }; });
+    drawList(); if (files.length > 1 && !fromFolder) toast(`أُضيفت ${files.length} فواتير إلى الدفعة`);
     pump();
   }
   let setProg = () => { };
   async function pump() {
     if (busy) return; busy = true;
-    let done = 0;
+    let done = 0; const batch = [];
     const total = () => done + queue.length;
     while (queue.length) {
       const job = queue.shift(); live[job.id].status = 'working'; drawList();
@@ -222,7 +228,7 @@
         const { d, pages: urls } = await processFile(job.file, say);
         d._id = job.id; d._at = new Date().toISOString(); d._warnings = P.checks(d, d._qr);
         imgs[job.id] = urls; delete live[job.id];
-        store(d);
+        store(d); batch.push(job.id);
         if (!cur || N === 1 || n === 1) open(job.id, n === 1);
       } catch (e) {
         console.error(e); live[job.id].status = 'error';
@@ -231,8 +237,35 @@
       done++; drawList();
     }
     busy = false; progress(null); setProg = () => { };
-    status(done > 1 ? `انتهت الدفعة: ${done} فواتير. افتح أي فاتورة من القائمة لمراجعتها.` : (cur && cur._qr ? 'تمت القراءة. وُجد رمز QR الضريبي.' : 'تمت القراءة. راجع الحقول وصحّح ما يلزم.'));
+    const dm = dupMap(), nd = batch.filter(id => dm.has(id)).length;
+    status((done > 1 ? `انتهت الدفعة: ${done} فواتير. افتح أي فاتورة من القائمة لمراجعتها.` : (cur && cur._qr ? 'تمت القراءة. وُجد رمز QR الضريبي.' : 'تمت القراءة. راجع الحقول وصحّح ما يلزم.'))
+      + (nd ? ` تنبيه: ${nd === 1 ? 'فاتورة مكررة' : nd + ' فواتير مكررة'} (نفس المورّد والرقم والتاريخ)، انظر القائمة.` : ''), !!nd);
+    if (cur) refresh();
   }
+
+  // ---------- كشف الفواتير المكررة: نفس المورّد (الرقم الضريبي أو الاسم) ونفس رقم الفاتورة ونفس التاريخ ----------
+  const nk = s => P.normDigits(s).toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^0-9a-z\u0621-\u064A]/g, '');
+  const vName = s => nk(String(s || '').replace(/^\s*(شركة|مؤسسة|مؤسسه|شركه)\s+/, '').replace(/\b(co|company|ltd|llc|est)\b\.?/gi, ''));
+  const vVat = s => { const d = P.normDigits(s).replace(/\D/g, ''); return d.length >= 10 ? d : ''; };
+  const invNo = s => nk(s).replace(/^0+(?=.)/, '');
+  const dKey = s => { const t = String(s || '').trim(); return t ? (P.findDate(t) || nk(t)) : ''; };
+  function sameVendor(a, b) {
+    const va = vVat(a.vendor_tax_number), vb = vVat(b.vendor_tax_number);
+    if (va && vb) return va === vb;
+    const na = vName(a.vendor_name), nb = vName(b.vendor_name);
+    return !!na && na === nb;
+  }
+  // يعيد Map: رقم الفاتورة الداخلي -> قائمة الفواتير المكررة معها
+  function dupMap() {
+    const groups = {}, out = new Map();
+    all().forEach(x => { const n = invNo(x.invoice_number), d = dKey(x.invoice_date); if (n && d) (groups[n + '|' + d] = groups[n + '|' + d] || []).push(x); });
+    Object.values(groups).forEach(g => {
+      if (g.length < 2) return;
+      g.forEach(a => g.forEach(b => { if (a !== b && sameVendor(a, b)) { if (!out.has(a._id)) out.set(a._id, []); out.get(a._id).push(b); } }));
+    });
+    return out;
+  }
+  const dupMsg = list => `فاتورة مكررة: يوجد ${list.length === 1 ? 'فاتورة أخرى' : list.length + ' فواتير أخرى'} بنفس المورّد والرقم والتاريخ (${list.map(x => '«\u2068' + (x.file || x.vendor_name || '') + '\u2069»').join('، ')}).`;
 
   // ---------- العرض ----------
   function showPage() {
@@ -275,7 +308,8 @@
     const w = P.checks(cur, qr, { text: textOnly }); cur._warnings = w;
     const items = cur.items.filter(it => it.total !== '' && it.total != null && isFinite(+it.total));
     $('isum').textContent = items.length ? 'مجموع البنود: ' + P.fmt(items.reduce((a, it) => a + +it.total, 0)) : '';
-    $('warns').innerHTML = w.length ? w.map(m => `<li>${esc(m)}</li>`).join('') : '<li class="good">المبالغ متطابقة والرقم الضريبي بصيغة صحيحة.</li>';
+    const dl = dupMap().get(cur._id), ws = dl ? [dupMsg(dl), ...w] : w;
+    $('warns').innerHTML = ws.length ? ws.map(m => `<li>${esc(m)}</li>`).join('') : '<li class="good">المبالغ متطابقة والرقم الضريبي بصيغة صحيحة، ولا توجد فاتورة مكررة.</li>';
     $('bigTotal').textContent = cur.total != null && cur.total !== '' ? P.fmt(cur.total) + ' ' + (cur.currency || '') : '';
     const vi = $('f_vendor_tax_number'); if (vi) vi.classList.toggle('bad', !!P.checkVat(cur.vendor_tax_number));
   }
@@ -347,12 +381,16 @@
     $('exportBar').hidden = !h.length;
     const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة' };
     const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="4">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
+    const dm = dupMap();
     const rows = h.map(x => {
-      const w = (x._warnings || []).length;
-      return `<tr class="${cur && cur._id === x._id ? 'sel' : ''}"><td data-l="المورّد"><b>${esc(x.vendor_name || 'بدون اسم')}</b><small>${esc(x.file || '')}</small></td><td data-l="رقم الفاتورة">${esc(x.invoice_number || '—')}</td><td data-l="التاريخ">${esc(x.invoice_date || '—')}</td><td data-l="الإجمالي" class="n">${x.total != null && x.total !== '' ? esc(P.fmt(x.total) + ' ' + (x.currency || '')) : '—'}</td><td data-l="الحالة">${w ? `<span class="wn">${w} تنبيه</span>` : '<span class="ok">سليمة</span>'}</td><td class="act"><button data-open="${esc(x._id)}">مراجعة</button><button data-rm="${esc(x._id)}" aria-label="حذف">حذف</button></td></tr>`;
+      const w = (x._warnings || []).length, dup = dm.get(x._id);
+      return `<tr class="${cur && cur._id === x._id ? 'sel' : ''}${dup ? ' dup' : ''}"${dup ? ` title="${esc(dupMsg(dup))}"` : ''}><td data-l="المورّد"><b>${esc(x.vendor_name || 'بدون اسم')}</b><small>${esc(x.file || '')}</small></td><td data-l="رقم الفاتورة">${esc(x.invoice_number || '—')}</td><td data-l="التاريخ">${esc(x.invoice_date || '—')}</td><td data-l="الإجمالي" class="n">${x.total != null && x.total !== '' ? esc(P.fmt(x.total) + ' ' + (x.currency || '')) : '—'}</td><td data-l="الحالة">${dup ? '<span class="dupb">مكررة</span>' : ''}${w ? `<span class="wn">${w} تنبيه</span>` : (dup ? '' : '<span class="ok">سليمة</span>')}</td><td class="act"><button data-open="${esc(x._id)}">مراجعة</button><button data-rm="${esc(x._id)}" aria-label="حذف">حذف</button></td></tr>`;
     }).join('');
     $('hist').tBodies[0].innerHTML = rowsP + rows || '<tr><td colspan="6" class="empty">لا توجد فواتير بعد. يمكنك اختيار عدة ملفات دفعة واحدة.</td></tr>';
     const sum = h.reduce((a, x) => { const c = x.currency || '—'; a[c] = (a[c] || 0) + (+x.total || 0); return a; }, {});
+    const nd = dm.size;
+    $('dupNote').hidden = !nd;
+    $('dupNote').textContent = nd ? `تنبيه: ${nd} فواتير في القائمة مكررة (نفس المورّد ورقم الفاتورة والتاريخ). هي معلّمة بكلمة «مكررة»؛ راجعها واحذف الزائد منها.` : '';
     $('sumAll').textContent = h.length ? 'مجموع الإجماليات: ' + Object.entries(sum).map(([c, v]) => P.fmt(v) + ' ' + c).join(' · ') : '';
   }
   $('hist').addEventListener('click', e => {
@@ -383,6 +421,8 @@
   // ---------- الأحداث ----------
   $('cam').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
   $('pick').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+  $('folder').onchange = e => { addFiles(e.target.files, true); e.target.value = ''; };
+  if (!('webkitdirectory' in document.createElement('input'))) $('folderBtn').hidden = true;
   $('zoom').onclick = () => { const z = $('stage').classList.toggle('zoom'); $('zoom').setAttribute('aria-pressed', z); $('zoom').textContent = z ? 'تصغير' : 'تكبير'; };
   $('prevP').onclick = () => { if (pageIdx > 0) { pageIdx--; showPage(); } };
   $('nextP').onclick = () => { if (pageIdx < pages.length - 1) { pageIdx++; showPage(); } };
@@ -390,8 +430,22 @@
   const dz = $('drop');
   ['dragenter', 'dragover'].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.remove('over'); }));
-  dz.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+  // سحب مجلد: نقرأ كل الملفات داخله (والمجلدات الفرعية)
+  function readEntry(en, out) {
+    if (en.isFile) return new Promise(ok => en.file(f => { f._path = en.fullPath.replace(/^\//, ''); out.push(f); ok(); }, () => ok()));
+    if (!en.isDirectory) return Promise.resolve();
+    const rd = en.createReader();
+    return new Promise(ok => {
+      const step = () => rd.readEntries(async ents => { if (!ents.length) return ok(); for (const c of ents) await readEntry(c, out); step(); }, () => ok());
+      step();
+    });
+  }
+  dz.addEventListener('drop', async e => {
+    const items = [...(e.dataTransfer.items || [])].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    if (items.some(en => en.isDirectory)) { const out = []; for (const en of items) await readEntry(en, out); addFiles(out, true); }
+    else addFiles(e.dataTransfer.files);
+  });
   document.addEventListener('paste', e => { const f = e.clipboardData?.files; if (f && f.length) addFiles(f); });
   drawList();
-  window.__invoiceApp = { addFiles, get cur() { return cur; }, get qr() { return qr; }, get raw() { return rawText; }, get busy() { return busy || queue.length > 0; }, all };
+  window.__invoiceApp = { addFiles, get cur() { return cur; }, get qr() { return qr; }, get raw() { return rawText; }, get busy() { return busy || queue.length > 0; }, all, dupMap };
 })();

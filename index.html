@@ -96,7 +96,10 @@ table.list td.act{white-space:nowrap;text-align:end}
 table.list td.act button{min-height:40px;padding:4px 12px;margin-inline-start:6px}
 table.list tr.sel{background:var(--soft)}
 table.list tr.pend td{color:var(--mute)}table.list tr.pend.working td{color:var(--blue)}table.list tr.pend.error td{color:var(--stamp)}
-.wn{color:var(--stamp)}.ok{color:var(--ok)}
+.wn{color:var(--stamp)}
+.dupnote{margin:12px 0 0;background:light-dark(#fff1f3,#3a1820);color:var(--stamp);border-radius:4px;padding:8px 12px}
+.dupb{display:inline-block;font-size:12px;font-weight:700;color:var(--paper);background:var(--stamp);border-radius:3px;padding:0 6px;margin-inline-end:6px}
+table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{color:var(--ok)}
 .empty{color:var(--mute);padding:16px 0!important}
 .toast{position:fixed;inset-inline:0;bottom:20px;margin:auto;width:max-content;max-width:90vw;background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 .toast.on{opacity:1}.toast.act{pointer-events:auto}.toast button{min-height:36px;padding:2px 12px;margin-inline-start:10px;background:transparent;color:inherit;border-color:currentColor}
@@ -125,10 +128,11 @@ table.list tr.pend td{color:var(--mute)}table.list tr.pend.working td{color:var(
         <path d="M22 18h20M22 26h20M22 34h12M36 44h6"/>
       </svg>
       <h2 id="capT">أضف فاتورة</h2>
-      <p>اسحب الملفات هنا أو الصقها، أو اختر إحدى الطريقتين. يمكنك اختيار عدة فواتير دفعة واحدة. الصيغ: JPG و PNG و PDF.</p>
+      <p>اسحب الملفات هنا أو الصقها، أو اختر إحدى الطريقتين. يمكنك اختيار عدة فواتير دفعة واحدة، أو مجلدًا كاملًا فتُقرأ كل الفواتير داخله. الصيغ: JPG و PNG و PDF.</p>
       <div class="btns">
         <label class="btn primary"><input type="file" id="cam" accept="image/*" capture="environment">تصوير بالكاميرا</label>
         <label class="btn"><input type="file" id="pick" multiple accept="image/*,application/pdf,.pdf">رفع ملفات أو صور</label>
+        <label class="btn" id="folderBtn"><input type="file" id="folder" webkitdirectory directory multiple>اختيار مجلد كامل</label>
       </div>
     </div>
     <div class="prog" id="prog"><div class="bar"><i id="barI"></i></div></div>
@@ -173,6 +177,7 @@ table.list tr.pend td{color:var(--mute)}table.list tr.pend.working td{color:var(
 
   <section class="slip hist" aria-labelledby="ht">
     <div class="lhead"><h3 id="ht">الفواتير <span id="count"></span></h3><span class="note" id="sumAll"></span></div>
+    <p class="dupnote" id="dupNote" hidden></p>
     <div class="exp" id="exportBar" hidden>
       <button class="primary" id="xAll">تصدير الكل إلى Excel</button>
       <button id="cAll">الفواتير CSV</button>
