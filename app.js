@@ -278,7 +278,7 @@
       if (twin) { runAdd(live[job.id].file, 'dup', 'نفس محتوى الملف «' + (twin.file || '') + '»'); delete live[job.id]; done++; drawList(); continue; }
       try {
         const { d, pages: urls } = await processFile(job.file, say);
-        d._id = job.id; d._at = new Date().toISOString(); d._sig = job.sig; d._ns = job.ns; d._hash = hash; d._warnings = P.checks(d, d._qr);
+        d._id = job.id; d._at = new Date().toISOString(); d._run = run && run.at; d._sig = job.sig; d._ns = job.ns; d._hash = hash; d._warnings = P.checks(d, d._qr);
         const same = all().find(x => x._id !== d._id && invNo(x.invoice_number) && invNo(x.invoice_number) === invNo(d.invoice_number) && dKey(x.invoice_date) === dKey(d.invoice_date) && sameVendor(x, d));
         if (same) { runAdd(live[job.id].file, 'dup', 'نفس الفاتورة محمّلة سابقًا من «' + (same.file || same.vendor_name || '') + '» (' + (d.invoice_number || '') + ')'); delete live[job.id]; done++; drawList(); continue; }
         imgs[job.id] = urls; IDB.put(job.id, urls); runAdd(live[job.id].file, 'ok', '', job.id); delete live[job.id];
@@ -300,6 +300,8 @@
   // ---------- كشف الفواتير المكررة: نفس المورّد (الرقم الضريبي أو الاسم) ونفس رقم الفاتورة ونفس التاريخ ----------
   const nk = s => P.normDigits(s).toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^0-9a-z\u0621-\u064A]/g, '');
   const vName = s => nk(String(s || '').replace(/^\s*(شركة|مؤسسة|مؤسسه|شركه)\s+/, '').replace(/\b(co|company|ltd|llc|est)\b\.?/gi, ''));
+  // الرقم الضريبي للمورد: من SuppliersT إن كان مسجلًا، وإلا من الفاتورة
+  const vatOf = x => { const s = !x._unreg && ref && x._supId != null && (ref.suppliers || []).find(z => z.id === x._supId); return (s && s.vat) || P.normDigits(String(x.vendor_tax_number || '')).replace(/\D/g, ''); };
   const vVat = s => { const d = P.normDigits(s).replace(/\D/g, ''); return d.length >= 10 ? d : ''; };
   const invNo = s => nk(s).replace(/^0+(?=.)/, '');
   const dKey = s => { const t = String(s || '').trim(); return t ? (P.findDate(t) || nk(t)) : ''; };
@@ -544,7 +546,7 @@
     if (!appr.length) return amsg(all().some(x => x._approved) ? 'كل الفواتير المعتمدة أُرسلت إلى Google Sheet سابقًا.' : 'لا توجد فواتير معتمدة. اعتمد الفواتير أولًا من تبويب «المراجعة».', true);
     const ready = appr.filter(x => (x._supId != null || x._unreg) && x.project_id != null && (x.product_id != null || x._unreg)), missing = appr.length - ready.length;
     if (!ready.length) return amsg(`لم يُرسل شيء: ${missing} فاتورة معتمدة ينقصها المورّد المسجل أو المشروع أو المنتج. اخترها من القوائم الحمراء.`, true);
-    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._unreg ? '' : x._supId, Unreg: !!x._unreg, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x._unreg ? '' : (x.product_id ?? ''), ProductName: x._unreg ? 'منتج غير مسجل' : (x.product_name || ''), Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: [x._unreg ? `مورد غير مسجل: ${x.vendor_name || '—'}${x.vendor_tax_number ? ' (الرقم الضريبي ' + x.vendor_tax_number + ')' : ''}` : '', x.note || ''].filter(Boolean).join(' | '), FilePath: x.file || '', FileHash: x._hash || '' })) };
+    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._unreg ? '' : x._supId, Unreg: !!x._unreg, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x._unreg ? '' : (x.product_id ?? ''), ProductName: x._unreg ? 'منتج غير مسجل' : (x.product_name || ''), Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: [x._unreg ? `مورد غير مسجل: ${x.vendor_name || '—'}${x.vendor_tax_number ? ' (الرقم الضريبي ' + x.vendor_tax_number + ')' : ''}` : '', x.note || ''].filter(Boolean).join(' | '), VATID: vatOf(x), FilePath: x.file || '', FileHash: x._hash || '' })) };
     $('gsSend').disabled = true; amsg(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
     try {
       const r = await fetch(gs.url, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' }); const j = await r.json();
@@ -817,18 +819,28 @@
     $('apprWarn').innerHTML = warnList(notExp, `${notExp.length} فاتورة معتمدة لم تُصدّر بعد:`); $('apprWarn').hidden = !notExp.length;
     $('exWarn').innerHTML = warnList(notAll, `${notAll.length} فاتورة لم تُصدّر بعد، وهذه الأسباب:`); $('exWarn').hidden = !notAll.length;
     // آخر عملية
-    const items = run ? run.items : [], ok = items.filter(i => i.st === 'ok'), dup = items.filter(i => i.st === 'dup'), err = items.filter(i => i.st === 'error');
+    // آخر عملية: من سجل العملية، وإن لم يوجد (متصفح آخر) فآخر دفعة حسب وقت التحميل
+    let R0 = run;
+    if (!R0 || !R0.items.length) {
+      const ts = h.map(x => x._at || '').filter(Boolean).sort(); const last = ts[ts.length - 1];
+      if (last) {
+        const t0 = Date.parse(last), grp = h.filter(x => x._at && (x._run ? x._run === (h.find(y => y._at === last) || {})._run : t0 - Date.parse(x._at) <= 10 * 60e3));
+        R0 = { at: grp.map(x => x._at).sort()[0] || last, items: grp.sort((a, b) => (a._at < b._at ? -1 : 1)).map(x => ({ file: x.file || '', st: 'ok', msg: '', id: x._id })) };
+      }
+    }
+    const items = R0 ? R0.items : [], ok = items.filter(i => i.st === 'ok'), dup = items.filter(i => i.st === 'dup'), err = items.filter(i => i.st === 'error');
     const pend = Object.values(live).filter(v => v.status === 'queued' || v.status === 'working');
-    $('lastRun').hidden = !run && !pend.length;
-    $('lrSum').innerHTML = run ? `<span>${esc(dt(run.at))}</span> · <b class="okc">حُمّلت ${ok.length}</b>${dup.length ? ` · <b class="dupc">لم تُحمّل لأنها مكررة ${dup.length}</b>` : ''}${err.length ? ` · <b class="errc">تعذّرت قراءتها ${err.length}</b>` : ''}${pend.length ? ` · <b>قيد القراءة ${pend.length}</b>` : ''}` : '';
+    $('lastRun').hidden = false;
+    $('lrCount').textContent = `(${items.length + pend.length})`;
+    $('lrSum').innerHTML = R0 ? `<span>${esc(dt(R0.at))}</span> · <b class="okc">حُمّلت ${ok.length}</b>${dup.length ? ` · <b class="dupc">لم تُحمّل لأنها مكررة ${dup.length}</b>` : ''}${err.length ? ` · <b class="errc">تعذّرت قراءتها ${err.length}</b>` : ''}${pend.length ? ` · <b>قيد القراءة ${pend.length}</b>` : ''}` : '';
     const lrRows = items.map(i => {
       const x = i.id && byId[i.id];
       if (x) return invRow(x, `<span class="okc">حُمّلت</span> ${ST(x)}`);
       return `<tr class="pend ${i.st === 'dup' ? 'dup' : 'error'}"><td data-l="الملف"><small class="fpath">📄 ${esc(i.file)}</small></td><td colspan="5" data-l="النتيجة">${i.st === 'ok' ? 'حُمّلت ثم حُذفت من القائمة' : i.st === 'dup' ? '<b class="dupc">لم تُحمّل (مكررة)</b>: ' + esc(i.msg) : '<b class="errc">تعذّرت القراءة</b>: ' + esc(i.msg)}</td><td></td></tr>`;
     }).concat(pend.map(v => `<tr class="pend"><td data-l="الملف"><small class="fpath">📄 ${esc(v.file)}</small></td><td colspan="5">${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</td><td></td></tr>`)).join('');
-    $('lrTable').innerHTML = HEAD() + `<tbody>${lrRows || '<tr><td colspan="7" class="empty">لا شيء بعد.</td></tr>'}</tbody>`;
+    $('lrTable').innerHTML = HEAD() + `<tbody>${lrRows || '<tr><td colspan="7" class="empty">لم تُحمّل أي فاتورة بعد.</td></tr>'}</tbody>`;
     // المحمّلة سابقًا
-    const inRun = new Set(ok.map(i => i.id)), prev = h.filter(x => !inRun.has(x._id));
+    const inRun = new Set(ok.map(i => i.id)), prev = h.filter(x => !inRun.has(x._id)).sort((a, b) => ((b._at || '') > (a._at || '') ? 1 : -1));
     $('pvCount').textContent = `(${prev.length})`;
     $('pvSum').textContent = prev.length ? `بانتظار المراجعة ${prev.filter(x => !x._approved).length} · معتمدة ${prev.filter(x => x._approved && !isExported(x)).length} · مُصدّرة ${prev.filter(isExported).length} · المجموع ${sumBy(prev)}` : '';
     $('pvTable').innerHTML = HEAD() + `<tbody>${prev.map(x => invRow(x)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير محمّلة قبل آخر عملية.</td></tr>'}</tbody>`;

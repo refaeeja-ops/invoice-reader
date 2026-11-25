@@ -128,12 +128,13 @@
     invamount: [d => num(d.total), 14], invvat: [d => num(d.tax_amount), 12], vatid: [d => d.vendor_tax_number || '', 18], note: [d => d.note || '', 24]
   };
   VAT_MAP.invdate = VAT_MAP.date;
+  const withVat = cols => { cols = cols && cols.length ? cols.slice() : VAT_DEFAULT.slice(); if (!cols.some(c => String(c).toLowerCase() === 'vatid')) cols.push('VATID'); return cols; };
   function vatRows(list, cols) {
-    cols = cols && cols.length ? cols : VAT_DEFAULT;
+    cols = withVat(cols);
     const f = cols.map(c => VAT_MAP[String(c).toLowerCase()] || [() => '', 12]);
     return [cols, ...list.map(d => f.map(([g]) => g(d)))];
   }
-  const vatW = cols => (cols && cols.length ? cols : VAT_DEFAULT).map(c => (VAT_MAP[String(c).toLowerCase()] || [0, 12])[1]);
+  const vatW = cols => withVat(cols).map(c => (VAT_MAP[String(c).toLowerCase()] || [0, 12])[1]);
   function vatXlsx(list, cols) { return xlsx([{ name: 'VatReport', rows: vatRows(list, cols), widths: vatW(cols) }]); }
   function toXlsx(list, cols) {
     return xlsx([{ name: 'الفواتير', rows: invRows(list), widths: INV_COLS.map(c => c[2]) }, { name: 'البنود', rows: itemRows(list), widths: ITEM_COLS.map(c => c[2]) }, { name: 'الكميات', rows: qtyRows(list), widths: QTY_W }, { name: 'VatReport', rows: vatRows(list, cols), widths: vatW(cols) }]);

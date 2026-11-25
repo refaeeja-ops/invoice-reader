@@ -110,6 +110,12 @@ function doGet(e) {
 }
 
 // التطبيق يرسل الفواتير المعتمدة: POST {email, token, invoices:[...]}
+// يضيف عمودًا في نهاية الترويسة إن لم يكن موجودًا (مثل VATID)
+function ensureCol_(sh, head, name) {
+  if (head.some(h => h.toLowerCase() === name.toLowerCase())) { const i = head.findIndex(h => h.toLowerCase() === name.toLowerCase()); head[i] = name; return; }
+  head.push(name); sh.getRange(1, head.length).setValue(name);
+}
+
 function doPost(e) {
   let body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'بيانات غير صالحة' }); }
@@ -121,6 +127,7 @@ function doPost(e) {
     const invSh = sheet_(ss, 'InvoiceT'), vatSh = sheet_(ss, 'VatReport');
     if (!invSh || !vatSh) return json_({ ok: false, error: 'لم أجد ورقة InvoiceT أو VatReport' });
     const inv = values_(invSh), ih = inv[0].map(str_);
+    ensureCol_(invSh, ih, 'VATID');
     const col = n => ih.indexOf(n);
     const existing = {}; let maxId = 0;
     inv.slice(1).forEach(r => {
@@ -128,6 +135,7 @@ function doPost(e) {
       if (r[col('InvoiceNo')] !== '') existing[dupKey_(r[col('SupID')], r[col('InvoiceNo')], r[col('InvDate')] || r[col('Date')])] = r[col('InvID')];
     });
     const vh = values_(vatSh)[0].map(str_);
+    ensureCol_(vatSh, vh, 'VATID');
     const today = new Date();
     const known = hashes_(ss), hashRows = [];
     const added = [], skipped = [], invRows = [], vatRows = [];
@@ -140,7 +148,7 @@ function doPost(e) {
       const date = d.Date && /^\d{4}-\d{2}-\d{2}$/.test(d.Date) ? new Date(d.Date + 'T00:00:00') : (d.Date || '');
       const vals = {
         InvID: ++maxId, InvoiceNo: d.InvoiceNo, SupID: d.SupID === '' ? '' : d.SupID, ProjectID: d.ProjectID, InvDate: date, Date: date,
-        Invamount: d.Invamount, invVat: d.invVat, Product: d.ProductID, ProductID: d.ProductID, ProductName: d.ProductName,
+        Invamount: d.Invamount, invVat: d.invVat, Product: d.ProductID, VATID: str_(d.VATID).replace(/\D/g, ''), ProductID: d.ProductID, ProductName: d.ProductName,
         SupfName: d.SupfName, ProjectName: d.ProjectName, InvEnteryDate: today, EnteredBy: who, FilePath: d.FilePath || '', FileName: d.FilePath || '',
         InvNote: [d.Note || '', ih.indexOf('FilePath') < 0 && ih.indexOf('FileName') < 0 && d.FilePath ? 'الملف: ' + d.FilePath : ''].filter(Boolean).join(' | ')
       };
