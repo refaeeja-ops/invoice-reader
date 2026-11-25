@@ -561,8 +561,8 @@
   const isExported = x => !!(x._exportedAt || x._sent);
   // شارة التصدير بجانب «معتمدة»: أخضر «مصدّرة» أو أحمر «غير مصدّرة»
   const expBadge = x => isExported(x)
-    ? `<span class="xb yes" title="${esc([x._sent ? 'في Google Sheet (InvID ' + x._sent + ')' : '', x._exportedAt ? 'صُدّرت إلى Excel' : ''].filter(Boolean).join(' · '))}">مصدّرة</span>`
-    : '<span class="xb no" title="لم تُصدّر ولم تُرسل إلى Google Sheet">غير مصدّرة</span>';
+    ? `<span class="xb yes" style="background:#1e7a46;color:#fff" title="${esc([x._sent ? 'في Google Sheet (InvID ' + x._sent + ')' : '', x._exportedAt ? 'صُدّرت إلى Excel' : ''].filter(Boolean).join(' · '))}">مصدّرة</span>`
+    : '<span class="xb no" style="background:#c0392b;color:#fff" title="لم تُصدّر ولم تُرسل إلى Google Sheet">غير مصدّرة</span>';
   function amsg(t, bad) { const e = $('apprMsg'); e.textContent = t; e.className = 'amsg' + (bad ? ' bad' : ''); e.hidden = !t; toast(t); }
   // سبب عدم تصدير الفاتورة (يظهر في التحذيرات والجداول)
   function whyNot(x) {

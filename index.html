@@ -185,8 +185,11 @@ body.lbon{overflow:hidden}
 .tabs .badge.warn{background:#d68910}
 tr.pick{cursor:pointer}tr.pick:hover td{background:#f3f6ff}
 @media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stat b{font-size:24px}}
-.xb{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;color:#fff;margin:2px}.xb.yes{background:#1e7a46}.xb.no{background:#c0392b}
+.xb{display:inline-block;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:700;color:#fff;margin:3px 4px}.xb.yes{background:#1e7a46}.xb.no{background:#c0392b}
 .why.ok{color:#1e7a46}
+td.act button,table.mini td.act button{margin:4px!important}
+td.act .st{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin-bottom:8px}
+@media(max-width:600px){table.list td.act{display:flex!important;flex-wrap:wrap;gap:8px;align-items:center}table.list td.act button{margin:0!important}td.act .st{width:100%;justify-content:flex-start}}
 </style>
 </head>
 <body>
@@ -344,11 +347,11 @@ tr.pick{cursor:pointer}tr.pick:hover td{background:#f3f6ff}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js"></script>
-<script src="export.js"></script>
-<script src="digits.js"></script>
-<script src="config.js"></script>
-<script src="ref.js"></script>
-<script src="app.js"></script>
+<script src="parse.js?v=202611250635"></script>
+<script src="export.js?v=202611250635"></script>
+<script src="digits.js?v=202611250635"></script>
+<script src="config.js?v=202611250635"></script>
+<script src="ref.js?v=202611250635"></script>
+<script src="app.js?v=202611250635"></script>
 </body>
 </html>
