@@ -334,54 +334,46 @@
 
   // ---------- الرفع والقراءة ----------
   const queue = [], live = {}; let busy = false;
-  const sig = f => [pathOf(f), f.size].join('|');
-  function addFiles(files) {
+  const sig = f => String(f.name || '').trim().toLowerCase(); // منع التكرار باسم الملف فقط
+  function addFiles(files, fromCam) {
     const seen = new Set(list.map(x => x.sig).filter(Boolean).concat(queue.map(j => sig(j.file))));
     let skipped = 0;
     [...(files || [])].filter(f => /^image\//.test(f.type) || /\.(pdf|jpe?g|png|webp|heic|bmp|gif)$/i.test(f.name || '') || f.type === 'application/pdf').forEach((f, i) => {
-      const s = sig(f); if (f.name && f.name !== 'image.jpg' && seen.has(s)) { skipped++; return; } seen.add(s);
+      const s = sig(f); if (!fromCam && seen.has(s)) { skipped++; return; } seen.add(s);
       const id = Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).slice(2, 6);
       queue.push({ id, file: f }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا' };
     });
-    if (skipped) toast(`${skipped} ملف موجود مسبقًا في القائمة ولم يُضف مرة أخرى`);
+    if (skipped) toast(`${skipped} ملف لم يُضف لأن ملفًا بنفس الاسم موجود في القائمة`);
     draw(); pump();
   }
   async function pump() {
     if (busy) return; busy = true;
-    let done = 0; const skippedDup = [];
+    let done = 0;
     while (queue.length) {
       const job = queue.shift(); live[job.id].status = 'working'; draw();
       const N = done + 1 + queue.length;
       const say = m => status(N > 1 ? `فاتورة ${done + 1} من ${N}: ${m}` : m);
       progress(0.02);
-      // منع التكرار بمحتوى الملف (يعمل حتى لو تغيّر اسم الملف أو أُعيد اختيار المجلد)
-      let hash = '';
-      try { if (crypto.subtle && job.file.size < 60e6) hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await job.file.arrayBuffer()))].map(b => b.toString(16).padStart(2, '0')).join(''); } catch { }
-      const twin = hash && list.find(y => y.hash === hash);
-      if (twin) { skippedDup.push(live[job.id].file); delete live[job.id]; done++; draw(); continue; }
       try {
         const { d, pages } = await processFile(job.file, say);
-        const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: sig(job.file), hash,
+        const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: sig(job.file),
           invoice_number: d.invoice_number || '', invoice_date: d.invoice_date || '', total: d.total ?? '', tax_amount: d.tax_amount ?? '',
           vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: d.payment_method || '', note: '' };
         list.unshift(x); save();
         IMG.put(job.id, { pages, blob: job.file.size < 25e6 ? job.file : null });
       } catch (e) {
         console.error(e);
-        const x = { id: job.id, at: new Date().toISOString(), file: live[job.id].file, sig: sig(job.file), hash, invoice_number: '', invoice_date: '', total: '', tax_amount: '', vendor_name: '', vendor_tax_number: '', payment_method: '', note: 'تعذّرت قراءة الملف تلقائيًا: أدخل البيانات يدويًا' };
+        const x = { id: job.id, at: new Date().toISOString(), file: live[job.id].file, sig: sig(job.file), invoice_number: '', invoice_date: '', total: '', tax_amount: '', vendor_name: '', vendor_tax_number: '', payment_method: '', note: 'تعذّرت قراءة الملف تلقائيًا: أدخل البيانات يدويًا' };
         list.unshift(x); save(); IMG.put(job.id, { pages: [], blob: job.file });
       }
       delete live[job.id]; done++; draw();
     }
     busy = false; progress(null);
-    if (skippedDup.length) toast(`${skippedDup.length} ملف لم يُضف لأن نفس الفاتورة موجودة مسبقًا`);
-    const read = done - skippedDup.length;
-    done = read;
     status(done ? (done > 1 ? `انتهت القراءة: ${done} فواتير. راجع الخانات الحمراء وأكملها.` : 'تمت القراءة. راجع الخانات وأكمل الناقص.') : '');
   }
   $('pick').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
   $('dir').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
-  $('cam').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+  $('cam').addEventListener('change', e => { addFiles(e.target.files, true); e.target.value = ''; });
   const drop = $('drop');
   ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
