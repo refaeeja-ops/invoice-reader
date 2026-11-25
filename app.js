@@ -212,9 +212,15 @@
     const allF = [...(files || [])];
     files = allF.filter(f => isInv(f) && !/^\./.test(f.name || ''));
     // منع التكرار: ملف سبق اختياره (في الملخص أو الدفعة الحالية) أو مكرر في نفس الاختيار
-    const seen = new Set([...all().map(x => x._sig).filter(Boolean), ...queue.map(j => j.sig), ...Object.values(live).map(v => v.sig).filter(Boolean)]);
+    const nsOf = f => String(f.name || '').toLowerCase() + '|' + (f.size || 0);
+    const seen = new Set([...all().flatMap(x => [x._sig, x._ns, x.file && x.file !== 'صورة من الكاميرا' ? 'p:' + x.file.toLowerCase() : '']).filter(Boolean),
+      ...queue.flatMap(j => [j.sig, j.ns]), ...Object.values(live).flatMap(v => [v.sig, v.ns]).filter(Boolean)]);
     const dupF = [];
-    files = files.filter(f => { const g = sigOf(f); if (!isCam(f) && seen.has(g)) { dupF.push(pathOf(f)); return false; } seen.add(g); return true; });
+    files = files.filter(f => {
+      const keys = [sigOf(f), nsOf(f), 'p:' + pathOf(f).toLowerCase()];
+      if (!isCam(f) && keys.some(k => seen.has(k))) { dupF.push(pathOf(f)); return false; }
+      keys.forEach(k => seen.add(k)); return true;
+    });
     const notInv = allF.length - files.length - dupF.length;
     const dupTxt = dupF.length ? `تم تجاهل ${dupF.length} ملف سبق رفعه (${dupF.slice(0, 3).join('، ')}${dupF.length > 3 ? '…' : ''})` : '';
     if (fromFolder) files.sort((a, b) => pathOf(a).localeCompare(pathOf(b), 'ar', { numeric: true }));
@@ -224,7 +230,7 @@
     }
     if (fromFolder) setTimeout(() => toast(`وُجدت ${files.length} فاتورة جديدة في المجلد` + (dupF.length ? `، و${dupTxt}` : '') + (notInv ? ` (وتُجوهل ${notInv} ملف ليس صورة أو PDF)` : '')), 50);
     else if (dupF.length) setTimeout(() => toast(dupTxt), 50);
-    files.forEach((f, i) => { const id = Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6); const sig = sigOf(f); queue.push({ id, file: f, sig }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا', sig }; });
+    files.forEach((f, i) => { const id = Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6); const sig = sigOf(f), ns = nsOf(f); queue.push({ id, file: f, sig, ns }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا', sig, ns }; });
     drawList(); if (files.length > 1 && !fromFolder) toast(`أُضيفت ${files.length} فواتير إلى الدفعة`);
     pump();
   }
@@ -251,7 +257,9 @@
       if (twin) { live[job.id].status = 'dup'; live[job.id].err = 'نفس محتوى الملف «' + (twin.file || '') + '»'; done++; drawList(); continue; }
       try {
         const { d, pages: urls } = await processFile(job.file, say);
-        d._id = job.id; d._at = new Date().toISOString(); d._sig = job.sig; d._hash = hash; d._warnings = P.checks(d, d._qr);
+        d._id = job.id; d._at = new Date().toISOString(); d._sig = job.sig; d._ns = job.ns; d._hash = hash; d._warnings = P.checks(d, d._qr);
+        const same = all().find(x => x._id !== d._id && invNo(x.invoice_number) && invNo(x.invoice_number) === invNo(d.invoice_number) && dKey(x.invoice_date) === dKey(d.invoice_date) && sameVendor(x, d));
+        if (same) { live[job.id].status = 'dup'; live[job.id].err = 'نفس الفاتورة محمّلة سابقًا من «' + (same.file || same.vendor_name || '') + '» (' + (d.invoice_number || '') + ')'; done++; drawList(); continue; }
         imgs[job.id] = urls; delete live[job.id];
         store(d); batch.push(job.id);
         if (N === 1) open(job.id, true); // الدفعة لا تفتح شاشة المراجعة تلقائيًا؛ النتائج تظهر في الملخص
@@ -541,7 +549,7 @@
     $('filters').hidden = !h.length;
     $('filters').innerHTML = [['all', 'الكل', h.length], ['pending', 'بانتظار الاعتماد', nP], ['approved', 'معتمدة', nA]]
       .map(([k, l, n]) => `<button data-filter="${k}" aria-pressed="${filter === k}">${l} (${n})</button>`).join('');
-    const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة', dup: 'تم تجاهله: الملف مختار سابقًا' };
+    const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة', dup: 'لم يُحمّل (مكرر)' };
     const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="6">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' || v.status === 'dup' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
     const shown = shownList();
     const rows = shown.map(x => {
@@ -560,7 +568,18 @@
     $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="8" class="empty">${h.length ? 'لا توجد فواتير في هذا التصنيف.' : 'لا توجد فواتير بعد. يمكنك اختيار عدة ملفات أو مجلد كامل.'}</td></tr>`;
     const nd = dm.size;
     $('dupNote').hidden = !nd;
-    $('dupNote').textContent = nd ? `تنبيه: ${nd} فواتير في القائمة مكررة (نفس المورّد ورقم الفاتورة والتاريخ). هي معلّمة بكلمة «مكررة»؛ راجعها واحذف الزائد منها.` : '';
+    $('dupNote').innerHTML = nd ? `تنبيه: ${nd} فواتير في القائمة مكررة (نفس المورّد ورقم الفاتورة والتاريخ). <button id="dupClean" class="del">حذف المكرر وإبقاء نسخة واحدة</button>` : '';
+    if (nd) $('dupClean').onclick = () => {
+      const h = all(), before = h.slice(), keep = new Set(), drop = new Set();
+      // نُبقي من كل مجموعة: المرسلة للشيت، ثم المعتمدة، ثم الأقدم
+      const rank = x => (x._sent ? 0 : 2) + (x._approved ? 0 : 1);
+      [...h].sort((a, b) => rank(a) - rank(b) || String(a._at || '').localeCompare(String(b._at || ''))).forEach(x => {
+        if (drop.has(x._id)) return; keep.add(x._id); (dm.get(x._id) || []).forEach(o => { if (!keep.has(o._id)) drop.add(o._id); });
+      });
+      for (let i = h.length - 1; i >= 0; i--) if (drop.has(h[i]._id)) h.splice(i, 1);
+      persist(); drawList();
+      undo(`حُذفت ${drop.size} فاتورة مكررة`, () => { h.splice(0, h.length, ...before); persist(); drawList(); });
+    };
     drawQty();
     $('sumAll').textContent = h.length ? `مجموع الكل: ${sumBy(h)}` + (nA ? ` · المعتمد: ${sumBy(h.filter(x => x._approved))}` : '') : '';
   }
