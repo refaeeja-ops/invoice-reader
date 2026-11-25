@@ -535,29 +535,44 @@
   $('gsForget').onclick = () => { gs = null; localStorage.setItem(GKEY, JSON.stringify({ url: GURL })); $('gsEmail').value = ''; $('gsToken').value = ''; gsUi(); toast('أُلغي الربط مع Google Sheet'); };
   $('gsLoad').onclick = async () => { try { await gsLoadRef(gs); } catch (e) { toast((e && e.message) || 'تعذّر التحديث من الشيت'); } };
   $('gsSend').onclick = async () => {
-    if (!gs) return;
+    if (!gs) return amsg('Google Sheet غير مربوط. اربطه من تبويب «تحميل الفواتير» ← «البيانات المرجعية والربط».', true);
     const appr = all().filter(x => x._approved && !x._sent);
-    if (!appr.length) return toast('لا توجد فواتير معتمدة جديدة للإرسال');
+    if (!appr.length) return amsg(all().some(x => x._approved) ? 'كل الفواتير المعتمدة أُرسلت إلى Google Sheet سابقًا.' : 'لا توجد فواتير معتمدة. اعتمد الفواتير أولًا من تبويب «المراجعة».', true);
     const ready = appr.filter(x => x._supId != null && x.project_id != null && x.product_id != null), missing = appr.length - ready.length;
-    if (!ready.length) return status(`لم يُرسل شيء: ${missing} فاتورة معتمدة ينقصها المورّد المسجل أو المشروع أو المنتج. اخترها من القوائم الحمراء.`, true);
+    if (!ready.length) return amsg(`لم يُرسل شيء: ${missing} فاتورة معتمدة ينقصها المورّد المسجل أو المشروع أو المنتج. اخترها من القوائم الحمراء.`, true);
     const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '', FilePath: x.file || '', FileHash: x._hash || '' })) };
-    $('gsSend').disabled = true; status(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
+    $('gsSend').disabled = true; amsg(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
     try {
       const r = await fetch(gs.url, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' }); const j = await r.json();
       if (!j.ok) throw new Error(j.error);
       const h = all(), now = new Date().toISOString();
       (j.added || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x) { x._sent = a.invId; x._sentAt = now; if (ref && x._hash) (ref.hashes = ref.hashes || {})[x._hash] = a.invId; if (ref) ref.inv[x._supId + '|' + String(x.invoice_number).toLowerCase().replace(/[^0-9a-zء-ي]/g, '').replace(/^0+(?=.)/, '')] = a.invId; } });
-      (j.skipped || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x && a.invId) { x._sent = a.invId; x._sentAt = now; x._sentNote = a.byFile ? 'نفس الملف أُرسل سابقًا' : 'كانت موجودة مسبقًا'; } });
+      (j.skipped || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x && a.invId) { x._sent = a.invId; x._sentAt = now; x._sentNote = a.byFile ? 'نفس الملف أُرسل سابقًا' : 'كانت موجودة مسبقًا'; delete x._sendErr; } else if (x) x._sendErr = a.reason || 'رفضها الشيت'; });
+      (j.added || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x) delete x._sendErr; });
       persist(); try { localStorage.setItem(RKEY, JSON.stringify(ref)); } catch { } drawList();
       const sk = (j.skipped || []).length;
       toast(`أُرسلت ${(j.added || []).length} فاتورة إلى Google Sheet`);
-      status(`أُضيفت ${(j.added || []).length} فاتورة إلى InvoiceT و VatReport.` + (sk ? ` لم تُضف ${sk} لأنها موجودة مسبقًا أو بلا رقم.` : '') + (missing ? ` لم تُرسل ${missing} لأن المورّد أو المشروع أو المنتج غير محدد.` : ''), !!missing);
-    } catch (e) { console.error(e); status('تعذّر الإرسال: ' + ((e && e.message) || 'تحقق من الاتصال'), true); }
+      amsg(`أُضيفت ${(j.added || []).length} فاتورة إلى InvoiceT و VatReport.` + (sk ? ` لم تُضف ${sk} لأنها موجودة مسبقًا أو بلا رقم.` : '') + (missing ? ` لم تُرسل ${missing} لأن المورّد أو المشروع أو المنتج غير محدد.` : ''), !!missing);
+    } catch (e) { console.error(e); const m = (e && e.message) || 'تحقق من الاتصال'; ready.forEach(x => x._sendErr = 'فشل الإرسال إلى Google Sheet: ' + m); persist(); drawList(); amsg('تعذّر الإرسال: ' + m, true); }
     finally { $('gsSend').disabled = false; }
   };
 
   let tab = 'up';
   const isExported = x => !!(x._exportedAt || x._sent);
+  function amsg(t, bad) { const e = $('apprMsg'); e.textContent = t; e.className = 'amsg' + (bad ? ' bad' : ''); e.hidden = !t; toast(t); }
+  // سبب عدم تصدير الفاتورة (يظهر في التحذيرات والجداول)
+  function whyNot(x) {
+    const r = [];
+    if (!x._approved) r.push('لم تُعتمد بعد، راجعها واعتمدها من تبويب «المراجعة»');
+    else {
+      const miss = [x._supId == null && 'المورّد المسجل', x.project_id == null && 'المشروع', x.product_id == null && 'المنتج'].filter(Boolean);
+      if (x._sendErr) r.push(x._sendErr);
+      if (miss.length) r.push('ينقصها ' + miss.join(' و') + '، فلا يمكن إرسالها إلى Google Sheet');
+      if (!r.length) r.push('جاهزة، ولم يُضغط زر التصدير بعد (تبويب «المعتمدة»)');
+    }
+    if (x._dup) r.push('مكررة مع فاتورة أخرى');
+    return r;
+  }
   const shownList = () => all().filter(x => tab === 'appr' ? x._approved : !x._approved);
   const money = x => x.total != null && x.total !== '' ? P.fmt(x.total) + ' ' + (x.currency || '') : '—';
   const sumBy = list => Object.entries(list.reduce((a, x) => { const c = x.currency || '—'; a[c] = (a[c] || 0) + (+x.total || 0); return a; }, {})).map(([c, v]) => P.fmt(v) + ' ' + c).join(' · ');
@@ -609,7 +624,7 @@
   const f2 = v => v == null ? '—' : P.fmt(v);
   function drawQty() {
     const h = all(), groups = X.qtyGroups(h);
-    $('qtySec').hidden = !groups.length;
+    $('qEmpty').hidden = !!groups.length; $('qtyBody').hidden = !groups.length; $('bQty').textContent = groups.filter(g => g.diff).length || '';
     if (!groups.length) return;
     const nd = groups.filter(g => g.diff).length;
     $('qcount').textContent = `(${groups.length} صنف)`;
@@ -720,10 +735,11 @@
   document.addEventListener('paste', e => { const f = e.clipboardData?.files; if (f && f.length) addFiles(f); });
   // ---------- التبويبات ----------
   function setTab(t, keep) {
+    if (t !== tab) $('apprMsg').hidden = true;
     tab = t;
     document.querySelectorAll('#tabs [data-tab]').forEach(b => { const on = b.dataset.tab === t; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
     document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.dataset.pane.split(' ').includes(t)));
-    if (!keep && cur && (t === 'up' || t === 'exp' || (t === 'appr') !== !!cur._approved)) { $('review').classList.remove('on'); cur = null; }
+    if (!keep && cur && (t === 'up' || t === 'exp' || t === 'qty' || (t === 'appr') !== !!cur._approved)) { $('review').classList.remove('on'); cur = null; }
     drawList();
     if (!keep && t === 'rev' && !cur) { const f = all().find(x => !x._approved); if (f) open(f._id); }
     try { sessionStorage.setItem('invoice-reader-tab', t); } catch { }
@@ -778,7 +794,14 @@
   function drawTabs() {
     const h = all(), byId = Object.fromEntries(h.map(x => [x._id, x]));
     const nRev = h.filter(x => !x._approved).length, nAppr = h.filter(x => x._approved).length, notExp = h.filter(x => x._approved && !isExported(x)), exp = h.filter(isExported);
-    $('bRev').textContent = nRev || ''; $('bAppr').textContent = nAppr || ''; $('bExp').textContent = notExp.length || '';
+    const notAll = h.filter(x => !isExported(x));
+    $('bRev').textContent = nRev || ''; $('bAppr').textContent = nAppr || ''; $('bExp').textContent = notAll.length || '';
+    // شريط تبويب «المعتمدة»: أزرار التصدير + تحذير
+    $('apprBar').hidden = tab !== 'appr';
+    $('xNew').textContent = `تصدير المعتمدة غير المصدّرة إلى Excel (${notExp.length})`;
+    const warnList = (list, title) => list.length ? `<b>⚠ ${title}</b><ul>${list.slice(0, 50).map(x => `<li><b>${esc(x._supName || x.vendor_name || x.file || '—')}</b> · ${esc(x.invoice_number || 'بدون رقم')} · ${esc(money(x))}: ${whyNot(x).map(esc).join('؛ ')}</li>`).join('')}${list.length > 50 ? '<li>…</li>' : ''}</ul>` : '';
+    $('apprWarn').innerHTML = warnList(notExp, `${notExp.length} فاتورة معتمدة لم تُصدّر بعد:`); $('apprWarn').hidden = !notExp.length;
+    $('exWarn').innerHTML = warnList(notAll, `${notAll.length} فاتورة لم تُصدّر بعد، وهذه الأسباب:`); $('exWarn').hidden = !notAll.length;
     // آخر عملية
     const items = run ? run.items : [], ok = items.filter(i => i.st === 'ok'), dup = items.filter(i => i.st === 'dup'), err = items.filter(i => i.st === 'error');
     const pend = Object.values(live).filter(v => v.status === 'queued' || v.status === 'working');
@@ -797,9 +820,8 @@
     $('pvTable').innerHTML = HEAD() + `<tbody>${prev.map(x => invRow(x)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير محمّلة قبل آخر عملية.</td></tr>'}</tbody>`;
     // التصدير
     $('exNote').textContent = nRev ? `ملاحظة: ${nRev} فاتورة ما زالت بانتظار المراجعة ولن تُصدّر قبل اعتمادها.` : '';
-    $('xNew').textContent = `تصدير المعتمدة غير المصدّرة إلى Excel (${notExp.length})`; $('xNew').disabled = !notExp.length;
-    $('neCount').textContent = `(${notExp.length})`; $('exCount').textContent = `(${exp.length})`;
-    $('neTable').innerHTML = HEAD() + `<tbody>${notExp.map(x => invRow(x)).join('') || '<tr><td colspan="7" class="empty">كل الفواتير المعتمدة صُدّرت ✓</td></tr>'}</tbody>`;
+    $('neCount').textContent = `(${notAll.length})`; $('exCount').textContent = `(${exp.length})`;
+    $('neTable').innerHTML = HEAD('السبب') + `<tbody>${notAll.map(x => invRow(x, `${ST(x)}<div class="why">${whyNot(x).map(esc).join('<br>')}</div>`)).join('') || '<tr><td colspan="7" class="empty">كل الفواتير صُدّرت ✓</td></tr>'}</tbody>`;
     $('exTable').innerHTML = HEAD('طريقة التصدير') + `<tbody>${exp.map(x => invRow(x, [x._sent ? `Google Sheet (InvID ${esc(x._sent)})` : '', x._exportedAt ? `Excel · ${esc(dt(x._exportedAt))}` : ''].filter(Boolean).join('<br>'))).join('') || '<tr><td colspan="7" class="empty">لم تُصدّر أي فاتورة بعد.</td></tr>'}</tbody>`;
   }
   document.querySelectorAll('.tabtable').forEach(t => t.addEventListener('click', e => {
@@ -808,11 +830,13 @@
     if (go) open(go, true);
   }));
   $('xNew').onclick = () => {
-    const l = all().filter(x => x._approved && !isExported(x)); if (!l.length) return toast('لا توجد فواتير معتمدة غير مصدّرة');
+    const l = all().filter(x => x._approved && !isExported(x));
+    if (!l.length) return amsg(all().some(x => x._approved) ? 'كل الفواتير المعتمدة صُدّرت سابقًا (انظر «تم تصديرها» في تبويب «التصدير»). لإعادة تصدير الكل استخدم «تصدير الكل إلى Excel» هناك.' : 'لا توجد فواتير معتمدة بعد. اعتمد الفواتير من تبويب «المراجعة».', true);
     if (!ref) toast('تنبيه: لم يُحمَّل ملف البيانات، فستكون SupID و ProjectID فارغة');
     download(`فواتير-معتمدة-${stamp()}.xlsx`, X.toXlsx(l, ref && ref.vatCols));
     const now = new Date().toISOString(); l.forEach(x => x._exportedAt = now); persist(); drawList();
-    undo(`صُدّرت ${l.length} فاتورة وانتقلت إلى «تم تصديرها»`, () => { l.forEach(x => delete x._exportedAt); persist(); drawList(); });
+    amsg(`صُدّرت ${l.length} فاتورة إلى Excel وانتقلت إلى «تم تصديرها» في تبويب «التصدير».`);
+    undo(`صُدّرت ${l.length} فاتورة`, () => { l.forEach(x => delete x._exportedAt); persist(); drawList(); });
   };
   document.addEventListener('click', e => { const u = e.target.dataset.unexport; if (!u) return; const x = all().find(v => v._id === u); if (x) { delete x._exportedAt; persist(); drawList(); } });
   // حذف الصور المحفوظة لفواتير لم تعد موجودة

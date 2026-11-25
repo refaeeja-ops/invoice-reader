@@ -173,7 +173,11 @@ table.mini{min-width:0!important}table.mini td.act{width:auto!important}table.mi
 .lbbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;background:rgba(0,0,0,.4)}.lbbar button{min-height:42px;min-width:42px}#lbInfo{color:#fff;font-size:14px}
 .lbstage{flex:1;overflow:auto;text-align:center;touch-action:pan-x pan-y pinch-zoom}.lbstage img{width:100%;max-width:none;display:inline-block}
 body.lbon{overflow:hidden}
-@media(max-width:600px){.tabs button{font-size:14px;padding:6px 10px}}
+@media(max-width:600px){.tabs{gap:3px;padding:6px 8px}.tabs button{flex:1 1 0;min-width:0;font-size:12.5px;padding:4px 2px;white-space:normal;line-height:1.25;border-radius:8px}.tabs .badge{display:block;margin:2px auto 0;width:max-content}}
+.apprbar{display:grid;gap:10px;margin:4px 0 12px}
+.amsg{margin:0;padding:10px 12px;border-radius:6px;background:#eaf6ee;color:#1e7a46}.amsg.bad{background:#fdecea;color:#b03a2e}
+.warnbox{padding:10px 14px;border-radius:6px;background:#fff6e0;border:1px solid #f0c36d;color:#7a5200;font-size:14px}.warnbox ul{margin:6px 0 0;padding-inline-start:18px}.warnbox li{margin:3px 0}
+.why{font-size:13px;color:#9a5b00;margin-top:4px}
 </style>
 </head>
 <body>
@@ -186,6 +190,7 @@ body.lbon{overflow:hidden}
   <button role="tab" data-tab="rev" aria-selected="false" tabindex="-1">المراجعة <span class="badge" id="bRev"></span></button>
   <button role="tab" data-tab="appr" aria-selected="false" tabindex="-1">المعتمدة <span class="badge ok" id="bAppr"></span></button>
   <button role="tab" data-tab="exp" aria-selected="false" tabindex="-1">التصدير <span class="badge" id="bExp"></span></button>
+  <button role="tab" data-tab="qty" aria-selected="false" tabindex="-1">الكميات <span class="badge" id="bQty"></span></button>
 </nav>
 <main>
 <div class="pane on" data-pane="up">
@@ -269,6 +274,11 @@ body.lbon{overflow:hidden}
   <section class="slip hist" aria-labelledby="ht">
     <div class="lhead"><h3 id="ht">فواتير بانتظار المراجعة <span id="count"></span></h3><span class="note" id="sumAll"></span></div>
     <p class="dupnote" id="dupNote" hidden></p>
+    <div class="apprbar" id="apprBar" hidden>
+      <div class="exp"><button class="primary" id="xNew">تصدير المعتمدة غير المصدّرة إلى Excel</button><button id="gsSend" class="gsbtn" hidden>إرسال المعتمدة إلى Google Sheet</button></div>
+      <p class="amsg" id="apprMsg" role="status" hidden></p>
+      <div class="warnbox" id="apprWarn" hidden></div>
+    </div>
     <div class="filters" id="filters" role="group" aria-label="تصفية الفواتير" hidden></div>
     <div class="twrap"><table id="hist" class="list"><thead><tr><th>المورّد</th><th>الرقم الضريبي</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الإجمالي</th><th>المشروع والمنتج</th><th>الملاحظات</th><th>الحالة والإجراء</th></tr></thead><tbody></tbody></table></div>
     <p class="note">اضغط «مراجعة» لفتح الفاتورة مع صورتها. اختر المورّد والمشروع والمنتج، ثم «اعتماد» فتنتقل إلى تبويب «المعتمدة». تُحفظ البيانات والصور في هذا المتصفح فقط (حتى 200 فاتورة).</p>
@@ -278,22 +288,27 @@ body.lbon{overflow:hidden}
   <section class="slip hist" aria-labelledby="exT">
     <div class="lhead"><h3 id="exT">التصدير</h3><span class="note" id="exNote"></span></div>
     <div class="exp" id="exportBar">
-      <button class="primary" id="xNew">تصدير المعتمدة غير المصدّرة إلى Excel</button>
       <button id="xAll">تصدير الكل إلى Excel</button>
       <button id="cAll">الفواتير CSV</button>
       <button id="cItems">البنود CSV</button>
       <button id="xVat">VatReport (المعتمدة)</button>
-      <button id="gsSend" class="gsbtn" hidden>إرسال المعتمدة إلى Google Sheet</button>
       <button id="clearAll" class="danger">حذف الكل</button>
     </div>
+    <div class="warnbox" id="exWarn" hidden></div>
     <h4>لم تُصدّر بعد <span id="neCount"></span></h4>
     <div class="twrap"><table id="neTable" class="list mini tabtable"></table></div>
     <h4>تم تصديرها <span id="exCount"></span></h4>
     <div class="twrap"><table id="exTable" class="list mini tabtable"></table></div>
-    <p class="note">«تصدير المعتمدة غير المصدّرة» ينزّل ملف Excel (الفواتير والبنود والكميات و VatReport) للفواتير المعتمدة التي لم تُصدّر، ثم ينقلها إلى «تم تصديرها». والإرسال إلى Google Sheet يُحسب تصديرًا أيضًا.</p>
+    <p class="note">زر «تصدير المعتمدة غير المصدّرة» في تبويب «المعتمدة» ينزّل ملف Excel (الفواتير والبنود والكميات و VatReport) للفواتير المعتمدة التي لم تُصدّر، ثم ينقلها إلى «تم تصديرها». والإرسال إلى Google Sheet يُحسب تصديرًا أيضًا.</p>
   </section>
-  <section class="slip hist" aria-labelledby="qt" id="qtySec" hidden>
+</div>
+
+
+<div class="pane" data-pane="qty">
+  <section class="slip hist" aria-labelledby="qt" id="qtySec">
     <div class="lhead"><h3 id="qt">جدول الكميات <span id="qcount"></span></h3><span class="note" id="qsum"></span></div>
+    <p class="empty" id="qEmpty">لا توجد بنود بعد. تظهر هنا كميات وأسعار أصناف كل الفواتير المحمّلة.</p>
+    <div id="qtyBody">
     <p class="dupnote" id="qwarn" hidden></p>
     <div class="exp">
       <label class="chk"><input type="checkbox" id="qOnlyDiff"> إظهار الأصناف المختلفة السعر فقط</label>
@@ -303,10 +318,9 @@ body.lbon{overflow:hidden}
     </div>
     <div class="twrap"><table id="qty" class="list qty"><thead><tr><th>الصنف</th><th class="n">الفواتير</th><th class="n">الكمية</th><th class="n">سعر الوحدة</th><th class="n">الإجمالي</th><th>الموردون</th><th>تنبيه السعر</th><th></th></tr></thead><tbody></tbody></table></div>
     <p class="note">يجمع بنود كل الفواتير حسب اسم الصنف. إذا اختلف سعر الوحدة لنفس الصنف بين فاتورة وأخرى يظهر تنبيه، واضغط «التفاصيل» لترى السعر في كل فاتورة. صحّح اسم الصنف في شاشة المراجعة إن قُرئ بشكل مختلف.</p>
+    </div>
   </section>
 </div>
-
-
 </main>
 <div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="صورة الفاتورة">
   <div class="lbbar"><button id="lbClose">إغلاق ✕</button><button id="lbOut" aria-label="تصغير">−</button><button id="lbIn" aria-label="تكبير">+</button><button id="lbPrev">السابقة</button><button id="lbNext">التالية</button><span id="lbInfo"></span></div>
