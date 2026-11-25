@@ -83,6 +83,7 @@
   // ---------- قراءة النص (Tesseract) ----------
   // نموذجان: «ara+eng» للنص العام، و«Arabic+eng» (نموذج الخط العربي) يُستدعى عند وجود أرقام هندية لأنه أدق فيها.
   const workers = {};
+  let deep = false; // إعادة القراءة: كل المحاولات بدل التوقف عند أول نتيجة مقبولة
   let ocrBase = 0, ocrSpan = 1;
   async function getWorker(lang) {
     if (workers[lang]) return workers[lang];
@@ -133,15 +134,15 @@
       if (k) say(`محاولة قراءة ${k + 1} لتحسين النتيجة…`);
       ocrBase = 0.1 + 0.8 * k / (PASSES.length + EAST_PASSES.length); ocrSpan = 0.8 / (PASSES.length + EAST_PASSES.length);
       const r = await run('ara+eng', PASSES[k]);
-      if (good(r) || (k >= 1 && P.itemsOk(r))) break;
-      if (eastern(runs[0].t) && k >= 1) break; // للأرقام الهندية ننتقل للنموذج المتخصص
+      if (!deep && (good(r) || (k >= 1 && P.itemsOk(r)))) break;
+      if (!deep && eastern(runs[0].t) && k >= 1) break; // للأرقام الهندية ننتقل للنموذج المتخصص
     }
-    if (runs.some(x => eastern(x.t)) && !runs.some(x => good(x.r))) {
+    if (runs.some(x => eastern(x.t)) && (deep || !runs.some(x => good(x.r)))) {
       for (let k = 0; k < EAST_PASSES.length; k++) {
         say('وُجدت أرقام هندية، جارٍ قراءتها بنموذج متخصص…');
         ocrBase = 0.1 + 0.8 * (PASSES.length + k) / (PASSES.length + EAST_PASSES.length);
         const r = await run('Arabic+eng', EAST_PASSES[k]);
-        if (good(r)) break;
+        if (!deep && good(r)) break;
       }
     }
     runs.sort((a, b) => b.s - a.s);
@@ -260,11 +261,11 @@
       <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
-      <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button><button class="del" data-del="${esc(x.id)}">حذف الفاتورة</button></footer>
+      <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button><button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}">حذف الفاتورة</button></footer>
     </article>`;
   }
   function draw() {
-    const pend = Object.values(live);
+    const pend = Object.values(live).filter(v => !v.reread);
     $('count').textContent = list.length ? `(${list.length})` : '';
     $('xl').disabled = !list.length; $('xl').textContent = `تنزيل ملف Excel${list.length ? ' (' + list.length + ')' : ''}`;
     const nIss = list.filter(x => issues(x).length).length;
@@ -290,7 +291,7 @@
     let v = el.value.trim();
     if (k === 'total' || k === 'tax_amount') v = n2(v);
     if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\s/g, '');
-    x[k] = v; save(); refreshCard(x);
+    x[k] = v; (x.edited = x.edited || {})[k] = 1; save(); refreshCard(x);
   });
   document.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -301,6 +302,7 @@
       undoBar(`حُذفت الفاتورة`, () => { list.splice(i, 0, x); save(); draw(); }, () => IMG.del(x.id));
     }
     if (b.dataset.view) view(b.dataset.view);
+    if (b.dataset.reread) reread(b.dataset.reread);
   });
 
   // ---------- عرض الملف ----------
@@ -346,6 +348,20 @@
     if (skipped) toast(`${skipped} ملف لم يُضف لأن ملفًا بنفس الاسم موجود في القائمة`);
     draw(); pump();
   }
+  async function reread(id) {
+    const x = list.find(y => y.id === id); if (!x || live[id]) return;
+    const rec = await IMG.get(id);
+    let file = rec && rec.blob;
+    if (!file) { // فواتير منقولة من النسخة السابقة: نعيد القراءة من الصورة المحفوظة
+      let pg = rec && rec.pages && rec.pages[0];
+      if (!pg && x.old) { const u = await OLD.get(id); pg = u && u[0]; }
+      if (pg) file = typeof pg === 'string' ? await (await fetch(pg)).blob() : pg;
+    }
+    if (!file) { toast('لا يوجد ملف محفوظ لهذه الفاتورة. ارفعها من جديد.'); return; }
+    if (!(file instanceof File)) file = new File([file], x.file_name || x.file || 'invoice.jpg', { type: file.type || 'image/jpeg' });
+    queue.push({ id, file, reread: true }); live[id] = { status: 'queued', file: x.file, reread: true };
+    draw(); pump();
+  }
   async function pump() {
     if (busy) return; busy = true;
     let done = 0;
@@ -354,6 +370,18 @@
       const N = done + 1 + queue.length;
       const say = m => status(N > 1 ? `فاتورة ${done + 1} من ${N}: ${m}` : m);
       progress(0.02);
+      if (job.reread) {
+        const x = list.find(y => y.id === job.id);
+        deep = true;
+        try {
+          const { d, pages } = await processFile(job.file, say);
+          let changed = 0;
+          F.forEach(([k]) => { const nv = k === 'total' || k === 'tax_amount' ? (d[k] ?? '') : (d[k] || ''); if (x && !(x.edited && x.edited[k]) && !blank(nv) && nv !== x[k]) { x[k] = nv; changed++; } });
+          if (x) { save(); IMG.get(job.id).then(r0 => IMG.put(job.id, { pages, blob: (r0 && r0.blob) || job.file })); }
+          toast(changed ? `أُعيدت القراءة: تحدّثت ${changed} من الخانات` : 'أُعيدت القراءة ولم تتغير البيانات');
+        } catch (e) { console.error(e); toast('تعذّرت إعادة القراءة'); }
+        deep = false; delete live[job.id]; done++; draw(); continue;
+      }
       try {
         const { d, pages } = await processFile(job.file, say);
         const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: sig(job.file),
