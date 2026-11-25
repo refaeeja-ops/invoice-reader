@@ -91,25 +91,11 @@ const dKey_ = v => v instanceof Date ? Utilities.formatDate(v, (typeof Session !
 // مفتاح التكرار: المورّد + رقم الفاتورة. للمورد غير المسجل (SupID فارغ) نضيف التاريخ حتى لا تتصادم فواتير موردين مختلفين
 const dupKey_ = (sup, no, date) => str_(sup) === '' ? '|' + invKey_(no) + '|' + dKey_(date) : str_(sup) + '|' + invKey_(no);
 
-// حماية من حقن المعادلات: أي نص يبدأ بـ = + - @ يُكتب نصًا (بعلامة ' في أوله) حتى لا يصبح معادلة في الشيت
-const safe_ = v => {
-  if (v == null) return '';
-  if (typeof v !== 'string') return v;
-  return /^[=+\-@\t\r]/.test(v) && !/^[-+]?\d+(\.\d+)?$/.test(v) ? "'" + v : v;
-};
-// المبالغ أرقام فقط؛ غير ذلك يُترك فارغًا
-const num_ = v => { if (v === '' || v == null) return ''; const n = Number(String(v).replace(/,/g, '')); return isFinite(n) ? n : ''; };
-
-// التطبيق يطلب البيانات المرجعية. الطريقة الجديدة: POST {action:'ref'|'hashes', email, token} (الرمز لا يظهر في الرابط).
-// GET ?email=...&token=...&action=ref ما زال مدعومًا للنسخ القديمة من التطبيق.
+// التطبيق يطلب البيانات المرجعية: GET ?email=...&token=...&action=ref
 function doGet(e) {
   const p = (e && e.parameter) || {};
-  return refReply_(p.email, p.token, p.action);
-}
-function refReply_(email, token, action) {
-  if (!auth_(email, token)) return json_({ ok: false, error: 'هذا البريد غير مسموح له أو الرمز غير صحيح' });
+  if (!auth_(p.email, p.token)) return json_({ ok: false, error: 'هذا البريد غير مسموح له أو الرمز غير صحيح' });
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const p = { action: action };
   if (p.action === 'hashes') return json_({ ok: true, hashes: hashes_(ss) });
   const out = { ok: true, title: ss.getName(), sheets: {}, hashes: hashes_(ss) };
   REF_SHEETS.forEach(n => { out.sheets[n] = values_(sheet_(ss, n)).map(r => r.map(v => v instanceof Date ? Utilities.formatDate(v, 'GMT', 'yyyy-MM-dd') : v)); });
@@ -133,22 +119,14 @@ function ensureCol_(sh, head, name) {
 function doPost(e) {
   let body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'بيانات غير صالحة' }); }
-  if (body.action === 'ref' || body.action === 'hashes') {
-    try { return refReply_(body.email, body.token, body.action); } catch (err) { return json_({ ok: false, error: 'خطأ في الشيت: ' + (err && err.message || err) }); }
-  }
   if (!auth_(body.email, body.token)) return json_({ ok: false, error: 'هذا البريد غير مسموح له أو الرمز غير صحيح' });
   const who = normEmail_(body.email);
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) return json_({ ok: false, error: 'الشيت مشغول بإرسال آخر الآن، حاول بعد دقيقة' });
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const invSh = sheet_(ss, 'InvoiceT'), vatSh = sheet_(ss, 'VatReport');
     if (!invSh || !vatSh) return json_({ ok: false, error: 'لم أجد ورقة InvoiceT أو VatReport' });
-    const inv = values_(invSh);
-    if (!inv.length || !inv[0].some(h => str_(h))) return json_({ ok: false, error: 'ورقة InvoiceT بلا ترويسة (الصف الأول فارغ)' });
-    const vat0 = values_(vatSh);
-    if (!vat0.length || !vat0[0].some(h => str_(h))) return json_({ ok: false, error: 'ورقة VatReport بلا ترويسة (الصف الأول فارغ). اكتب أسماء الأعمدة في الصف الأول.' });
-    const ih = inv[0].map(str_);
+    const inv = values_(invSh), ih = inv[0].map(str_);
     ensureCol_(invSh, ih, 'VATID');
     const col = n => ih.indexOf(n);
     const existing = {}; let maxId = 0;
@@ -156,7 +134,7 @@ function doPost(e) {
       const id = Number(r[col('InvID')]); if (id > maxId) maxId = id;
       if (r[col('InvoiceNo')] !== '') existing[dupKey_(r[col('SupID')], r[col('InvoiceNo')], r[col('InvDate')] || r[col('Date')])] = r[col('InvID')];
     });
-    const vh = vat0[0].map(str_);
+    const vh = values_(vatSh)[0].map(str_);
     ensureCol_(vatSh, vh, 'VATID');
     const today = new Date();
     const known = hashes_(ss), hashRows = [];
@@ -167,18 +145,18 @@ function doPost(e) {
       const fh = str_(d.FileHash).toLowerCase();
       if (fh && known[fh]) { skipped.push({ id: d.id, reason: 'نفس ملف الفاتورة أُرسل سابقًا (InvID ' + known[fh] + ')', invId: known[fh], byFile: true }); return; }
       if (existing[key]) { skipped.push({ id: d.id, reason: 'موجودة مسبقًا (InvID ' + existing[key] + ')', invId: existing[key] }); return; }
-      const date = d.Date && /^\d{4}-\d{2}-\d{2}$/.test(d.Date) ? new Date(d.Date + 'T00:00:00') : safe_(String(d.Date || ''));
+      const date = d.Date && /^\d{4}-\d{2}-\d{2}$/.test(d.Date) ? new Date(d.Date + 'T00:00:00') : (d.Date || '');
       const vals = {
         InvID: ++maxId, InvoiceNo: d.InvoiceNo, SupID: d.SupID === '' ? '' : d.SupID, ProjectID: d.ProjectID, InvDate: date, Date: date,
-        Invamount: num_(d.Invamount), invVat: num_(d.invVat), Product: d.ProductID, VATID: str_(d.VATID).replace(/\D/g, ''), ProductID: d.ProductID, ProductName: d.ProductName,
+        Invamount: d.Invamount, invVat: d.invVat, Product: d.ProductID, VATID: str_(d.VATID).replace(/\D/g, ''), ProductID: d.ProductID, ProductName: d.ProductName,
         SupfName: d.SupfName, ProjectName: d.ProjectName, InvEnteryDate: today, EnteredBy: who, FilePath: d.FilePath || '', FileName: d.FilePath || '',
         InvNote: [d.Note || '', ih.indexOf('FilePath') < 0 && ih.indexOf('FileName') < 0 && d.FilePath ? 'الملف: ' + d.FilePath : ''].filter(Boolean).join(' | ')
       };
-      invRows.push(ih.map(h => vals[h] !== undefined && vals[h] !== null ? safe_(vals[h]) : ''));
+      invRows.push(ih.map(h => vals[h] !== undefined && vals[h] !== null ? vals[h] : ''));
       // VatReport: «ProductName» المكرر بعد ProjectID = اسم المشروع
-      vatRows.push(vh.map((h, i) => (h === 'ProductName' && vh[i - 1] === 'ProjectID') ? safe_(String(d.ProjectName || '')) : (vals[h] !== undefined && vals[h] !== null ? safe_(vals[h]) : '')));
+      vatRows.push(vh.map((h, i) => (h === 'ProductName' && vh[i - 1] === 'ProjectID') ? (d.ProjectName || '') : (vals[h] !== undefined && vals[h] !== null ? vals[h] : '')));
       existing[key] = maxId;
-      if (fh) { known[fh] = maxId; hashRows.push([fh, maxId, safe_(String(d.FilePath || '')), who, today]); }
+      if (fh) { known[fh] = maxId; hashRows.push([fh, maxId, d.FilePath || '', who, today]); }
       added.push({ id: d.id, invId: maxId });
     });
     // رقم الفاتورة نص (حتى لا تضيع الأصفار في أوله مثل 03337)
@@ -186,7 +164,5 @@ function doPost(e) {
     if (vatRows.length) { const r0 = vatSh.getLastRow() + 1; const vi = vh.indexOf('InvoiceNo'); if (vi >= 0) vatSh.getRange(r0, vi + 1, vatRows.length, 1).setNumberFormat('@'); vatSh.getRange(r0, 1, vatRows.length, vh.length).setValues(vatRows); }
     if (hashRows.length) { const hs = hashSheet_(ss); hs.getRange(hs.getLastRow() + 1, 1, hashRows.length, HASH_HEAD.length).setValues(hashRows); }
     return json_({ ok: true, added, skipped });
-  } catch (err) {
-    return json_({ ok: false, error: 'خطأ في الشيت: ' + (err && err.message || err) });
   } finally { lock.releaseLock(); }
 }
