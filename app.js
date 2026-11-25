@@ -512,7 +512,7 @@
   function gsUi() {
     $('gsBox').hidden = !GURL;
     $('gsState').textContent = gs ? `(مربوط باسم ${gs.email || '—'} ✓)` : '(غير مربوط)'; $('gsState').classList.toggle('on', !!gs);
-    $('gsSend').hidden = !gs; $('gsLoad').hidden = !gs; $('gsForget').hidden = !gs;
+    $('gsSend').hidden = !GURL; $('gsLoad').hidden = !gs; $('gsForget').hidden = !gs;
     if (gs) { $('gsEmail').value = gs.email || ''; $('gsToken').value = gs.token; }
   }
   async function gsGet(cfg) {
@@ -811,6 +811,7 @@
     document.querySelectorAll('.stats').forEach(e => e.innerHTML = cards);
     // شريط تبويب «المعتمدة»: أزرار التصدير + تحذير
     $('apprBar').hidden = tab !== 'appr';
+    $('needRef').hidden = !!ref || !(tab === 'rev' || tab === 'appr');
     $('xNew').textContent = `تصدير المعتمدة غير المصدّرة إلى Excel (${notExp.length})`;
     const warnList = (list, title) => list.length ? `<b>⚠ ${title}</b><ul>${list.slice(0, 50).map(x => `<li><b>${esc(x._supName || x.vendor_name || x.file || '—')}</b> · ${esc(x.invoice_number || 'بدون رقم')} · ${esc(money(x))}: ${whyNot(x).map(esc).join('؛ ')}</li>`).join('')}${list.length > 50 ? '<li>…</li>' : ''}</ul>` : '';
     $('apprWarn').innerHTML = warnList(notExp, `${notExp.length} فاتورة معتمدة لم تُصدّر بعد:`); $('apprWarn').hidden = !notExp.length;
@@ -858,6 +859,8 @@
   // حذف الصور المحفوظة لفواتير لم تعد موجودة
   IDB.keys().then(ks => { const have = new Set(all().map(x => x._id)); (ks || []).forEach(k => { if (!have.has(k)) IDB.del(k); }); });
   refInfo(); gsUi();
+  // عند فتح التطبيق: إن كان مربوطًا بالشيت نحدّث البيانات المرجعية منه تلقائيًا (حتى تظهر خانات المشروع والمنتج على أي جهاز)
+  if (gs) gsLoadRef(gs, true).catch(e => { if (!ref) amsg('تعذّر تحميل الموردين والمشاريع من Google Sheet: ' + ((e && e.message) || 'تحقق من الاتصال'), true); });
   let t0 = 'up'; try { t0 = sessionStorage.getItem('invoice-reader-tab') || 'up'; } catch { }
   setTab(t0);
   window.__invoiceApp = { addFiles, get cur() { return cur; }, get qr() { return qr; }, get raw() { return rawText; }, get busy() { return busy || queue.length > 0; }, all, dupMap, setTab, get tab() { return tab; } };
