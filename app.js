@@ -559,6 +559,10 @@
 
   let tab = 'up';
   const isExported = x => !!(x._exportedAt || x._sent);
+  // شارة التصدير بجانب «معتمدة»: أخضر «مصدّرة» أو أحمر «غير مصدّرة»
+  const expBadge = x => isExported(x)
+    ? `<span class="xb yes" title="${esc([x._sent ? 'في Google Sheet (InvID ' + x._sent + ')' : '', x._exportedAt ? 'صُدّرت إلى Excel' : ''].filter(Boolean).join(' · '))}">مصدّرة</span>`
+    : '<span class="xb no" title="لم تُصدّر ولم تُرسل إلى Google Sheet">غير مصدّرة</span>';
   function amsg(t, bad) { const e = $('apprMsg'); e.textContent = t; e.className = 'amsg' + (bad ? ' bad' : ''); e.hidden = !t; toast(t); }
   // سبب عدم تصدير الفاتورة (يظهر في التحذيرات والجداول)
   function whyNot(x) {
@@ -598,7 +602,7 @@
         <td data-l="الإجمالي" class="n"><b>${esc(money(x))}</b><small>الضريبة: ${x.tax_amount != null && x.tax_amount !== '' ? esc(P.fmt(x.tax_amount)) : '—'}</small></td>
         <td data-l="المشروع والمنتج" class="lnk">${linkCell(x)}</td>
         <td data-l="الملاحظات" class="notes">${notes ? `<div class="auto">${notes}</div>` : '<div class="auto"><span class="ok">لا تنبيهات</span></div>'}<input class="unote" data-note="${id}" value="${esc(x.note || '')}" placeholder="أضف ملاحظتك…" aria-label="ملاحظتك على الفاتورة"></td>
-        <td class="act"><div class="st">${x._approved ? `<span class="okb">معتمدة</span>${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}${x._sent ? `<span class="sent">في الشيت (InvID ${esc(x._sent)})</span>` : ''}</div>${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
+        <td class="act"><div class="st">${x._approved ? `<span class="okb">معتمدة</span>${expBadge(x)}${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}</div>${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
     }).join('');
     $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="8" class="empty">${tab === 'appr' ? 'لا توجد فواتير معتمدة بعد.' : h.length ? 'لا توجد فواتير بانتظار المراجعة. كل الفواتير معتمدة ✓' : 'لا توجد فواتير بعد. حمّلها من تبويب «تحميل الفواتير».'}</td></tr>`;
     const nd = dm.size;
@@ -788,7 +792,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('lb').hidden) lbClose(); });
   const viewImg = async id => lightbox(await pagesOf(id), 0);
   // جداول التبويبات: آخر عملية، المحمّلة سابقًا، التصدير
-  const ST = x => x._sent ? `<span class="sent">في الشيت (InvID ${esc(x._sent)})</span>` : x._exportedAt ? '<span class="sent">مُصدّرة</span>' : x._approved ? '<span class="okb">معتمدة</span>' : '<span class="pendb">بانتظار المراجعة</span>';
+  const ST = x => x._approved ? `<span class="okb">معتمدة</span> ${expBadge(x)}` : '<span class="pendb">بانتظار المراجعة</span>';
   const dt = s => s ? new Date(s).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short' }) : '';
   const invRow = (x, extra) => `<tr class="pick" data-row="${esc(x._id)}" title="اضغط لعرض ملف الفاتورة"><td data-l="الملف"><small class="fpath">📄 ${esc(x.file || '')}</small></td><td data-l="المورّد"><b>${esc(x._supName || x.vendor_name || '—')}</b></td><td data-l="رقم الفاتورة">${esc(x.invoice_number || '—')}</td><td data-l="التاريخ">${esc(x.invoice_date || '—')}</td><td data-l="الإجمالي" class="n">${esc(money(x))}</td><td data-l="الحالة">${extra || ST(x)}</td><td class="act"><button data-img="${esc(x._id)}">عرض الصورة</button><button data-go="${esc(x._id)}">${x._approved ? 'فتح' : 'مراجعة'}</button></td></tr>`;
   const HEAD = last => `<thead><tr><th>الملف</th><th>المورّد</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الإجمالي</th><th>${last || 'الحالة'}</th><th></th></tr></thead>`;
@@ -829,7 +833,7 @@
     $('naCount').textContent = `(${revL.length})`; $('neCount').textContent = `(${notExp.length})`; $('exCount').textContent = `(${exp.length})`;
     $('naTable').innerHTML = HEAD('السبب') + `<tbody>${revL.map(x => invRow(x, `${ST(x)}<div class="why">${whyNot(x).map(esc).join('<br>')}</div>`)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير غير معتمدة ✓</td></tr>'}</tbody>`;
     $('neTable').innerHTML = HEAD('السبب') + `<tbody>${notExp.map(x => invRow(x, `${ST(x)}<div class="why">${whyNot(x).map(esc).join('<br>')}</div>`)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير معتمدة غير مصدّرة ✓</td></tr>'}</tbody>`;
-    $('exTable').innerHTML = HEAD('طريقة التصدير') + `<tbody>${exp.map(x => invRow(x, [x._sent ? `Google Sheet (InvID ${esc(x._sent)})` : '', x._exportedAt ? `Excel · ${esc(dt(x._exportedAt))}` : ''].filter(Boolean).join('<br>'))).join('') || '<tr><td colspan="7" class="empty">لم تُصدّر أي فاتورة بعد.</td></tr>'}</tbody>`;
+    $('exTable').innerHTML = HEAD('طريقة التصدير') + `<tbody>${exp.map(x => invRow(x, ST(x) + '<div class="why ok">' + [x._sent ? `Google Sheet (InvID ${esc(x._sent)})` : '', x._exportedAt ? `Excel · ${esc(dt(x._exportedAt))}` : ''].filter(Boolean).join('<br>') + '</div>')).join('') || '<tr><td colspan="7" class="empty">لم تُصدّر أي فاتورة بعد.</td></tr>'}</tbody>`;
   }
   document.querySelectorAll('.tabtable').forEach(t => t.addEventListener('click', e => {
     const im = e.target.dataset.img, go = e.target.dataset.go;
