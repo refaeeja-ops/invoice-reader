@@ -573,7 +573,7 @@
     if (x._dup) r.push('مكررة مع فاتورة أخرى');
     return r;
   }
-  const shownList = () => all().filter(x => tab === 'appr' ? x._approved : !x._approved);
+  const shownList = () => all().filter(x => tab === 'appr' ? x._approved && !isExported(x) : !x._approved);
   const money = x => x.total != null && x.total !== '' ? P.fmt(x.total) + ' ' + (x.currency || '') : '—';
   const sumBy = list => Object.entries(list.reduce((a, x) => { const c = x.currency || '—'; a[c] = (a[c] || 0) + (+x.total || 0); return a; }, {})).map(([c, v]) => P.fmt(v) + ' ' + c).join(' · ');
   function drawList() {
@@ -583,7 +583,7 @@
     const dm = dupMap();
     h.forEach(x => { const d = dm.get(x._id); if (d) x._dup = dupMsg(d); else delete x._dup; link(x); });
     const nA = h.filter(x => x._approved).length, nP = h.length - nA;
-    $('ht').firstChild.textContent = tab === 'appr' ? 'الفواتير المعتمدة ' : 'فواتير بانتظار المراجعة ';
+    $('ht').firstChild.textContent = tab === 'appr' ? 'معتمدة لم تُصدّر بعد ' : 'مرفوعة لم تُعتمد بعد ';
     const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة', dup: 'لم يُحمّل (مكرر)' };
     const rowsP = ''; void pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="6">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' || v.status === 'dup' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
     const shown = shownList();
@@ -744,6 +744,7 @@
     if (!keep && t === 'rev' && !cur) { const f = all().find(x => !x._approved); if (f) open(f._id); }
     try { sessionStorage.setItem('invoice-reader-tab', t); } catch { }
   }
+  document.addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) { setTab(g.dataset.goto); window.scrollTo(0, 0); } });
   $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { setTab(b.dataset.tab); window.scrollTo(0, 0); } });
   $('tabs').addEventListener('keydown', e => {
     const ts = [...document.querySelectorAll('#tabs [data-tab]')], i = ts.findIndex(b => b.dataset.tab === tab);
@@ -789,13 +790,17 @@
   // جداول التبويبات: آخر عملية، المحمّلة سابقًا، التصدير
   const ST = x => x._sent ? `<span class="sent">في الشيت (InvID ${esc(x._sent)})</span>` : x._exportedAt ? '<span class="sent">مُصدّرة</span>' : x._approved ? '<span class="okb">معتمدة</span>' : '<span class="pendb">بانتظار المراجعة</span>';
   const dt = s => s ? new Date(s).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short' }) : '';
-  const invRow = (x, extra) => `<tr><td data-l="الملف"><small class="fpath">📄 ${esc(x.file || '')}</small></td><td data-l="المورّد"><b>${esc(x._supName || x.vendor_name || '—')}</b></td><td data-l="رقم الفاتورة">${esc(x.invoice_number || '—')}</td><td data-l="التاريخ">${esc(x.invoice_date || '—')}</td><td data-l="الإجمالي" class="n">${esc(money(x))}</td><td data-l="الحالة">${extra || ST(x)}</td><td class="act"><button data-img="${esc(x._id)}">عرض الصورة</button><button data-go="${esc(x._id)}">${x._approved ? 'فتح' : 'مراجعة'}</button></td></tr>`;
+  const invRow = (x, extra) => `<tr class="pick" data-row="${esc(x._id)}" title="اضغط لعرض ملف الفاتورة"><td data-l="الملف"><small class="fpath">📄 ${esc(x.file || '')}</small></td><td data-l="المورّد"><b>${esc(x._supName || x.vendor_name || '—')}</b></td><td data-l="رقم الفاتورة">${esc(x.invoice_number || '—')}</td><td data-l="التاريخ">${esc(x.invoice_date || '—')}</td><td data-l="الإجمالي" class="n">${esc(money(x))}</td><td data-l="الحالة">${extra || ST(x)}</td><td class="act"><button data-img="${esc(x._id)}">عرض الصورة</button><button data-go="${esc(x._id)}">${x._approved ? 'فتح' : 'مراجعة'}</button></td></tr>`;
   const HEAD = last => `<thead><tr><th>الملف</th><th>المورّد</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الإجمالي</th><th>${last || 'الحالة'}</th><th></th></tr></thead>`;
   function drawTabs() {
     const h = all(), byId = Object.fromEntries(h.map(x => [x._id, x]));
     const nRev = h.filter(x => !x._approved).length, nAppr = h.filter(x => x._approved).length, notExp = h.filter(x => x._approved && !isExported(x)), exp = h.filter(isExported);
     const notAll = h.filter(x => !isExported(x));
-    $('bRev').textContent = nRev || ''; $('bAppr').textContent = nAppr || ''; $('bExp').textContent = notAll.length || '';
+    $('bRev').textContent = nRev || ''; $('bAppr').textContent = notExp.length || ''; $('bExp').textContent = exp.length || '';
+    // بطاقات الحالة: مرفوعة / غير معتمدة / معتمدة غير مصدّرة / مصدّرة
+    const card = (k, n, l, t) => `<button class="stat s-${k}" data-goto="${t}"><b>${n}</b><span>${l}</span></button>`;
+    const cards = card('all', h.length, 'كل الفواتير المرفوعة', 'up') + card('rev', nRev, 'مرفوعة لم تُعتمد', 'rev') + card('appr', notExp.length, 'معتمدة لم تُصدّر', 'appr') + card('exp', exp.length, 'تم تصديرها', 'exp');
+    document.querySelectorAll('.stats').forEach(e => e.innerHTML = cards);
     // شريط تبويب «المعتمدة»: أزرار التصدير + تحذير
     $('apprBar').hidden = tab !== 'appr';
     $('xNew').textContent = `تصدير المعتمدة غير المصدّرة إلى Excel (${notExp.length})`;
@@ -820,14 +825,17 @@
     $('pvTable').innerHTML = HEAD() + `<tbody>${prev.map(x => invRow(x)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير محمّلة قبل آخر عملية.</td></tr>'}</tbody>`;
     // التصدير
     $('exNote').textContent = nRev ? `ملاحظة: ${nRev} فاتورة ما زالت بانتظار المراجعة ولن تُصدّر قبل اعتمادها.` : '';
-    $('neCount').textContent = `(${notAll.length})`; $('exCount').textContent = `(${exp.length})`;
-    $('neTable').innerHTML = HEAD('السبب') + `<tbody>${notAll.map(x => invRow(x, `${ST(x)}<div class="why">${whyNot(x).map(esc).join('<br>')}</div>`)).join('') || '<tr><td colspan="7" class="empty">كل الفواتير صُدّرت ✓</td></tr>'}</tbody>`;
+    const revL = h.filter(x => !x._approved);
+    $('naCount').textContent = `(${revL.length})`; $('neCount').textContent = `(${notExp.length})`; $('exCount').textContent = `(${exp.length})`;
+    $('naTable').innerHTML = HEAD('السبب') + `<tbody>${revL.map(x => invRow(x, `${ST(x)}<div class="why">${whyNot(x).map(esc).join('<br>')}</div>`)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير غير معتمدة ✓</td></tr>'}</tbody>`;
+    $('neTable').innerHTML = HEAD('السبب') + `<tbody>${notExp.map(x => invRow(x, `${ST(x)}<div class="why">${whyNot(x).map(esc).join('<br>')}</div>`)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير معتمدة غير مصدّرة ✓</td></tr>'}</tbody>`;
     $('exTable').innerHTML = HEAD('طريقة التصدير') + `<tbody>${exp.map(x => invRow(x, [x._sent ? `Google Sheet (InvID ${esc(x._sent)})` : '', x._exportedAt ? `Excel · ${esc(dt(x._exportedAt))}` : ''].filter(Boolean).join('<br>'))).join('') || '<tr><td colspan="7" class="empty">لم تُصدّر أي فاتورة بعد.</td></tr>'}</tbody>`;
   }
   document.querySelectorAll('.tabtable').forEach(t => t.addEventListener('click', e => {
     const im = e.target.dataset.img, go = e.target.dataset.go;
-    if (im) viewImg(im);
-    if (go) open(go, true);
+    if (im) return viewImg(im);
+    if (go) return open(go, true);
+    const r = e.target.closest('tr[data-row]'); if (r && !e.target.closest('button,input,select,a')) viewImg(r.dataset.row);
   }));
   $('xNew').onclick = () => {
     const l = all().filter(x => x._approved && !isExported(x));

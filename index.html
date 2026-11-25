@@ -178,6 +178,13 @@ body.lbon{overflow:hidden}
 .amsg{margin:0;padding:10px 12px;border-radius:6px;background:#eaf6ee;color:#1e7a46}.amsg.bad{background:#fdecea;color:#b03a2e}
 .warnbox{padding:10px 14px;border-radius:6px;background:#fff6e0;border:1px solid #f0c36d;color:#7a5200;font-size:14px}.warnbox ul{margin:6px 0 0;padding-inline-start:18px}.warnbox li{margin:3px 0}
 .why{font-size:13px;color:#9a5b00;margin-top:4px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 6px;border-radius:10px;border:1px solid #dde2ee;background:var(--paper);box-shadow:0 2px 8px rgba(20,30,80,.06);min-height:0}
+.stat b{font-size:28px;line-height:1.1}.stat span{font-size:13px;color:var(--mute);text-align:center}
+.stat.s-rev b{color:#c0392b}.stat.s-appr b{color:#b9770e}.stat.s-exp b{color:#1e7a46}
+.tabs .badge.warn{background:#d68910}
+tr.pick{cursor:pointer}tr.pick:hover td{background:#f3f6ff}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stat b{font-size:24px}}
 </style>
 </head>
 <body>
@@ -188,12 +195,13 @@ body.lbon{overflow:hidden}
 <nav class="tabs" id="tabs" role="tablist" aria-label="أقسام التطبيق">
   <button role="tab" data-tab="up" aria-selected="true">تحميل الفواتير</button>
   <button role="tab" data-tab="rev" aria-selected="false" tabindex="-1">المراجعة <span class="badge" id="bRev"></span></button>
-  <button role="tab" data-tab="appr" aria-selected="false" tabindex="-1">المعتمدة <span class="badge ok" id="bAppr"></span></button>
-  <button role="tab" data-tab="exp" aria-selected="false" tabindex="-1">التصدير <span class="badge" id="bExp"></span></button>
+  <button role="tab" data-tab="appr" aria-selected="false" tabindex="-1">المعتمدة <span class="badge warn" id="bAppr"></span></button>
+  <button role="tab" data-tab="exp" aria-selected="false" tabindex="-1">التصدير <span class="badge ok" id="bExp"></span></button>
   <button role="tab" data-tab="qty" aria-selected="false" tabindex="-1">الكميات <span class="badge" id="bQty"></span></button>
 </nav>
 <main>
 <div class="pane on" data-pane="up">
+  <div class="stats" role="group" aria-label="حالة الفواتير"></div>
   <section class="slip cap" aria-labelledby="capT">
     <div class="drop" id="drop">
       <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" aria-hidden="true">
@@ -285,6 +293,7 @@ body.lbon{overflow:hidden}
   </section>
 </div>
 <div class="pane" data-pane="exp">
+  <div class="stats" role="group" aria-label="حالة الفواتير"></div>
   <section class="slip hist" aria-labelledby="exT">
     <div class="lhead"><h3 id="exT">التصدير</h3><span class="note" id="exNote"></span></div>
     <div class="exp" id="exportBar">
@@ -295,7 +304,9 @@ body.lbon{overflow:hidden}
       <button id="clearAll" class="danger">حذف الكل</button>
     </div>
     <div class="warnbox" id="exWarn" hidden></div>
-    <h4>لم تُصدّر بعد <span id="neCount"></span></h4>
+    <h4>مرفوعة لم تُعتمد بعد <span id="naCount"></span></h4>
+    <div class="twrap"><table id="naTable" class="list mini tabtable"></table></div>
+    <h4>معتمدة لم تُصدّر بعد <span id="neCount"></span></h4>
     <div class="twrap"><table id="neTable" class="list mini tabtable"></table></div>
     <h4>تم تصديرها <span id="exCount"></span></h4>
     <div class="twrap"><table id="exTable" class="list mini tabtable"></table></div>
