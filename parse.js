@@ -102,7 +102,7 @@
 
   // ---------- الكلمات المفتاحية ----------
   const K = {
-    invNo: /(رقم\s*الفاتور[ةه]|فاتور[ةه]\s*رقم|رقم\s*الإيصال|رقم\s*الايصال|رقم\s*السند|invoice\s*(?:no|number|num|#)|inv\s*(?:no|#)|bill\s*(?:no|#|number)|receipt\s*(?:no|#|number)|ref(?:erence)?\s*(?:no|#))\.?/i,
+    invNo: /(رقم\s*الفاتور[ةه]|رقم\s*فاتور[ةه]|فاتور[ةه]\s*(?:ضريبي[ةه]\s*)?(?:مبسط[ةه]\s*)?رقم|رقم\s*الإيصال|رقم\s*الايصال|رقم\s*السند|رقم\s*المستند|(?:tax\s*)?invoice\s*(?:n[o0]|number|num|#|id)|inv\.?\s*(?:n[o0]|#|number)|bill\s*(?:n[o0]|#|number)|receipt\s*(?:n[o0]|#|number)|doc(?:ument)?\.?\s*(?:n[o0]|#|number)|ref(?:erence)?\s*(?:n[o0]|#))\.?/i,
     date: /(تاريخ\s*الفاتور[ةه]|تاريخ\s*الإصدار|تاريخ\s*الاصدار|التاريخ|تاريخ|invoice\s*date|issue\s*date|date)/i,
     due: /(تاريخ\s*الاستحقاق|due\s*date|payment\s*due)/i,
     vat: /(الرقم\s*الضريبي|رقم\s*التسجيل\s*الضريبي|الرقم\s*الضريبى|vat\s*(?:reg(?:istration)?\.?\s*)?(?:no|number|#)|tax\s*(?:id|no|number|registration)|trn)/i,
@@ -142,6 +142,54 @@
       rest = line.slice(0, m.index).replace(/[\s:：#.\-–|/]+$/, '').trim();
     }
     return rest;
+  }
+  // ---------- رقم الفاتورة ----------
+  // المرشحون: كلمات من حروف لاتينية وأرقام تفصلها - / : . _ # وفيها رقم واحد على الأقل (مثل INV-1001، SIF-DM:26111020، 02/2026/00576)
+  function invCands(s) {
+    const out = [], re = /(?:[A-Za-z]{1,4}\s(?=\d))?[A-Za-z0-9]+(?:\s?[-_/:.#]\s?[A-Za-z0-9]+)*/g; let m;
+    while ((m = re.exec(s))) {
+      let t = m[0].replace(/^(n[o0]|num|inv|bill|ref|doc|am|pm)\s(?=\d)/i, '').replace(/\s?([-_/:.#])\s?/g, '$1').replace(/^[-_/:.#]+|[-_/:.#]+$/g, '');
+      if (!/\d/.test(t) || t.length < 2 || t.length > 32) continue;
+      if (/^(n[o0]|number|num|inv|invoice|bill|ref|doc)[.:#]?$/i.test(t)) continue;
+      t = t.replace(/^(?:n[o0]|#)[.:#]+/i, ''); // «No.123» → 123
+      if (!/\d/.test(t)) continue;
+      out.push({ t, i: m.index });
+    }
+    return out.filter(({ t }) => !badInv(t));
+  }
+  function badInv(t) {
+    const d = t.replace(/\D/g, '');
+    if (/^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}$/.test(t) && findDate(t)) return true; // تاريخ
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(t)) return true; // وقت
+    if (/^(3\d{13}3|100\d{12})$/.test(t)) return true; // رقم ضريبي
+    if (/^(\+?966|0)?5\d{8}$/.test(t)) return true; // جوال سعودي
+    if (/^\d{1,3}(,\d{3})*\.\d{2}$/.test(t) || /^\d+\.\d{1,2}$/.test(t)) return true; // مبلغ
+    if (/^\d{1,2}%?$/.test(t)) return true; // رقم قصير جدًا
+    if (/^(sar|sr|vat|cr|kg|pcs|qty)\d*$/i.test(t)) return true;
+    return d.length === 0;
+  }
+  // القيمة بعد التسمية أولًا (الأقرب)، ثم قبلها (ترتيب عربي معكوس)، ثم السطر التالي
+  function invNoNear(line, next, prev) {
+    const m = line.match(K.invNo); if (!m) return '';
+    const after = line.slice(m.index + m[0].length), before = line.slice(0, m.index);
+    // لا نتجاوز تسمية حقل آخر في نفس السطر (مثل: Invoice NO ... Date ...)
+    const stopAt = s => { const k = s.search(/(تاريخ|date|vat|الرقم\s*الضريبي|العميل|customer|client|mobile|phone|هاتف|جوال|c\.?\s*r\b|السجل)/i); return k > 0 ? s.slice(0, k) : (k === 0 ? '' : s); };
+    const a = invCands(stopAt(after));
+    if (a.length) return a[0].t;
+    const b = invCands(before.split(/(تاريخ|date|vat|الرقم\s*الضريبي|customer|client|العميل)/i).pop());
+    if (b.length) return b[b.length - 1].t;
+    const n = invCands(stopAt(next)); if (n.length && n[0].t.length >= 3) return n[0].t;
+    return '';
+  }
+  // بدون تسمية: رمز مثل INV-1001 أو SIF-DM:26111020 في أعلى الفاتورة
+  function invNoGuess(lines) {
+    const top = lines.slice(0, Math.max(12, Math.ceil(lines.length * 0.4)));
+    for (const l of top) {
+      if (/(vat|tax\s*(no|number|id)|الرقم\s*الضريبي|c\.?\s*r\b|السجل|phone|mobile|tel|هاتف|جوال|iban|po\s*box|ص\.ب)/i.test(l)) continue;
+      const c = invCands(l).find(({ t }) => /^(inv|sif|si|tin|ti|bill|rec|rcpt|fp|fps|ord|so|cs|sa)[A-Za-z]{0,4}[-_/:.#]?[A-Za-z]{0,4}[-_/:.#]?\d{3,}/i.test(t));
+      if (c) return c.t;
+    }
+    return '';
   }
   function findDate(s) {
     s = normDigits(s);
@@ -245,10 +293,8 @@
       if (vm) vm.forEach(v => vatCands.push({ v, labeled: K.vat.test(L) || K.vat.test(lines[idx - 1] || '') }));
       // رقم الفاتورة
       if (!r.invoice_number && K.invNo.test(L)) {
-        let v = valueAfter(L, K.invNo);
-        if (!/\d/.test(v) && lines[idx + 1]) v = lines[idx + 1];
-        const tok = (v.match(/[A-Za-z]{0,6}[-/#]?\d[\w\-/]{1,30}/) || [])[0];
-        if (tok) set('invoice_number', tok.replace(/[.:]+$/, ''), 'text');
+        const tok = invNoNear(L, lines[idx + 1] || '', lines[idx - 1] || '');
+        if (tok) set('invoice_number', tok, 'text');
       }
       // التواريخ
       if (K.due.test(L)) set('due_date', findDate(L) || findDate(lines[idx + 1] || ''), 'text');
@@ -272,6 +318,7 @@
       else if (K.total.test(L) && !K.tax.test(L)) { const t = lastTok(L, { noPercent: true }); if (t) (r._plainTotals = r._plainTotals || []).push(t); }
       if (pct && K.tax.test(L)) set('tax_rate', toNum(pct[1]), 'text');
     });
+    if (!r.invoice_number) { const g = invNoGuess(lines); if (g) set('invoice_number', g, 'text'); }
 
     // الرقم الضريبي: الأفضل ما كان بجانب تسمية، ثم ما يطابق صيغة السعودية
     if (vatCands.length) {
