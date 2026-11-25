@@ -225,6 +225,8 @@
   }
   // آخر عملية تحميل (تُحفظ في المتصفح)
   const LKEY = 'invoice-reader-lastrun-v1';
+  // كتابة آمنة في localStorage: بعض إعدادات Safari تمنعه وترمي «The operation is insecure»
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { console.warn(e); return false; } };
   let run = null; try { run = JSON.parse(localStorage.getItem(LKEY)) || null; } catch { run = null; }
   const saveRun = () => { try { localStorage.setItem(LKEY, JSON.stringify(run)); } catch { } };
   const runAdd = (file, st, msg, id) => { run.items.push({ file, st, msg: msg || '', id: id || '' }); saveRun(); };
@@ -456,7 +458,16 @@
   let saveOk = true;
   function saveFail(e) {
     console.error(e); saveOk = false; const w = $('saveWarn'); if (!w) return;
-    w.textContent = '⚠ تعذّر حفظ آخر التعديلات في المتصفح (قد تكون مساحة الجهاز ممتلئة). صدّر الفواتير أو نزّل نسخة احتياطية من تبويب «التصدير» قبل إغلاق الصفحة.'; w.hidden = false;
+    const why = (e && (e.name || e.message)) ? ` (السبب: ${e.name || ''}${e.message ? ' ' + e.message : ''})` : '';
+    w.textContent = '⚠ تعذّر حفظ آخر التعديلات في المتصفح' + why + '. صدّر الفواتير أو نزّل نسخة احتياطية من تبويب «التصدير» قبل إغلاق الصفحة.'; w.hidden = false;
+  }
+  // المتصفح يمنع كل أنواع الحفظ (Safari مع «حظر كل ملفات تعريف الارتباط» غالبًا): التطبيق يعمل لكن بدون حفظ
+  function memWarn() {
+    const w = $('saveWarn'); if (!w || S.mode !== 'mem') return;
+    w.innerHTML = '⚠ هذا المتصفح يمنع التطبيق من حفظ البيانات، فالفواتير الجديدة ستضيع عند إغلاق الصفحة. التطبيق يعمل، لكن أرسل المعتمدة إلى Google Sheet أو صدّرها قبل الإغلاق.<br>'
+      + '<b>للإصلاح على الآيفون/الآيباد:</b> الإعدادات ← Safari ← أوقف «حظر كل ملفات تعريف الارتباط» (Block All Cookies)، وتأكد أنك لست في «التصفح الخاص»، ثم أعد فتح الصفحة.'
+      + `<br><small>${esc(S.why || '')}</small>`;
+    w.hidden = false;
   }
   function saved() { if (!saveOk) { saveOk = true; $('saveWarn').hidden = true; } }
   function write(list) { if (!list.length) return; S.putInv(list).then(() => { saved(); if (bc) bc.postMessage({ put: list.map(x => x._id) }); }, saveFail); }
@@ -619,11 +630,11 @@
     if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) return toast('الرابط يجب أن يكون رابط Web app من script.google.com');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('اكتب بريدك الإلكتروني'); if (!token) return toast('الصق رمز الدخول');
     $('gsSave').disabled = true; status('جارٍ اختبار الربط مع Google Sheet…');
-    try { await gsLoadRef({ url, email, token }, true); gs = { url, email, token }; localStorage.setItem(GKEY, JSON.stringify({ url, email, token })); gsUi(); $('gsBox').open = false; status('تم الربط مع Google Sheet، وحُمّلت منه البيانات المرجعية.'); }
+    try { await gsLoadRef({ url, email, token }, true); gs = { url, email, token }; lsSet(GKEY, { url, email, token }); gsUi(); $('gsBox').open = false; status('تم الربط مع Google Sheet، وحُمّلت منه البيانات المرجعية.'); }
     catch (e) { console.error(e); status('تعذّر الربط: ' + ((e && e.message) || 'تحقق من الرابط والبريد والرمز، وأن النشر «Anyone»'), true); }
     finally { $('gsSave').disabled = false; }
   };
-  $('gsForget').onclick = () => { gs = null; localStorage.setItem(GKEY, JSON.stringify({ url: GURL })); $('gsEmail').value = ''; $('gsToken').value = ''; gsUi(); toast('أُلغي الربط مع Google Sheet'); };
+  $('gsForget').onclick = () => { gs = null; lsSet(GKEY, { url: GURL }); $('gsEmail').value = ''; $('gsToken').value = ''; gsUi(); toast('أُلغي الربط مع Google Sheet'); };
   $('gsLoad').onclick = async () => { try { await gsLoadRef(gs); } catch (e) { toast((e && e.message) || 'تعذّر التحديث من الشيت'); } };
   $('gsSend').onclick = async () => {
     if (!gs) return amsg('Google Sheet غير مربوط. اربطه من تبويب «تحميل الفواتير» ← «البيانات المرجعية والربط».', true);
@@ -1040,9 +1051,10 @@
     }
     cache.sort((a, b) => String(b._at || '').localeCompare(String(a._at || '')));
     cache.forEach(x => snap.set(x._id, ser(x)));
+    memWarn();
     try {
       ref = (await S.getKv('ref')) || null;
-      if (!ref) { const o = JSON.parse(localStorage.getItem(RKEY) || 'null'); if (o) { ref = o; await S.setKv('ref', o); localStorage.removeItem(RKEY); } }
+      if (!ref) { const o = JSON.parse(localStorage.getItem(RKEY) || 'null'); if (o) { ref = o; await S.setKv('ref', o); if (S.mode !== 'mem') localStorage.removeItem(RKEY); } }
     } catch (e) { console.error(e); }
   })();
   ready.then(() => {

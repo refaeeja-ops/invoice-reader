@@ -24,36 +24,53 @@
       t.oncomplete = () => ok(out); t.onerror = () => no(t.error); t.onabort = () => no(t.error || new Error('abort'));
     });
   }
-  // نسخة بسيطة تعتمد localStorage عند تعذّر IndexedDB
-  const lsInv = () => { try { return JSON.parse(localStorage.getItem(LS_INV)) || []; } catch { return []; } };
-  const lsSave = l => localStorage.setItem(LS_INV, JSON.stringify(l));
-  let mode = null; // 'idb' أو 'ls'
+  // بديل 1: localStorage عند تعذّر IndexedDB. بديل 2: الذاكرة فقط (حين يمنع المتصفح كل أنواع الحفظ،
+  // مثل Safari مع «حظر كل ملفات تعريف الارتباط»: يرمي SecurityError «The operation is insecure»)
+  const mem = { inv: [], kv: {} };
+  const lsInv = () => { if (mode === 'mem') return mem.inv; try { return JSON.parse(localStorage.getItem(LS_INV)) || []; } catch { return []; } };
+  const lsSave = l => { if (mode === 'mem') { mem.inv = l; return; } localStorage.setItem(LS_INV, JSON.stringify(l)); };
+  let mode = null, why = ''; // 'idb' أو 'ls' أو 'mem'
+  const errTxt = e => (e && (e.name || '') + (e.message ? ': ' + e.message : '')) || String(e);
   async function init() {
     if (mode) return mode;
-    try { await open(); mode = 'idb'; } catch (e) { console.warn('IndexedDB غير متاح', e); mode = 'ls'; }
+    try { // اختبار حقيقي: فتح القاعدة وكتابة وحذف
+      await open();
+      await tx('kv', 'readwrite', st => { st.put(1, '__test'); st.delete('__test'); });
+      mode = 'idb';
+    } catch (e) {
+      console.warn('IndexedDB غير متاح', e); why = errTxt(e); dbp = null;
+      try { localStorage.setItem('__ir_test', '1'); localStorage.removeItem('__ir_test'); mode = 'ls'; }
+      catch (e2) {
+        console.warn('localStorage غير متاح', e2); why += ' / ' + errTxt(e2); mode = 'mem';
+        // إن كانت القراءة ممكنة (مثل امتلاء المساحة) نعرض الفواتير الموجودة ولا نحذف شيئًا
+        try { mem.inv = JSON.parse(localStorage.getItem(LS_INV)) || []; } catch { mem.inv = []; }
+      }
+    }
     return mode;
   }
   const api = {
-    init, get mode() { return mode; },
-    async allInv() { await init(); if (mode === 'ls') return lsInv(); return tx('inv', 'readonly', st => req(st.getAll())); },
-    async getInv(id) { await init(); if (mode === 'ls') return lsInv().find(x => x._id === id) || null; return tx('inv', 'readonly', st => req(st.get(id))); },
+    init, get mode() { return mode; }, get why() { return why; },
+    async allInv() { await init(); if (mode !== 'idb') return lsInv(); return tx('inv', 'readonly', st => req(st.getAll())); },
+    async getInv(id) { await init(); if (mode !== 'idb') return lsInv().find(x => x._id === id) || null; return tx('inv', 'readonly', st => req(st.get(id))); },
     async putInv(list) {
       await init();
-      if (mode === 'ls') { const l = lsInv(); list.forEach(x => { const i = l.findIndex(y => y._id === x._id); if (i >= 0) l[i] = x; else l.unshift(x); }); lsSave(l); return; }
+      if (mode !== 'idb') { const l = lsInv(); list.forEach(x => { const i = l.findIndex(y => y._id === x._id); if (i >= 0) l[i] = x; else l.unshift(x); }); lsSave(l); return; }
       return tx('inv', 'readwrite', st => { list.forEach(x => st.put(x)); });
     },
     async delInv(ids) {
       await init();
-      if (mode === 'ls') { const s = new Set(ids); lsSave(lsInv().filter(x => !s.has(x._id))); return; }
+      if (mode !== 'idb') { const s = new Set(ids); lsSave(lsInv().filter(x => !s.has(x._id))); return; }
       return tx('inv', 'readwrite', st => { ids.forEach(id => st.delete(id)); });
     },
     async getKv(k) {
       await init();
+      if (mode === 'mem') return mem.kv[k] ?? null;
       if (mode === 'ls') { try { return JSON.parse(localStorage.getItem(LS_KV + k)); } catch { return null; } }
       return tx('kv', 'readonly', st => req(st.get(k)));
     },
     async setKv(k, v) {
       await init();
+      if (mode === 'mem') { if (v == null) delete mem.kv[k]; else mem.kv[k] = v; return; }
       if (mode === 'ls') { if (v == null) localStorage.removeItem(LS_KV + k); else localStorage.setItem(LS_KV + k, JSON.stringify(v)); return; }
       return tx('kv', 'readwrite', st => { if (v == null) st.delete(k); else st.put(v, k); });
     }
