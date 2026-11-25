@@ -140,7 +140,8 @@
     return xlsx([{ name: 'الفواتير', rows: invRows(list), widths: INV_COLS.map(c => c[2]) }, { name: 'البنود', rows: itemRows(list), widths: ITEM_COLS.map(c => c[2]) }, { name: 'الكميات', rows: qtyRows(list), widths: QTY_W }, { name: 'VatReport', rows: vatRows(list, cols), widths: vatW(cols) }]);
   }
   function csv(rows) {
-    const q = v => { if (v && typeof v === 'object') v = v.s === 3 ? new Date(Date.UTC(1899, 11, 30) + v.n * 864e5).toISOString().slice(0, 10) : v.n; const s = String(v ?? ''); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    // نص يبدأ بـ = + - @ يفسّره Excel معادلة (حقن معادلات): نسبقه بـ ' ما لم يكن رقمًا عاديًا
+    const q = v => { if (v && typeof v === 'object') v = v.s === 3 ? new Date(Date.UTC(1899, 11, 30) + v.n * 864e5).toISOString().slice(0, 10) : v.n; let s = String(v ?? ''); if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s) && !/^[-+]?\d+(\.\d+)?$/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     return '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
   }
   const api = { qtyGroups, qtyXlsx, qtyCsv: list => csv(qtyRows(list)), toXlsx, vatXlsx, vatRows, vatCsv: (list, cols) => csv(vatRows(list, cols)), invoicesCsv: list => csv(invRows(list)), itemsCsv: list => csv(itemRows(list)), xlsx, zip, crc32 };

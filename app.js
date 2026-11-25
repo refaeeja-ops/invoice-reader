@@ -34,7 +34,7 @@
   }
   async function pdfPages(file) {
     if (!window.pdfjsLib) throw new Error('تعذّر تحميل قارئ PDF.');
-    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
     const n = Math.min(doc.numPages, 5), out = [];
     for (let p = 1; p <= n; p++) {
       const pg = await doc.getPage(p), v0 = pg.getViewport({ scale: 1 });
@@ -96,7 +96,7 @@
     if (workers[lang]) return workers[lang];
     status(lang === 'ara+eng' ? 'جارٍ تجهيز قارئ النص العربي والإنجليزي…' : 'جارٍ تجهيز قارئ الأرقام الهندية… (مرة واحدة فقط)');
     workers[lang] = Tesseract.createWorker(lang, 1, {
-      workerPath: abs('vendor/worker.min.js'), corePath: abs('vendor/core'), langPath: abs('vendor/lang'), gzip: true,
+      workerPath: abs('vendor/worker.min.js'), workerBlobURL: false, corePath: abs('vendor/core'), langPath: abs('vendor/lang'), gzip: true,
       logger: m => { if (m.status === 'recognizing text') setProg(ocrBase + m.progress * ocrSpan); }
     }).then(async w => { await w.setParameters({ preserve_interword_spaces: '1' }); return w; });
     try { return await workers[lang]; } catch (e) { delete workers[lang]; throw e; }
@@ -118,8 +118,19 @@
   const quality = (r, q) => P.score(r) + (P.itemsOk(r) ? 20 : 0) - 3 * P.checks(r, q).length;
   const good = r => P.itemsOk(r) && r.invoice_number && r.total != null && r.vendor_tax_number && !P.checkVat(r.vendor_tax_number);
 
+  // الدفعات الكبيرة (أكثر من 10 ملفات): عدد محاولات أقل حتى لا تطول القراءة كثيرًا
+  let fastMode = false;
+  // إغلاق قارئ النص بعد دقيقتين بلا استخدام لتحرير ذاكرة الجوال (يُعاد تحميله من الذاكرة المؤقتة عند الحاجة)
+  let idleT = null;
+  function idleWorkers() {
+    clearTimeout(idleT);
+    idleT = setTimeout(() => {
+      if (busy) return;
+      Object.keys(workers).forEach(k => { const p = workers[k]; delete workers[k]; Promise.resolve(p).then(w => w && w.terminate()).catch(() => { }); });
+    }, 120000);
+  }
   async function ocrPage(canvas, q, say) {
-    const runs = [];
+    const runs = [], PS = fastMode ? PASSES.slice(0, 3) : PASSES, ES = fastMode ? EAST_PASSES.slice(0, 1) : EAST_PASSES;
     const add = (t, tag) => { const r = P.parseInvoice(t, q), s = quality(r, q); runs.push({ t, r, s }); return r; };
     const run = async (lang, pass) => {
       const w = await getWorker(lang);
@@ -137,18 +148,18 @@
       }
       return r;
     };
-    for (let k = 0; k < PASSES.length; k++) {
+    for (let k = 0; k < PS.length; k++) {
       if (k) say(`محاولة قراءة ${k + 1} لتحسين النتيجة…`);
-      ocrBase = 0.1 + 0.8 * k / (PASSES.length + EAST_PASSES.length); ocrSpan = 0.8 / (PASSES.length + EAST_PASSES.length);
-      const r = await run('ara+eng', PASSES[k]);
+      ocrBase = 0.1 + 0.8 * k / (PS.length + ES.length); ocrSpan = 0.8 / (PS.length + ES.length);
+      const r = await run('ara+eng', PS[k]);
       if (good(r) || (k >= 1 && P.itemsOk(r))) break;
       if (eastern(runs[0].t) && k >= 1) break; // للأرقام الهندية ننتقل للنموذج المتخصص
     }
     if (runs.some(x => eastern(x.t)) && !runs.some(x => good(x.r))) {
-      for (let k = 0; k < EAST_PASSES.length; k++) {
+      for (let k = 0; k < ES.length; k++) {
         say('وُجدت أرقام هندية، جارٍ قراءتها بنموذج متخصص…');
-        ocrBase = 0.1 + 0.8 * (PASSES.length + k) / (PASSES.length + EAST_PASSES.length);
-        const r = await run('Arabic+eng', EAST_PASSES[k]);
+        ocrBase = 0.1 + 0.8 * (PS.length + k) / (PS.length + ES.length);
+        const r = await run('Arabic+eng', ES[k]);
         if (good(r)) break;
       }
     }
@@ -163,7 +174,9 @@
     if (isPdf) { const r = await pdfPages(file); list = r.pages; if (r.total > 5) toast('ستُقرأ أول 5 صفحات فقط'); }
     else {
       const url = URL.createObjectURL(file);
-      try { list = [{ canvas: toCanvas(await loadImg(url), 2400), text: '' }]; } finally { URL.revokeObjectURL(url); }
+      try { list = [{ canvas: toCanvas(await loadImg(url), 2400), text: '' }]; }
+      catch (e) { if (/\.hei[cf]$/i.test(file.name || '') || /hei[cf]/i.test(file.type || '')) throw new Error('صيغة HEIC لا يفتحها هذا المتصفح. حوّل الصورة إلى JPG (أو اضبط كاميرا الآيفون على «الأكثر توافقًا») ثم ارفعها.'); throw e; }
+      finally { URL.revokeObjectURL(url); }
     }
     say('جارٍ البحث عن رمز QR الضريبي…'); setProg(0.06);
     let q = null, qRaw = null;
@@ -190,14 +203,16 @@
     }
     d.qr_raw = qRaw || ''; d._qr = q; d._raw = raw.slice(0, 20000);
     d.file = pathOf(file) || 'صورة من الكاميرا'; d.file_name = file.name || '';
-    return { d, pages: list.map(p => toUrl(p.canvas)) };
+    return { d, pages: await Promise.all(list.map(p => toBlob(p.canvas))) };
   }
-  function toUrl(c) { // صورة للعرض فقط، بحجم أصغر لتوفير الذاكرة
+  function toBlob(c) { // صورة للعرض فقط، بحجم أصغر لتوفير الذاكرة. تُحفظ Blob (أصغر بالثلث من نص base64)
     const r = Math.min(1, 1600 / Math.max(c.width, c.height));
-    if (r === 1) return c.toDataURL('image/jpeg', 0.82);
-    const s = document.createElement('canvas'); s.width = Math.round(c.width * r); s.height = Math.round(c.height * r);
-    s.getContext('2d').drawImage(c, 0, 0, s.width, s.height); return s.toDataURL('image/jpeg', 0.82);
+    let s = c;
+    if (r < 1) { s = document.createElement('canvas'); s.width = Math.round(c.width * r); s.height = Math.round(c.height * r); s.getContext('2d').drawImage(c, 0, 0, s.width, s.height); }
+    return new Promise(ok => s.toBlob(b => ok(b || s.toDataURL('image/jpeg', 0.82)), 'image/jpeg', 0.82));
   }
+  // الصورة المحفوظة قد تكون Blob (الجديدة) أو نص data URL (القديمة)
+  const srcOf = v => typeof v === 'string' ? v : URL.createObjectURL(v);
 
   // ---------- طابور الدفعة ----------
   const isInv = f => /^image\/|pdf/.test(f.type) || /\.(pdf|jpe?g|png|webp|heic)$/i.test(f.name || '');
@@ -225,18 +240,20 @@
       keys: () => tx('readonly', st => st.getAllKeys()).catch(() => [])
     };
   })();
-  async function pagesOf(id) { if (imgs[id] && imgs[id].length) return imgs[id]; const u = await IDB.get(id); if (u && u.length) imgs[id] = u; return u || []; }
+  async function pagesOf(id) { if (imgs[id] && imgs[id].length) return imgs[id]; const u = await IDB.get(id); if (u && u.length) { imgs[id] = u.map(srcOf); return imgs[id]; } return []; }
   function addFiles(files, fromFolder) {
     const allF = [...(files || [])];
     if (!busy && !queue.length) { run = { at: new Date().toISOString(), items: [] }; saveRun(); }
     files = allF.filter(f => isInv(f) && !/^\./.test(f.name || ''));
     // منع التكرار: ملف سبق اختياره (في الملخص أو الدفعة الحالية) أو مكرر في نفس الاختيار
     const nsOf = f => String(f.name || '').toLowerCase() + '|' + (f.size || 0);
-    const seen = new Set([...all().flatMap(x => [x._sig, x._ns, x.file && x.file !== 'صورة من الكاميرا' ? 'p:' + x.file.toLowerCase() : '']).filter(Boolean),
+    // المسار الكامل يُقارن فقط لملفات المجلدات (فيه «/»)؛ الاسم وحده لا يكفي، فقد تحمل فاتورتان مختلفتان نفس الاسم مثل Invoice.pdf
+    const pKey = p => /[\\/]/.test(p || '') ? 'p:' + String(p).toLowerCase() : '';
+    const seen = new Set([...all().flatMap(x => [x._sig, x._ns, pKey(x.file)]).filter(Boolean),
       ...queue.flatMap(j => [j.sig, j.ns]), ...Object.values(live).flatMap(v => [v.sig, v.ns]).filter(Boolean)]);
     const dupF = [];
     files = files.filter(f => {
-      const keys = [sigOf(f), nsOf(f), 'p:' + pathOf(f).toLowerCase()];
+      const keys = [sigOf(f), nsOf(f), pKey(pathOf(f))].filter(Boolean);
       if (!isCam(f) && keys.some(k => seen.has(k))) { dupF.push(pathOf(f)); return false; }
       keys.forEach(k => seen.add(k)); return true;
     });
@@ -258,17 +275,19 @@
   let setProg = () => { };
   async function sheetHashes() { // بصمات الملفات المرسلة إلى الشيت من كل الأجهزة والمستخدمين
     if (!gs) return (ref && ref.hashes) || {};
-    try { const r = await fetch(gs.url + (gs.url.includes('?') ? '&' : '?') + 'action=hashes&email=' + encodeURIComponent(gs.email || '') + '&token=' + encodeURIComponent(gs.token), { redirect: 'follow' }); const j = await r.json(); if (j.ok && j.hashes) { if (ref) { ref.hashes = j.hashes; try { localStorage.setItem(RKEY, JSON.stringify(ref)); } catch { } } return j.hashes; } } catch { }
+    try { const j = await gsCall(gs, 'hashes', 10000); if (j.ok && j.hashes) { if (ref) { ref.hashes = j.hashes; saveRef(); } return j.hashes; } } catch { }
     return (ref && ref.hashes) || {};
   }
   async function pump() {
-    if (busy) return; busy = true;
+    if (busy) return; busy = true; clearTimeout(idleT);
+    await ready;
     status('جارٍ التحقق من الملفات المرسلة سابقًا…'); const sh = await sheetHashes();
-    let done = 0; const batch = [];
+    let done = 0, perr = ''; const batch = [];
+    try { // أي خطأ غير متوقع لا يترك التطبيق عالقًا في «جارٍ القراءة»
     const total = () => done + 1 + queue.length;
     while (queue.length) {
       const job = queue.shift(); live[job.id].status = 'working'; drawList();
-      const n = done + 1, N = total();
+      const n = done + 1, N = total(); fastMode = N > 10;
       const say = m => status(N > 1 ? `فاتورة ${n} من ${N}: ${m}` : m);
       setProg = p => progress(((n - 1) + Math.min(1, p)) / N);
       setProg(0.02); say('جارٍ فتح الملف…');
@@ -281,7 +300,7 @@
         d._id = job.id; d._at = new Date().toISOString(); d._run = run && run.at; d._sig = job.sig; d._ns = job.ns; d._hash = hash; d._warnings = P.checks(d, d._qr);
         const same = all().find(x => x._id !== d._id && invNo(x.invoice_number) && invNo(x.invoice_number) === invNo(d.invoice_number) && dKey(x.invoice_date) === dKey(d.invoice_date) && sameVendor(x, d));
         if (same) { runAdd(live[job.id].file, 'dup', 'نفس الفاتورة محمّلة سابقًا من «' + (same.file || same.vendor_name || '') + '» (' + (d.invoice_number || '') + ')'); delete live[job.id]; done++; drawList(); continue; }
-        imgs[job.id] = urls; IDB.put(job.id, urls); runAdd(live[job.id].file, 'ok', '', job.id); delete live[job.id];
+        imgs[job.id] = urls.map(srcOf); IDB.put(job.id, urls); runAdd(live[job.id].file, 'ok', '', job.id); delete live[job.id];
         store(d); batch.push(job.id);
         if (N === 1) open(job.id, true); // الدفعة لا تفتح شاشة المراجعة تلقائيًا؛ النتائج تظهر في الملخص
       } catch (e) {
@@ -289,7 +308,9 @@
       }
       done++; drawList();
     }
-    busy = false; progress(null); setProg = () => { };
+    } catch (e) { console.error(e); queue.length = 0; Object.keys(live).forEach(k => { if (live[k].status !== 'error') delete live[k]; }); perr = 'حدث خطأ غير متوقع أثناء القراءة: ' + ((e && e.message) || e); }
+    busy = false; progress(null); setProg = () => { }; fastMode = false; idleWorkers(); if (batch.length) askPersist();
+    if (perr) { status(perr, true); try { drawList(); } catch { } return; }
     const dm = dupMap(), nd = batch.filter(id => dm.has(id)).length;
     status((done > 1 ? `انتهت الدفعة: ${done} فواتير. التفاصيل في «آخر عملية تحميل»، وراجعها من تبويب «المراجعة».` : (cur && cur._qr ? 'تمت القراءة. وُجد رمز QR الضريبي.' : 'تمت القراءة. راجع الحقول وصحّح ما يلزم.'))
       + (nd ? ` تنبيه: ${nd === 1 ? 'فاتورة مكررة' : nd + ' فواتير مكررة'} (نفس المورّد والرقم والتاريخ)، انظر القائمة.` : ''), !!nd);
@@ -409,8 +430,8 @@
     try {
       const blob = data instanceof Blob ? data : new Blob([data], { type });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); toast('جارٍ التنزيل');
-    } catch { toast('التنزيل غير متاح هنا، استخدم النسخ'); }
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); toast('جارٍ التنزيل'); return true;
+    } catch (e) { console.error(e); toast('تعذّر التنزيل هنا، استخدم النسخ'); return false; }
   }
   const stamp = () => new Date().toISOString().slice(0, 10);
   const safe = s => String(s || '').replace(/[^\w؀-ۿ-]+/g, '_').slice(0, 40);
@@ -423,23 +444,60 @@
 
   // ---------- قائمة الفواتير (محفوظة في المتصفح) ----------
   const X = window.InvoiceExport;
-  const KEY = 'invoice-reader-history-v1', MAX = 200;
-  let cache = null;
-  const all = () => { if (cache) return cache; try { cache = JSON.parse(localStorage.getItem(KEY)) || []; } catch { cache = []; } return cache; };
-  function persist() { try { localStorage.setItem(KEY, JSON.stringify(all().slice(0, MAX))); } catch { toast('مساحة المتصفح ممتلئة: صدّر الفواتير ثم احذف القديمة'); } }
+  // الفواتير محفوظة في IndexedDB (store.js) بلا حد لعددها. القائمة في الذاكرة (cache) ونحفظ ما تغيّر فقط.
+  const S = window.InvoiceStore;
+  const KEY = 'invoice-reader-history-v1'; // المكان القديم في localStorage: يُنقل منه مرة واحدة
+  let cache = [];
+  const all = () => cache;
+  const snap = new Map(); // آخر نسخة محفوظة من كل فاتورة (لمعرفة ما تغيّر)
+  const ser = x => { try { return JSON.stringify(x); } catch { return ''; } };
+  // تعدد التبويبات: كل تبويب يُعلم الآخرين بما حفظه أو حذفه فيحدّثون قوائمهم
+  const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('invoice-reader') : null;
+  let saveOk = true;
+  function saveFail(e) {
+    console.error(e); saveOk = false; const w = $('saveWarn'); if (!w) return;
+    w.textContent = '⚠ تعذّر حفظ آخر التعديلات في المتصفح (قد تكون مساحة الجهاز ممتلئة). صدّر الفواتير أو نزّل نسخة احتياطية من تبويب «التصدير» قبل إغلاق الصفحة.'; w.hidden = false;
+  }
+  function saved() { if (!saveOk) { saveOk = true; $('saveWarn').hidden = true; } }
+  function write(list) { if (!list.length) return; S.putInv(list).then(() => { saved(); if (bc) bc.postMessage({ put: list.map(x => x._id) }); }, saveFail); }
+  // يحفظ الفواتير التي تغيّرت ويحذف المحذوفة من القائمة
+  function persist() {
+    const ch = [], have = new Set();
+    cache.forEach(x => { have.add(x._id); const s = ser(x); if (snap.get(x._id) !== s) { snap.set(x._id, s); ch.push(x); } });
+    const gone = [...snap.keys()].filter(id => !have.has(id));
+    write(ch);
+    if (gone.length) { gone.forEach(id => snap.delete(id)); S.delInv(gone).then(() => { if (bc) bc.postMessage({ del: gone }); }, saveFail); }
+  }
+  // حفظ فاتورة واحدة بعد توقف الكتابة قليلًا (بدون تحويل كل القائمة)
+  const pendSave = new Set();
+  function saveSoon(x, ms) {
+    pendSave.add(x); clearTimeout(saveSoon.t);
+    saveSoon.t = setTimeout(() => { const l = [...pendSave].filter(v => cache.includes(v)); pendSave.clear(); l.forEach(v => snap.set(v._id, ser(v))); write(l); }, ms == null ? 400 : ms);
+  }
   function store(d, quiet) {
     const h = all(), i = h.findIndex(x => x._id === d._id);
     if (i >= 0) h[i] = d; else h.unshift(d);
-    clearTimeout(store.t); store.t = setTimeout(persist, quiet ? 400 : 0);
+    saveSoon(d, quiet ? 400 : 0);
     if (quiet) { clearTimeout(store.h); store.h = setTimeout(drawList, 500); } else drawList();
   }
+  window.addEventListener('pagehide', () => { if (pendSave.size) { clearTimeout(saveSoon.t); const l = [...pendSave]; pendSave.clear(); l.forEach(v => snap.set(v._id, ser(v))); write(l); } });
   // ---------- البيانات المرجعية (الموردين والمشاريع والمنتجات) ----------
   const R = window.InvoiceRef, RKEY = 'invoice-reader-ref-v1';
-  let ref = null; try { ref = JSON.parse(localStorage.getItem(RKEY)) || null; } catch { ref = null; }
+  let ref = null; // يُحمَّل من IndexedDB عند بدء التشغيل
+  const saveRef = () => S.setKv('ref', ref).then(() => { if (bc) bc.postMessage({ ref: 1 }); }, saveFail);
   let supEdit = null; // فاتورة يجري تغيير مورّدها يدويًا
+  // مطابقة المورّد محفوظة مؤقتًا حسب (الرقم الضريبي + الاسم) حتى لا تُعاد مع كل رسم للقائمة
+  let lkMemo = new Map(), lkRef = null, supSorted = null;
+  function matchSup(x) {
+    if (lkRef !== ref) { lkMemo = new Map(); lkRef = ref; supSorted = null; }
+    const k = String(x.vendor_tax_number || '') + '\u0001' + String(x.vendor_name || '');
+    if (!lkMemo.has(k)) lkMemo.set(k, R.matchSupplier(ref, x));
+    return lkMemo.get(k);
+  }
+  const sortedSup = () => { if (lkRef !== ref) matchSup({}); return supSorted || (supSorted = ref.suppliers.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar'))); };
   function link(x) {
     if (!ref) return;
-    if (!x._supManual) { const m = R.matchSupplier(ref, x); x._supId = m ? m.id : null; x._supBy = m ? m.by : null; x._unreg = !m; }
+    if (!x._supManual) { const m = matchSup(x); x._supId = m ? m.id : null; x._supBy = m ? m.by : null; x._unreg = !m; }
     // المورّد غير موجود في SuppliersT: يُسجَّل «مورد غير مسجل» و«منتج غير مسجل» ويُسمح بالتصدير
     if (x._unreg) { x._supId = null; x._supName = 'مورد غير مسجل'; x.product_id = null; const pr0 = R.project(ref, x.project_id); x.project_name = pr0 ? pr0.name : ''; x.product_name = 'منتج غير مسجل'; x._exists = null; return; }
     const s = R.supplier(ref, x._supId); x._supName = s ? s.name : '';
@@ -466,8 +524,10 @@
     if (!ref) return '';
     const id = esc(x._id);
     if (x._unreg && supEdit !== x._id) return `<small class="supunreg">مورد غير مسجل في SuppliersT</small><button class="linkb" data-supedit="${id}">اختيار مورّد مسجل</button>`;
+    // قائمة الموردين الكاملة تُبنى فقط عند الضغط (توفّر آلاف العناصر في الصفحة)
+    if (x._supId == null && !x._unreg && supEdit !== x._id) return `<button class="linkb unsetb" data-supedit="${id}">⚠ اختر المورّد المسجل</button>`;
     if (x._supId != null && supEdit !== x._id) return `<small class="${x._supBy === 'name' ? 'supname' : 'supok'}">SupID ${x._supId}: ${esc(x._supName)}${x._supBy === 'name' ? ' (بالاسم)' : x._supBy === 'manual' ? ' (يدوي)' : ''}</small><button class="linkb" data-supedit="${id}">تغيير</button>`;
-    const list = ref.suppliers.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    const list = sortedSup();
     return `<select data-sup="${id}" aria-label="اختر المورّد المسجل"${x._supId == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المورّد المسجل —', x._supId == null && !x._unreg)}${opt('unreg', '✱ مورد غير مسجل', !!x._unreg)}${x._supManual ? opt('auto', '↺ مطابقة تلقائية', false) : ''}${list.map(s => opt(s.id, s.id + ' - ' + s.name, s.id === x._supId)).join('')}</select>`;
   }
   function linkCell(x) {
@@ -489,12 +549,12 @@
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try {
       const r = await R.load(f); ref = r;
-      try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch { toast('الملف كبير على ذاكرة المتصفح: سيُستخدم حتى إغلاق الصفحة فقط'); }
+      saveRef();
       all().forEach(x => { if (!x._supManual) { delete x._supId; delete x._unreg; } }); persist();
       refInfo(); drawList(); toast('تم تحميل ملف البيانات ومطابقة الفواتير');
     } catch (err) { console.error(err); toast((err && err.message) || 'تعذّرت قراءة الملف'); }
   };
-  $('refClear').onclick = () => { ref = null; localStorage.removeItem(RKEY); refInfo(); drawList(); toast('أُزيل ملف البيانات من هذا المتصفح'); };
+  $('refClear').onclick = () => { ref = null; saveRef(); refInfo(); drawList(); toast('أُزيل ملف البيانات من هذا المتصفح'); };
   $('hist').addEventListener('change', e => {
     const t = e.target, d = t.dataset, id = d.sup || d.proj || d.prod; if (!id) return;
     const x = all().find(v => v._id === id); if (!x) return;
@@ -517,15 +577,40 @@
     $('gsSend').hidden = !GURL; $('gsLoad').hidden = !gs; $('gsForget').hidden = !gs;
     if (gs) { $('gsEmail').value = gs.email || ''; $('gsToken').value = gs.token; }
   }
+  // طلب مع مهلة: إن لم يرد الشيت خلال المهلة نتوقف بدل الانتظار بلا نهاية
+  async function fetchT(url, opt, ms) {
+    const c = typeof AbortController !== 'undefined' ? new AbortController() : null, t = c && setTimeout(() => c.abort(), ms);
+    try { return await fetch(url, Object.assign({ redirect: 'follow' }, opt, c ? { signal: c.signal } : {})); }
+    catch (e) { if (e && e.name === 'AbortError') throw new Error('انتهت مهلة الاتصال بـ Google Sheet، تحقق من الإنترنت وحاول مرة أخرى'); throw new Error('تعذّر الاتصال بـ Google Sheet، تحقق من الإنترنت'); }
+    finally { if (t) clearTimeout(t); }
+  }
+  // قراءة رد الشيت: إن لم يكن JSON (صفحة خطأ من Google مثلًا) نعطي رسالة مفهومة بدل «Unexpected token»
+  async function readJson(r) {
+    const t = await r.text();
+    try { return JSON.parse(t); } catch {
+      throw new Error(r.status >= 400 ? `ردّ Google Sheet بخطأ (${r.status}). أعد نشر السكربت أو حاول لاحقًا.` : 'ردّ Google Sheet بصفحة غير متوقعة. تأكد أن السكربت منشور (Deploy) كـ Web app والوصول «Anyone»، وأن بريدك ورمزك صحيحان.');
+    }
+  }
+  // الطلبات ترسل البريد والرمز داخل جسم POST (لا في الرابط حتى لا يُسجَّلا في سجلات الروابط).
+  // إن كان السكربت المنشور قديمًا (لا يعرف action) نرجع إلى الطريقة القديمة GET.
+  async function gsCall(cfg, action, ms) {
+    const body = JSON.stringify({ action, email: cfg.email || '', token: cfg.token });
+    let j = await readJson(await fetchT(cfg.url, { method: 'POST', body }, ms));
+    const okShape = action === 'ref' ? j.sheets : j.hashes;
+    if (j.ok && !okShape) {
+      const u = cfg.url + (cfg.url.includes('?') ? '&' : '?') + 'action=' + action + '&email=' + encodeURIComponent(cfg.email || '') + '&token=' + encodeURIComponent(cfg.token);
+      j = await readJson(await fetchT(u, {}, ms));
+    }
+    return j;
+  }
   async function gsGet(cfg) {
-    const u = cfg.url + (cfg.url.includes('?') ? '&' : '?') + 'action=ref&email=' + encodeURIComponent(cfg.email || '') + '&token=' + encodeURIComponent(cfg.token);
-    const r = await fetch(u, { redirect: 'follow' }); const j = await r.json();
+    const j = await gsCall(cfg, 'ref', 30000);
     if (!j.ok) throw new Error(j.error || 'تعذّر الاتصال بالشيت'); return j;
   }
   async function gsLoadRef(cfg, quiet) {
     const j = await gsGet(cfg);
     const r = R.fromSheets(j.sheets, 'Google Sheet: ' + (j.title || '')); r.hashes = j.hashes || {};
-    ref = r; try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch { }
+    ref = r; saveRef();
     all().forEach(x => { if (!x._supManual) { delete x._supId; delete x._unreg; } }); persist(); refInfo(); drawList();
     if (!quiet) toast('حُدّثت البيانات المرجعية من Google Sheet');
   }
@@ -549,13 +634,13 @@
     const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._unreg ? '' : x._supId, Unreg: !!x._unreg, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x._unreg ? '' : (x.product_id ?? ''), ProductName: x._unreg ? 'منتج غير مسجل' : (x.product_name || ''), Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: [x._unreg ? `مورد غير مسجل: ${x.vendor_name || '—'}${x.vendor_tax_number ? ' (الرقم الضريبي ' + x.vendor_tax_number + ')' : ''}` : '', x.note || ''].filter(Boolean).join(' | '), VATID: vatOf(x), FilePath: x.file || '', FileHash: x._hash || '' })) };
     $('gsSend').disabled = true; amsg(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
     try {
-      const r = await fetch(gs.url, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' }); const j = await r.json();
+      const j = await readJson(await fetchT(gs.url, { method: 'POST', body: JSON.stringify(payload) }, 90000));
       if (!j.ok) throw new Error(j.error);
       const h = all(), now = new Date().toISOString();
       (j.added || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x) { x._sent = a.invId; x._sentAt = now; if (ref && x._hash) (ref.hashes = ref.hashes || {})[x._hash] = a.invId; if (ref) ref.inv[x._supId + '|' + String(x.invoice_number).toLowerCase().replace(/[^0-9a-zء-ي]/g, '').replace(/^0+(?=.)/, '')] = a.invId; } });
       (j.skipped || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x && a.invId) { x._sent = a.invId; x._sentAt = now; x._sentNote = a.byFile ? 'نفس الملف أُرسل سابقًا' : 'كانت موجودة مسبقًا'; delete x._sendErr; } else if (x) x._sendErr = a.reason || 'رفضها الشيت'; });
       (j.added || []).forEach(a => { const x = h.find(v => v._id === a.id); if (x) delete x._sendErr; });
-      persist(); try { localStorage.setItem(RKEY, JSON.stringify(ref)); } catch { } drawList();
+      persist(); if (ref) saveRef(); drawList();
       const sk = (j.skipped || []).length;
       toast(`أُرسلت ${(j.added || []).length} فاتورة إلى Google Sheet`);
       amsg(`أُضيفت ${(j.added || []).length} فاتورة إلى InvoiceT و VatReport.` + (sk ? ` لم تُضف ${sk} لأنها موجودة مسبقًا أو بلا رقم.` : '') + (missing ? ` لم تُرسل ${missing} لأن المورّد أو المشروع أو المنتج غير محدد.` : ''), !!missing);
@@ -596,7 +681,9 @@
     $('ht').firstChild.textContent = tab === 'appr' ? 'معتمدة لم تُصدّر بعد ' : 'مرفوعة لم تُعتمد بعد ';
     const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة', dup: 'لم يُحمّل (مكرر)' };
     const rowsP = ''; void pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="6">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' || v.status === 'dup' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
-    const shown = shownList();
+    // نرسم فقط التبويب الظاهر (أسرع بكثير على الجوال مع كثرة الفواتير)
+    const onList = tab === 'rev' || tab === 'appr';
+    const shown = onList ? shownList() : [];
     const rows = shown.map(x => {
       const id = esc(x._id), dup = dm.get(x._id), w = x._warnings || [];
       const notes = [...(dup ? ['<span class="dupb">مكررة</span>'] : []), ...refNotes(x).map(([c, m]) => `<span class="${c}">• ${esc(m)}</span>`), ...w.map(m => `<span class="wn">• ${esc(m)}</span>`)].join('');
@@ -610,7 +697,7 @@
         <td data-l="الملاحظات" class="notes">${notes ? `<div class="auto">${notes}</div>` : '<div class="auto"><span class="ok">لا تنبيهات</span></div>'}<input class="unote" data-note="${id}" value="${esc(x.note || '')}" placeholder="أضف ملاحظتك…" aria-label="ملاحظتك على الفاتورة"></td>
         <td class="act"><div class="st">${x._approved ? `<span class="okb">معتمدة</span>${expBadge(x)}${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}</div>${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
     }).join('');
-    $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="8" class="empty">${tab === 'appr' ? 'لا توجد فواتير معتمدة بعد.' : h.length ? 'لا توجد فواتير بانتظار المراجعة. كل الفواتير معتمدة ✓' : 'لا توجد فواتير بعد. حمّلها من تبويب «تحميل الفواتير».'}</td></tr>`;
+    if (onList) $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="8" class="empty">${tab === 'appr' ? 'لا توجد فواتير معتمدة بعد.' : h.length ? 'لا توجد فواتير بانتظار المراجعة. كل الفواتير معتمدة ✓' : 'لا توجد فواتير بعد. حمّلها من تبويب «تحميل الفواتير».'}</td></tr>`;
     const nd = dm.size;
     $('dupNote').hidden = !nd;
     $('dupNote').innerHTML = nd ? `تنبيه: ${nd} فواتير في القائمة مكررة (نفس المورّد ورقم الفاتورة والتاريخ). <button id="dupClean" class="del">حذف المكرر وإبقاء نسخة واحدة</button>` : '';
@@ -635,7 +722,7 @@
   function drawQty() {
     const h = all(), groups = X.qtyGroups(h);
     $('qEmpty').hidden = !!groups.length; $('qtyBody').hidden = !groups.length; $('bQty').textContent = groups.filter(g => g.diff).length || '';
-    if (!groups.length) return;
+    if (!groups.length || tab !== 'qty') return;
     const nd = groups.filter(g => g.diff).length;
     $('qcount').textContent = `(${groups.length} صنف)`;
     $('qsum').textContent = 'إجمالي البنود: ' + P.fmt(groups.reduce((a, g) => a + g.total, 0));
@@ -674,7 +761,7 @@
   $('hist').addEventListener('input', e => {
     const id = e.target.dataset.note; if (!id) return;
     const x = all().find(v => v._id === id); if (!x) return;
-    x.note = e.target.value; clearTimeout(store.t); store.t = setTimeout(persist, 400); // بدون إعادة رسم حتى لا يضيع المؤشر
+    x.note = e.target.value; saveSoon(x); // بدون إعادة رسم حتى لا يضيع المؤشر
   });
   $('hist').addEventListener('click', e => {
     if (e.target.dataset.supedit) { supEdit = e.target.dataset.supedit; drawList(); const s = document.querySelector(`select[data-sup="${CSS.escape(supEdit)}"]`); if (s) s.focus(); return; }
@@ -818,7 +905,8 @@
     const warnList = (list, title) => list.length ? `<b>⚠ ${title}</b><ul>${list.slice(0, 50).map(x => `<li><b>${esc(x._supName || x.vendor_name || x.file || '—')}</b> · ${esc(x.invoice_number || 'بدون رقم')} · ${esc(money(x))}: ${whyNot(x).map(esc).join('؛ ')}</li>`).join('')}${list.length > 50 ? '<li>…</li>' : ''}</ul>` : '';
     $('apprWarn').innerHTML = warnList(notExp, `${notExp.length} فاتورة معتمدة لم تُصدّر بعد:`); $('apprWarn').hidden = !notExp.length;
     $('exWarn').innerHTML = warnList(notAll, `${notAll.length} فاتورة لم تُصدّر بعد، وهذه الأسباب:`); $('exWarn').hidden = !notAll.length;
-    // آخر عملية
+    keepNote();
+    if (tab === 'up') { // جداول تبويب التحميل تُرسم فقط عند ظهوره
     // آخر عملية: من سجل العملية، وإن لم يوجد (متصفح آخر) فآخر دفعة حسب وقت التحميل
     let R0 = run;
     if (!R0 || !R0.items.length) {
@@ -844,6 +932,9 @@
     $('pvCount').textContent = `(${prev.length})`;
     $('pvSum').textContent = prev.length ? `بانتظار المراجعة ${prev.filter(x => !x._approved).length} · معتمدة ${prev.filter(x => x._approved && !isExported(x)).length} · مُصدّرة ${prev.filter(isExported).length} · المجموع ${sumBy(prev)}` : '';
     $('pvTable').innerHTML = HEAD() + `<tbody>${prev.map(x => invRow(x)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير محمّلة قبل آخر عملية.</td></tr>'}</tbody>`;
+    }
+    if (tab !== 'exp') return;
+    storageInfo();
     // التصدير
     $('exNote').textContent = nRev ? `ملاحظة: ${nRev} فاتورة ما زالت بانتظار المراجعة ولن تُصدّر قبل اعتمادها.` : '';
     const revL = h.filter(x => !x._approved);
@@ -862,18 +953,117 @@
     const l = all().filter(x => x._approved && !isExported(x));
     if (!l.length) return amsg(all().some(x => x._approved) ? 'كل الفواتير المعتمدة صُدّرت سابقًا (انظر «تم تصديرها» في تبويب «التصدير»). لإعادة تصدير الكل استخدم «تصدير الكل إلى Excel» هناك.' : 'لا توجد فواتير معتمدة بعد. اعتمد الفواتير من تبويب «المراجعة».', true);
     if (!ref) toast('تنبيه: لم يُحمَّل ملف البيانات، فستكون SupID و ProjectID فارغة');
-    download(`فواتير-معتمدة-${stamp()}.xlsx`, X.toXlsx(l, ref && ref.vatCols));
+    let ok = false; try { ok = download(`فواتير-معتمدة-${stamp()}.xlsx`, X.toXlsx(l, ref && ref.vatCols)); } catch (e) { console.error(e); }
+    if (!ok) return amsg('تعذّر إنشاء ملف Excel، فلم تُنقل الفواتير إلى «تم تصديرها». حاول مرة أخرى.', true);
     const now = new Date().toISOString(); l.forEach(x => x._exportedAt = now); persist(); drawList();
     amsg(`صُدّرت ${l.length} فاتورة إلى Excel وانتقلت إلى «تم تصديرها» في تبويب «التصدير».`);
     undo(`صُدّرت ${l.length} فاتورة`, () => { l.forEach(x => delete x._exportedAt); persist(); drawList(); });
   };
   document.addEventListener('click', e => { const u = e.target.dataset.unexport; if (!u) return; const x = all().find(v => v._id === u); if (x) { delete x._exportedAt; persist(); drawList(); } });
-  // حذف الصور المحفوظة لفواتير لم تعد موجودة
-  IDB.keys().then(ks => { const have = new Set(all().map(x => x._id)); (ks || []).forEach(k => { if (!have.has(k)) IDB.del(k); }); });
-  refInfo(); gsUi();
-  // عند فتح التطبيق: إن كان مربوطًا بالشيت نحدّث البيانات المرجعية منه تلقائيًا (حتى تظهر خانات المشروع والمنتج على أي جهاز)
-  if (gs) gsLoadRef(gs, true).catch(e => { if (!ref) amsg('تعذّر تحميل الموردين والمشاريع من Google Sheet: ' + ((e && e.message) || 'تحقق من الاتصال'), true); });
-  let t0 = 'up'; try { t0 = sessionStorage.getItem('invoice-reader-tab') || 'up'; } catch { }
-  setTab(t0);
+  // ---------- الحفظ الدائم والنسخ الاحتياطي ----------
+  const OLD_DAYS = 3;
+  function keepNote() { // تذكير: معتمدة لم تُرسل ولم تُصدّر منذ أيام (قد تضيع إذا مسح المتصفح بياناته)
+    const w = $('keepWarn'); if (!w) return;
+    const old = all().filter(x => x._approved && !isExported(x) && Date.now() - (Date.parse(x._approvedAt || x._at || '') || Date.now()) > OLD_DAYS * 864e5);
+    w.hidden = !old.length;
+    if (old.length) w.innerHTML = `⚠ لديك <b>${old.length}</b> فاتورة معتمدة لم تُرسل إلى Google Sheet ولم تُصدّر منذ أكثر من ${OLD_DAYS} أيام. هي محفوظة في هذا المتصفح فقط، وقد يمسحها المتصفح (خصوصًا Safari على الآيفون إذا لم يُفتح الموقع أسبوعًا). <button data-goto="appr">أرسلها أو صدّرها الآن</button>`;
+  }
+  let persisted = false;
+  async function askPersist() { // نطلب من المتصفح ألا يمسح بيانات التطبيق تلقائيًا
+    try { if (!persisted && navigator.storage && navigator.storage.persist) persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist()); } catch { }
+    storageInfo();
+  }
+  async function storageInfo() {
+    const e = $('bkInfo'); if (!e) return;
+    let t = `${all().length} فاتورة محفوظة في هذا المتصفح`;
+    try { if (navigator.storage && navigator.storage.estimate) { const q = await navigator.storage.estimate(); if (q && q.usage != null) t += ` (تشغل ${(q.usage / 1048576).toFixed(1)} ميغابايت)`; } } catch { }
+    t += persisted ? '. الحفظ دائم: لن يمسحها المتصفح تلقائيًا، لكن خذ نسخة احتياطية قبل مسح بيانات المتصفح أو تغيير الجهاز.' : '. قد يمسح المتصفح هذه البيانات إذا امتلأ الجهاز أو لم يُفتح الموقع مدة طويلة، فأرسل المعتمدة إلى الشيت أو خذ نسخة احتياطية بانتظام.';
+    if (S.mode === 'ls') t += ' تنبيه: هذا المتصفح لا يدعم قاعدة البيانات الداخلية، فالمساحة محدودة (نحو 5 ميغابايت).';
+    e.textContent = t;
+  }
+  const blobToData = b => typeof b === 'string' ? Promise.resolve(b) : new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ok(''); r.readAsDataURL(b); });
+  $('bkSave').onclick = async () => {
+    const h = all(), withImg = $('bkImg').checked;
+    if (!h.length) return toast('لا توجد فواتير لحفظها');
+    $('bkSave').disabled = true; status('جارٍ تجهيز النسخة الاحتياطية…');
+    try {
+      const out = { app: 'invoice-reader', v: 1, at: new Date().toISOString(), invoices: h, images: {} };
+      if (withImg) for (const x of h) { const u = await IDB.get(x._id); if (u && u.length) out.images[x._id] = await Promise.all(u.map(blobToData)); }
+      if (download(`نسخة-احتياطية-فواتير-${stamp()}.json`, JSON.stringify(out), 'application/json')) status(`نُزّلت نسخة احتياطية فيها ${h.length} فاتورة${withImg ? ' مع صورها' : ''}. احفظ الملف في مكان آمن (Drive مثلًا).`);
+    } catch (e) { console.error(e); status('تعذّر تجهيز النسخة الاحتياطية' + (withImg ? '، جرّب بدون الصور' : ''), true); }
+    finally { $('bkSave').disabled = false; }
+  };
+  $('bkFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const o = JSON.parse(await f.text());
+      if (!o || o.app !== 'invoice-reader' || !Array.isArray(o.invoices)) throw new Error('هذا ليس ملف نسخة احتياطية من قارئ الفواتير');
+      await ready;
+      const have = new Set(all().map(x => x._id)); let n = 0, ni = 0;
+      for (const x of o.invoices) {
+        if (!x || !x._id || have.has(x._id)) continue;
+        cache.push(x); have.add(x._id); n++;
+        const im = o.images && o.images[x._id];
+        if (Array.isArray(im) && im.length) { const bl = await Promise.all(im.map(u => fetch(u).then(r => r.blob()).catch(() => u))); await IDB.put(x._id, bl); ni++; }
+      }
+      cache.sort((a, b) => String(b._at || '').localeCompare(String(a._at || '')));
+      persist(); drawList(); storageInfo();
+      toast(n ? `استُرجعت ${n} فاتورة${ni ? ` (${ni} منها مع صورها)` : ''}` : 'كل فواتير هذه النسخة موجودة أصلًا');
+    } catch (err) { console.error(err); toast((err && err.message) || 'تعذّرت قراءة الملف'); }
+  };
+  // تبويب آخر حفظ أو حذف فواتير: نحدّث هذا التبويب بنفس التغييرات حتى لا يكتب أحدهما فوق الآخر
+  if (bc) bc.onmessage = async e => {
+    const m = e.data || {};
+    try {
+      if (m.ref) { ref = (await S.getKv('ref')) || null; refInfo(); }
+      for (const id of m.put || []) {
+        const x = await S.getInv(id); if (!x) continue;
+        const i = cache.findIndex(v => v._id === id); if (i >= 0) cache[i] = x; else cache.unshift(x);
+        snap.set(id, ser(x)); delete imgs[id];
+        if (cur && cur._id === id) { cur = x; qr = x._qr || null; cur.src = cur.src || {}; cur.items = cur.items || []; render(); }
+      }
+      for (const id of m.del || []) {
+        const i = cache.findIndex(v => v._id === id); if (i >= 0) cache.splice(i, 1); snap.delete(id);
+        if (cur && cur._id === id) { $('review').classList.remove('on'); cur = null; }
+      }
+      drawList();
+    } catch (err) { console.error(err); }
+  };
+  // ---------- بدء التشغيل: تحميل الفواتير والبيانات المرجعية من IndexedDB (ونقلها من localStorage أول مرة) ----------
+  const ready = (async () => {
+    try { await S.init(); cache = (await S.allInv()) || []; } catch (e) { saveFail(e); cache = []; }
+    if (!cache.length && S.mode === 'idb') {
+      try {
+        const old = JSON.parse(localStorage.getItem(KEY) || '[]');
+        if (Array.isArray(old) && old.length) { await S.putInv(old); cache = old; localStorage.removeItem(KEY); }
+      } catch (e) { console.error('تعذّر نقل الفواتير القديمة', e); }
+    }
+    cache.sort((a, b) => String(b._at || '').localeCompare(String(a._at || '')));
+    cache.forEach(x => snap.set(x._id, ser(x)));
+    try {
+      ref = (await S.getKv('ref')) || null;
+      if (!ref) { const o = JSON.parse(localStorage.getItem(RKEY) || 'null'); if (o) { ref = o; await S.setKv('ref', o); localStorage.removeItem(RKEY); } }
+    } catch (e) { console.error(e); }
+  })();
+  ready.then(() => {
+    // حذف الصور المحفوظة لفواتير لم تعد موجودة
+    IDB.keys().then(ks => { const have = new Set(all().map(x => x._id)); (ks || []).forEach(k => { if (!have.has(k)) IDB.del(k); }); });
+    refInfo(); gsUi();
+    // عند فتح التطبيق: إن كان مربوطًا بالشيت نحدّث البيانات المرجعية منه تلقائيًا (حتى تظهر خانات المشروع والمنتج على أي جهاز)
+    if (gs) gsLoadRef(gs, true).catch(e => { if (!ref) amsg('تعذّر تحميل الموردين والمشاريع من Google Sheet: ' + ((e && e.message) || 'تحقق من الاتصال'), true); });
+    let t0 = 'up'; try { t0 = sessionStorage.getItem('invoice-reader-tab') || 'up'; } catch { }
+    setTab(t0);
+    if (all().length) askPersist(); else storageInfo();
+  });
+  // ---------- العمل بدون إنترنت (Service Worker) وتجهيز ملفات القراءة مسبقًا ----------
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(() => {
+      // أول زيارة: نحمّل ملفات قراءة النص في الخلفية لتكون أول فاتورة أسرع (مرة واحدة، وليس مع توفير البيانات)
+      const c = navigator.connection; if ((c && c.saveData) || localStorage.getItem('invoice-reader-prefetch-v1')) return;
+      const go = () => Promise.all(['vendor/worker.min.js', 'vendor/core/tesseract-core-simd-lstm.wasm.js', 'vendor/lang/ara.traineddata.gz', 'vendor/lang/eng.traineddata.gz'].map(u => fetch(abs(u)).then(r => r.ok && r.blob())))
+        .then(() => localStorage.setItem('invoice-reader-prefetch-v1', '1')).catch(() => { });
+      (window.requestIdleCallback || (f => setTimeout(f, 3000)))(go);
+    }).catch(e => console.warn('SW', e));
+  }
   window.__invoiceApp = { addFiles, get cur() { return cur; }, get qr() { return qr; }, get raw() { return rawText; }, get busy() { return busy || queue.length > 0; }, all, dupMap, setTab, get tab() { return tab; } };
 })();
