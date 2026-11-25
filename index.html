@@ -23,7 +23,7 @@ h1,h2,h3{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:
 .top{background:var(--band);color:#fff;padding:clamp(24px,4vw,44px) max(5vw,16px) 92px}
 .top h1{font-size:clamp(32px,5vw,44px)}
 .top p{margin:8px 0 0;max-width:62ch;opacity:.92}
-main{max-width:1200px;margin:-68px auto 48px;padding:0 max(3vw,12px);display:grid;gap:22px}
+main{max-width:1200px;margin:0 auto 48px;padding:0 max(3vw,12px);display:grid;gap:22px}
 .slip{background:var(--paper);border-radius:6px;padding:clamp(16px,3vw,30px);box-shadow:0 1px 0 var(--line),0 18px 40px -24px #0b1550aa}
 .cap{max-width:820px;width:100%;margin-inline:auto}
 .drop{border:2px dashed var(--line);border-radius:6px;padding:26px 16px;text-align:center;transition:border-color .2s,background .2s}
@@ -157,6 +157,23 @@ table.list tr.dup td:first-child{box-shadow:inset -4px 0 0 var(--stamp)}.ok{colo
  table.list td.act{text-align:start}table.list td.act button{margin:0 0 0 8px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 small.fpath{display:block;direction:ltr;text-align:right;unicode-bidi:plaintext;word-break:break-all;opacity:.75}
+
+.tabs{position:sticky;top:0;z-index:20;display:flex;gap:4px;max-width:1200px;margin:-80px auto 58px;padding:6px max(3vw,12px);overflow-x:auto;scrollbar-width:none}
+.tabs button{flex:1 0 auto;min-height:46px;padding:6px 16px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(40,52,120,.55);color:#fff;font-weight:600;font-size:15px;white-space:nowrap;backdrop-filter:blur(6px)}
+.tabs button[aria-selected=true]{background:var(--paper);color:var(--ink);border-color:var(--paper);box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.tabs .badge:empty{display:none}.tabs .badge{display:inline-block;min-width:22px;padding:0 6px;margin-inline-start:4px;border-radius:11px;background:#c0392b;color:#fff;font-size:12px;line-height:20px}
+.tabs .badge.ok{background:#1e7a46}
+.pane{display:none;gap:22px}.pane.on{display:grid}
+.zt{display:inline-flex;gap:4px;align-items:center;margin-inline-start:auto}.zt button{min-width:40px}#zinfo{min-width:48px;text-align:center;font-size:13px}
+.stage,.lbstage{direction:ltr}.stage img{cursor:zoom-in}
+table.mini{min-width:0!important}table.mini td.act{width:auto!important}table.mini td.act button{width:auto!important;margin:2px!important}
+.okc{color:#1e7a46}.dupc{color:#b9770e}.errc{color:#c0392b}
+.hist h4{margin:18px 0 6px;font-size:16px}
+.lb{position:fixed;inset:0;z-index:100;background:rgba(10,12,20,.94);display:flex;flex-direction:column}.lb[hidden]{display:none}
+.lbbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;background:rgba(0,0,0,.4)}.lbbar button{min-height:42px;min-width:42px}#lbInfo{color:#fff;font-size:14px}
+.lbstage{flex:1;overflow:auto;text-align:center;touch-action:pan-x pan-y pinch-zoom}.lbstage img{width:100%;max-width:none;display:inline-block}
+body.lbon{overflow:hidden}
+@media(max-width:600px){.tabs button{font-size:14px;padding:6px 10px}}
 </style>
 </head>
 <body>
@@ -164,7 +181,14 @@ small.fpath{display:block;direction:ltr;text-align:right;unicode-bidi:plaintext;
   <h1>قارئ الفواتير</h1>
   <p>صوّر الفاتورة أو ارفعها (صورة أو PDF)، فيقرأ التطبيق رمز QR الضريبي والنص، ويستخرج بياناتها الأساسية لتراجعها وتنسخها. يعمل داخل جهازك، مجانًا، ولا يرسل الفاتورة إلى أي خادم.</p>
 </header>
+<nav class="tabs" id="tabs" role="tablist" aria-label="أقسام التطبيق">
+  <button role="tab" data-tab="up" aria-selected="true">تحميل الفواتير</button>
+  <button role="tab" data-tab="rev" aria-selected="false" tabindex="-1">المراجعة <span class="badge" id="bRev"></span></button>
+  <button role="tab" data-tab="appr" aria-selected="false" tabindex="-1">المعتمدة <span class="badge ok" id="bAppr"></span></button>
+  <button role="tab" data-tab="exp" aria-selected="false" tabindex="-1">التصدير <span class="badge" id="bExp"></span></button>
+</nav>
 <main>
+<div class="pane on" data-pane="up">
   <section class="slip cap" aria-labelledby="capT">
     <div class="drop" id="drop">
       <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" aria-hidden="true">
@@ -184,11 +208,34 @@ small.fpath{display:block;direction:ltr;text-align:right;unicode-bidi:plaintext;
     <p class="free">أول قراءة تحمّل ملفات اللغة (نحو 5 ميغابايت، و4 إضافية عند وجود أرقام هندية) مرة واحدة فقط.</p>
   </section>
 
+  <section class="slip hist" id="lastRun" aria-labelledby="lrT" hidden>
+    <div class="lhead"><h3 id="lrT">آخر عملية تحميل</h3><span class="note" id="lrSum"></span></div>
+    <div class="twrap"><table id="lrTable" class="list mini tabtable"></table></div>
+  </section>
+  <section class="slip hist" aria-labelledby="pvT">
+    <div class="lhead"><h3 id="pvT">الفواتير المحمّلة سابقًا <span id="pvCount"></span></h3><span class="note" id="pvSum"></span></div>
+    <div class="twrap"><table id="pvTable" class="list mini tabtable"></table></div>
+  </section>
+  <section class="slip hist" aria-labelledby="setT">
+    <div class="lhead"><h3 id="setT">البيانات المرجعية والربط</h3></div>
+    <div class="refbar" id="refbar">
+      <div class="refi"><b>بياناتك المرجعية</b><span id="refInfo">لم يُحمَّل ملف بعد. حمّل ملف Excel الذي فيه أوراق SuppliersT و ProjectsT و ProductsT و SupplierProductT لمطابقة الموردين واختيار المشروع والمنتج. يُقرأ الملف داخل جهازك ولا يُرفع لأي مكان.</span></div>
+      <div class="refb"><button id="gsLoad" hidden>تحديث البيانات من Google Sheet</button><label class="btn"><input type="file" id="refFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">تحميل ملف البيانات</label><button id="refClear" hidden>إزالة الملف</button></div>
+    </div>
+    <details class="gs" id="gsBox" hidden>
+      <summary>ربط Google Sheet <span id="gsState">(غير مربوط)</span></summary>
+      <p class="note">التحديث مسموح فقط للأشخاص الذين أضافهم مالك الشيت (قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له»)، ولكل بريد رمز خاص. اكتب بريدك ورمزك. رابط الشيت يحدده مالك التطبيق فقط ولا يمكن تغييره من هنا. بعدها يرسل زر «إرسال المعتمدة إلى Google Sheet» الفواتير المعتمدة إلى InvoiceT و VatReport بدون تكرار، ويمكنك تحميل الموردين والمشاريع والمنتجات من الشيت مباشرة.</p>
+      <div class="gsf"><input id="gsEmail" type="email" placeholder="بريدك الإلكتروني" aria-label="بريدك الإلكتروني" dir="ltr"><input id="gsToken" placeholder="رمز الدخول" aria-label="رمز الدخول" dir="ltr"><button class="primary" id="gsSave">حفظ واختبار الربط</button><button id="gsForget" hidden>إلغاء الربط</button></div>
+    </details>
+  </section>
+</div>
+<div class="pane" data-pane="rev appr">
   <div id="review">
     <section class="slip viewer" aria-label="صورة الفاتورة">
-      <div class="vhead"><b>الفاتورة المفتوحة للمراجعة</b><span>هذه نسخة للمراجعة فقط، والفاتورة محسوبة في الملخص أدناه.</span></div>
+      <div class="vhead"><b>الفاتورة المفتوحة للمراجعة</b><span>اضغط الصورة لعرضها بملء الشاشة وتكبيرها.</span></div>
       <div class="vtools">
-        <button id="zoom" aria-pressed="false">تكبير</button><button id="closeV">إغلاق المراجعة</button>
+        <button class="primary" id="vAppr">اعتماد</button><button id="vNext">التالي</button><button id="vDel" class="del">حذف</button><button id="closeV">إغلاق</button>
+        <span class="zt"><button id="zoomOut" aria-label="تصغير">−</button><span id="zinfo">100%</span><button id="zoomIn" aria-label="تكبير">+</button><button id="zoom">ملء الشاشة</button></span>
         <button id="prevP" hidden>الصفحة السابقة</button><button id="nextP" hidden>الصفحة التالية</button>
         <span id="pinfo"></span>
       </div>
@@ -219,30 +266,31 @@ small.fpath{display:block;direction:ltr;text-align:right;unicode-bidi:plaintext;
       <details><summary>النص المقروء من الفاتورة</summary><pre id="rawText"></pre><button id="copyRaw">نسخ النص الكامل</button></details>
     </section>
   </div>
-
   <section class="slip hist" aria-labelledby="ht">
-    <div class="lhead"><h3 id="ht">ملخص الفواتير <span id="count"></span></h3><span class="note" id="sumAll"></span></div>
+    <div class="lhead"><h3 id="ht">فواتير بانتظار المراجعة <span id="count"></span></h3><span class="note" id="sumAll"></span></div>
     <p class="dupnote" id="dupNote" hidden></p>
-    <div class="refbar" id="refbar">
-      <div class="refi"><b>بياناتك المرجعية</b><span id="refInfo">لم يُحمَّل ملف بعد. حمّل ملف Excel الذي فيه أوراق SuppliersT و ProjectsT و ProductsT و SupplierProductT لمطابقة الموردين واختيار المشروع والمنتج. يُقرأ الملف داخل جهازك ولا يُرفع لأي مكان.</span></div>
-      <div class="refb"><button id="gsLoad" hidden>تحديث البيانات من Google Sheet</button><label class="btn"><input type="file" id="refFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">تحميل ملف البيانات</label><button id="refClear" hidden>إزالة الملف</button></div>
-    </div>
-    <details class="gs" id="gsBox" hidden>
-      <summary>ربط Google Sheet <span id="gsState">(غير مربوط)</span></summary>
-      <p class="note">التحديث مسموح فقط للأشخاص الذين أضافهم مالك الشيت (قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له»)، ولكل بريد رمز خاص. اكتب بريدك ورمزك. رابط الشيت يحدده مالك التطبيق فقط ولا يمكن تغييره من هنا. بعدها يرسل زر «إرسال المعتمدة إلى Google Sheet» الفواتير المعتمدة إلى InvoiceT و VatReport بدون تكرار، ويمكنك تحميل الموردين والمشاريع والمنتجات من الشيت مباشرة.</p>
-      <div class="gsf"><input id="gsEmail" type="email" placeholder="بريدك الإلكتروني" aria-label="بريدك الإلكتروني" dir="ltr"><input id="gsToken" placeholder="رمز الدخول" aria-label="رمز الدخول" dir="ltr"><button class="primary" id="gsSave">حفظ واختبار الربط</button><button id="gsForget" hidden>إلغاء الربط</button></div>
-    </details>
-    <div class="exp" id="exportBar" hidden>
-      <button class="primary" id="xAll">تصدير الكل إلى Excel</button>
+    <div class="filters" id="filters" role="group" aria-label="تصفية الفواتير" hidden></div>
+    <div class="twrap"><table id="hist" class="list"><thead><tr><th>المورّد</th><th>الرقم الضريبي</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الإجمالي</th><th>المشروع والمنتج</th><th>الملاحظات</th><th>الحالة والإجراء</th></tr></thead><tbody></tbody></table></div>
+    <p class="note">اضغط «مراجعة» لفتح الفاتورة مع صورتها. اختر المورّد والمشروع والمنتج، ثم «اعتماد» فتنتقل إلى تبويب «المعتمدة». تُحفظ البيانات والصور في هذا المتصفح فقط (حتى 200 فاتورة).</p>
+  </section>
+</div>
+<div class="pane" data-pane="exp">
+  <section class="slip hist" aria-labelledby="exT">
+    <div class="lhead"><h3 id="exT">التصدير</h3><span class="note" id="exNote"></span></div>
+    <div class="exp" id="exportBar">
+      <button class="primary" id="xNew">تصدير المعتمدة غير المصدّرة إلى Excel</button>
+      <button id="xAll">تصدير الكل إلى Excel</button>
       <button id="cAll">الفواتير CSV</button>
       <button id="cItems">البنود CSV</button>
-      <button id="xVat">VatReport</button>
+      <button id="xVat">VatReport (المعتمدة)</button>
       <button id="gsSend" class="gsbtn" hidden>إرسال المعتمدة إلى Google Sheet</button>
       <button id="clearAll" class="danger">حذف الكل</button>
     </div>
-    <div class="filters" id="filters" role="group" aria-label="تصفية الفواتير" hidden></div>
-    <div class="twrap"><table id="hist" class="list"><thead><tr><th>المورّد</th><th>الرقم الضريبي</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الإجمالي</th><th>المشروع والمنتج</th><th>الملاحظات</th><th>الحالة والإجراء</th></tr></thead><tbody></tbody></table></div>
-    <p class="note">اعتمد الفاتورة بعد مراجعتها، واكتب ملاحظتك في خانة الملاحظات. الحالة والملاحظات تُصدَّر مع Excel و CSV. تُحفظ البيانات في هذا المتصفح فقط (حتى 200 فاتورة)، ولا تُحفظ الصور.</p>
+    <h4>لم تُصدّر بعد <span id="neCount"></span></h4>
+    <div class="twrap"><table id="neTable" class="list mini tabtable"></table></div>
+    <h4>تم تصديرها <span id="exCount"></span></h4>
+    <div class="twrap"><table id="exTable" class="list mini tabtable"></table></div>
+    <p class="note">«تصدير المعتمدة غير المصدّرة» ينزّل ملف Excel (الفواتير والبنود والكميات و VatReport) للفواتير المعتمدة التي لم تُصدّر، ثم ينقلها إلى «تم تصديرها». والإرسال إلى Google Sheet يُحسب تصديرًا أيضًا.</p>
   </section>
   <section class="slip hist" aria-labelledby="qt" id="qtySec" hidden>
     <div class="lhead"><h3 id="qt">جدول الكميات <span id="qcount"></span></h3><span class="note" id="qsum"></span></div>
@@ -256,7 +304,14 @@ small.fpath{display:block;direction:ltr;text-align:right;unicode-bidi:plaintext;
     <div class="twrap"><table id="qty" class="list qty"><thead><tr><th>الصنف</th><th class="n">الفواتير</th><th class="n">الكمية</th><th class="n">سعر الوحدة</th><th class="n">الإجمالي</th><th>الموردون</th><th>تنبيه السعر</th><th></th></tr></thead><tbody></tbody></table></div>
     <p class="note">يجمع بنود كل الفواتير حسب اسم الصنف. إذا اختلف سعر الوحدة لنفس الصنف بين فاتورة وأخرى يظهر تنبيه، واضغط «التفاصيل» لترى السعر في كل فاتورة. صحّح اسم الصنف في شاشة المراجعة إن قُرئ بشكل مختلف.</p>
   </section>
+</div>
+
+
 </main>
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="صورة الفاتورة">
+  <div class="lbbar"><button id="lbClose">إغلاق ✕</button><button id="lbOut" aria-label="تصغير">−</button><button id="lbIn" aria-label="تكبير">+</button><button id="lbPrev">السابقة</button><button id="lbNext">التالية</button><span id="lbInfo"></span></div>
+  <div class="lbstage"><img id="lbImg" alt="صورة الفاتورة"></div>
+</div>
 <div class="toast" id="toast" aria-live="polite"></div>
 
 <script src="vendor/pdf.min.js"></script>

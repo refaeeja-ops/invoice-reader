@@ -208,8 +208,27 @@
   async function hashOf(f) {
     try { const b = await crypto.subtle.digest('SHA-256', await f.arrayBuffer()); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); } catch { return ''; }
   }
+  // آخر عملية تحميل (تُحفظ في المتصفح)
+  const LKEY = 'invoice-reader-lastrun-v1';
+  let run = null; try { run = JSON.parse(localStorage.getItem(LKEY)) || null; } catch { run = null; }
+  const saveRun = () => { try { localStorage.setItem(LKEY, JSON.stringify(run)); } catch { } };
+  const runAdd = (file, st, msg, id) => { run.items.push({ file, st, msg: msg || '', id: id || '' }); saveRun(); };
+  // صور الفواتير تُحفظ في IndexedDB داخل المتصفح (مجانًا) لعرضها لاحقًا في المراجعة والتصدير
+  const IDB = (() => {
+    let dbp = null;
+    const db = () => dbp || (dbp = new Promise((ok, no) => { try { const r = indexedDB.open('invoice-reader-img', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); } catch (e) { no(e); } }));
+    const tx = async (mode, fn) => { const d = await db(); return new Promise((ok, no) => { const t = d.transaction('img', mode), st = t.objectStore('img'); const r = fn(st); t.oncomplete = () => ok(r && r.result); t.onerror = () => no(t.error); }); };
+    return {
+      put: (id, v) => tx('readwrite', st => st.put(v, id)).catch(() => { }),
+      get: id => tx('readonly', st => st.get(id)).catch(() => null),
+      del: id => tx('readwrite', st => st.delete(id)).catch(() => { }),
+      keys: () => tx('readonly', st => st.getAllKeys()).catch(() => [])
+    };
+  })();
+  async function pagesOf(id) { if (imgs[id] && imgs[id].length) return imgs[id]; const u = await IDB.get(id); if (u && u.length) imgs[id] = u; return u || []; }
   function addFiles(files, fromFolder) {
     const allF = [...(files || [])];
+    if (!busy && !queue.length) { run = { at: new Date().toISOString(), items: [] }; saveRun(); }
     files = allF.filter(f => isInv(f) && !/^\./.test(f.name || ''));
     // منع التكرار: ملف سبق اختياره (في الملخص أو الدفعة الحالية) أو مكرر في نفس الاختيار
     const nsOf = f => String(f.name || '').toLowerCase() + '|' + (f.size || 0);
@@ -225,11 +244,13 @@
     const dupTxt = dupF.length ? `تم تجاهل ${dupF.length} ملف سبق رفعه (${dupF.slice(0, 3).join('، ')}${dupF.length > 3 ? '…' : ''})` : '';
     if (fromFolder) files.sort((a, b) => pathOf(a).localeCompare(pathOf(b), 'ar', { numeric: true }));
     if (!files.length) {
+      dupF.forEach(f => runAdd(f, 'dup', 'الملف سبق رفعه')); drawList();
       if (dupF.length) return toast(fromFolder ? `لا توجد ملفات جديدة في المجلد. ${dupTxt}` : dupTxt);
       if (allF.length || fromFolder) toast(fromFolder ? 'لا توجد صور أو ملفات PDF في هذا المجلد' : 'الملف ليس صورة أو PDF'); return;
     }
     if (fromFolder) setTimeout(() => toast(`وُجدت ${files.length} فاتورة جديدة في المجلد` + (dupF.length ? `، و${dupTxt}` : '') + (notInv ? ` (وتُجوهل ${notInv} ملف ليس صورة أو PDF)` : '')), 50);
     else if (dupF.length) setTimeout(() => toast(dupTxt), 50);
+    dupF.forEach(f => runAdd(f, 'dup', 'الملف سبق رفعه'));
     files.forEach((f, i) => { const id = Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2, 6); const sig = sigOf(f), ns = nsOf(f); queue.push({ id, file: f, sig, ns }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا', sig, ns }; });
     drawList(); if (files.length > 1 && !fromFolder) toast(`أُضيفت ${files.length} فواتير إلى الدفعة`);
     pump();
@@ -244,7 +265,7 @@
     if (busy) return; busy = true;
     status('جارٍ التحقق من الملفات المرسلة سابقًا…'); const sh = await sheetHashes();
     let done = 0; const batch = [];
-    const total = () => done + queue.length;
+    const total = () => done + 1 + queue.length;
     while (queue.length) {
       const job = queue.shift(); live[job.id].status = 'working'; drawList();
       const n = done + 1, N = total();
@@ -253,28 +274,27 @@
       setProg(0.02); say('جارٍ فتح الملف…');
       const hash = await hashOf(job.file);
       const twin = hash && all().find(x => x._hash === hash);
-      if (hash && sh[hash] && !twin) { live[job.id].status = 'dup'; live[job.id].err = 'هذا الملف أُرسل سابقًا إلى Google Sheet (InvID ' + sh[hash] + ')'; done++; drawList(); continue; }
-      if (twin) { live[job.id].status = 'dup'; live[job.id].err = 'نفس محتوى الملف «' + (twin.file || '') + '»'; done++; drawList(); continue; }
+      if (hash && sh[hash] && !twin) { runAdd(live[job.id].file, 'dup', 'هذا الملف أُرسل سابقًا إلى Google Sheet (InvID ' + sh[hash] + ')'); delete live[job.id]; done++; drawList(); continue; }
+      if (twin) { runAdd(live[job.id].file, 'dup', 'نفس محتوى الملف «' + (twin.file || '') + '»'); delete live[job.id]; done++; drawList(); continue; }
       try {
         const { d, pages: urls } = await processFile(job.file, say);
         d._id = job.id; d._at = new Date().toISOString(); d._sig = job.sig; d._ns = job.ns; d._hash = hash; d._warnings = P.checks(d, d._qr);
         const same = all().find(x => x._id !== d._id && invNo(x.invoice_number) && invNo(x.invoice_number) === invNo(d.invoice_number) && dKey(x.invoice_date) === dKey(d.invoice_date) && sameVendor(x, d));
-        if (same) { live[job.id].status = 'dup'; live[job.id].err = 'نفس الفاتورة محمّلة سابقًا من «' + (same.file || same.vendor_name || '') + '» (' + (d.invoice_number || '') + ')'; done++; drawList(); continue; }
-        imgs[job.id] = urls; delete live[job.id];
+        if (same) { runAdd(live[job.id].file, 'dup', 'نفس الفاتورة محمّلة سابقًا من «' + (same.file || same.vendor_name || '') + '» (' + (d.invoice_number || '') + ')'); delete live[job.id]; done++; drawList(); continue; }
+        imgs[job.id] = urls; IDB.put(job.id, urls); runAdd(live[job.id].file, 'ok', '', job.id); delete live[job.id];
         store(d); batch.push(job.id);
         if (N === 1) open(job.id, true); // الدفعة لا تفتح شاشة المراجعة تلقائيًا؛ النتائج تظهر في الملخص
       } catch (e) {
-        console.error(e); live[job.id].status = 'error';
-        live[job.id].err = e && e.message === 'img' ? 'تعذّر فتح الصورة' : ((e && e.message) || 'خطأ');
+        console.error(e); runAdd(live[job.id].file, 'error', e && e.message === 'img' ? 'تعذّر فتح الصورة' : ((e && e.message) || 'خطأ')); delete live[job.id];
       }
       done++; drawList();
     }
     busy = false; progress(null); setProg = () => { };
     const dm = dupMap(), nd = batch.filter(id => dm.has(id)).length;
-    status((done > 1 ? `انتهت الدفعة: ${done} فواتير. افتح أي فاتورة من القائمة لمراجعتها.` : (cur && cur._qr ? 'تمت القراءة. وُجد رمز QR الضريبي.' : 'تمت القراءة. راجع الحقول وصحّح ما يلزم.'))
+    status((done > 1 ? `انتهت الدفعة: ${done} فواتير. التفاصيل في «آخر عملية تحميل»، وراجعها من تبويب «المراجعة».` : (cur && cur._qr ? 'تمت القراءة. وُجد رمز QR الضريبي.' : 'تمت القراءة. راجع الحقول وصحّح ما يلزم.'))
       + (nd ? ` تنبيه: ${nd === 1 ? 'فاتورة مكررة' : nd + ' فواتير مكررة'} (نفس المورّد والرقم والتاريخ)، انظر القائمة.` : ''), !!nd);
     if (cur) refresh();
-    if (done > 1) $('ht').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth' });
+    if (done > 1) $('lastRun').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth' });
   }
 
   // ---------- كشف الفواتير المكررة: نفس المورّد (الرقم الضريبي أو الاسم) ونفس رقم الفاتورة ونفس التاريخ ----------
@@ -306,7 +326,7 @@
     const n = pages.length;
     $('pimg').src = n ? pages[pageIdx] : '';
     $('pimg').hidden = !n;
-    $('pinfo').textContent = n > 1 ? `صفحة ${pageIdx + 1} من ${n}` : (n ? '' : 'الصورة غير محفوظة بعد إغلاق الصفحة');
+    $('pinfo').textContent = n > 1 ? `صفحة ${pageIdx + 1} من ${n}` : (n ? '' : 'لا توجد صورة محفوظة لهذه الفاتورة');
     $('prevP').hidden = $('nextP').hidden = n < 2;
     $('prevP').disabled = pageIdx === 0; $('nextP').disabled = pageIdx >= n - 1;
   }
@@ -317,7 +337,9 @@
     const d = all().find(x => x._id === id); if (!d) return;
     cur = d; qr = d._qr || null; rawText = d._raw || ''; textOnly = P.parseInvoice(rawText, null);
     cur.src = cur.src || {}; cur.items = cur.items || [];
-    pages = imgs[id] || []; pageIdx = 0; showPage(); render(); drawList();
+    pages = imgs[id] || []; pageIdx = 0; showPage(); render();
+    if (!pages.length) pagesOf(id).then(u => { if (cur && cur._id === id && u.length) { pages = u; showPage(); } });
+    const want = d._approved ? 'appr' : 'rev'; if (tab !== want) setTab(want, true); else drawList();
     if (scroll) $('review').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth' });
   }
   function render() {
@@ -534,23 +556,21 @@
     finally { $('gsSend').disabled = false; }
   };
 
-  let filter = 'all';
-  const shownList = () => all().filter(x => filter === 'all' || (filter === 'approved') === !!x._approved);
+  let tab = 'up';
+  const isExported = x => !!(x._exportedAt || x._sent);
+  const shownList = () => all().filter(x => tab === 'appr' ? x._approved : !x._approved);
   const money = x => x.total != null && x.total !== '' ? P.fmt(x.total) + ' ' + (x.currency || '') : '—';
   const sumBy = list => Object.entries(list.reduce((a, x) => { const c = x.currency || '—'; a[c] = (a[c] || 0) + (+x.total || 0); return a; }, {})).map(([c, v]) => P.fmt(v) + ' ' + c).join(' · ');
   function drawList() {
     const h = all(), pend = Object.entries(live);
-    $('count').textContent = h.length ? `(${h.length})` : '';
+    $('count').textContent = `(${shownList().length})`;
     $('exportBar').hidden = !h.length;
     const dm = dupMap();
     h.forEach(x => { const d = dm.get(x._id); if (d) x._dup = dupMsg(d); else delete x._dup; link(x); });
-    $('xVat').textContent = `VatReport (${filter === 'all' ? 'الكل' : filter === 'approved' ? 'المعتمدة' : 'بانتظار الاعتماد'})`;
     const nA = h.filter(x => x._approved).length, nP = h.length - nA;
-    $('filters').hidden = !h.length;
-    $('filters').innerHTML = [['all', 'الكل', h.length], ['pending', 'بانتظار الاعتماد', nP], ['approved', 'معتمدة', nA]]
-      .map(([k, l, n]) => `<button data-filter="${k}" aria-pressed="${filter === k}">${l} (${n})</button>`).join('');
+    $('ht').firstChild.textContent = tab === 'appr' ? 'الفواتير المعتمدة ' : 'فواتير بانتظار المراجعة ';
     const STAT = { queued: 'بالانتظار', working: 'جارٍ القراءة…', error: 'تعذّرت القراءة', dup: 'لم يُحمّل (مكرر)' };
-    const rowsP = pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="6">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' || v.status === 'dup' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
+    const rowsP = ''; void pend.map(([id, v]) => `<tr class="pend ${v.status}"><td>${esc(v.file)}</td><td colspan="6">${STAT[v.status]}${v.err ? ': ' + esc(v.err) : ''}</td><td class="act">${v.status === 'error' || v.status === 'dup' ? `<button data-dismiss="${esc(id)}">إخفاء</button>` : ''}</td></tr>`).join('');
     const shown = shownList();
     const rows = shown.map(x => {
       const id = esc(x._id), dup = dm.get(x._id), w = x._warnings || [];
@@ -565,7 +585,7 @@
         <td data-l="الملاحظات" class="notes">${notes ? `<div class="auto">${notes}</div>` : '<div class="auto"><span class="ok">لا تنبيهات</span></div>'}<input class="unote" data-note="${id}" value="${esc(x.note || '')}" placeholder="أضف ملاحظتك…" aria-label="ملاحظتك على الفاتورة"></td>
         <td class="act"><div class="st">${x._approved ? `<span class="okb">معتمدة</span>${x._approvedAt ? `<small>${esc(new Date(x._approvedAt).toLocaleDateString('ar-SA-u-ca-gregory-nu-latn'))}</small>` : ''}` : '<span class="pendb">بانتظار الاعتماد</span>'}${x._sent ? `<span class="sent">في الشيت (InvID ${esc(x._sent)})</span>` : ''}</div>${x._approved ? `<button data-unapprove="${id}">إلغاء الاعتماد</button>` : `<button class="primary" data-approve="${id}">اعتماد</button>`}<button data-open="${id}">مراجعة</button><button data-rm="${id}" class="del">حذف</button></td></tr>`;
     }).join('');
-    $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="8" class="empty">${h.length ? 'لا توجد فواتير في هذا التصنيف.' : 'لا توجد فواتير بعد. يمكنك اختيار عدة ملفات أو مجلد كامل.'}</td></tr>`;
+    $('hist').tBodies[0].innerHTML = rowsP + rows || `<tr><td colspan="8" class="empty">${tab === 'appr' ? 'لا توجد فواتير معتمدة بعد.' : h.length ? 'لا توجد فواتير بانتظار المراجعة. كل الفواتير معتمدة ✓' : 'لا توجد فواتير بعد. حمّلها من تبويب «تحميل الفواتير».'}</td></tr>`;
     const nd = dm.size;
     $('dupNote').hidden = !nd;
     $('dupNote').innerHTML = nd ? `تنبيه: ${nd} فواتير في القائمة مكررة (نفس المورّد ورقم الفاتورة والتاريخ). <button id="dupClean" class="del">حذف المكرر وإبقاء نسخة واحدة</button>` : '';
@@ -581,7 +601,8 @@
       undo(`حُذفت ${drop.size} فاتورة مكررة`, () => { h.splice(0, h.length, ...before); persist(); drawList(); });
     };
     drawQty();
-    $('sumAll').textContent = h.length ? `مجموع الكل: ${sumBy(h)}` + (nA ? ` · المعتمد: ${sumBy(h.filter(x => x._approved))}` : '') : '';
+    $('sumAll').textContent = shownList().length ? `المجموع: ${sumBy(shownList())}` : '';
+    void nP; drawTabs();
   }
   // ---------- جدول الكميات (مستقل) ----------
   const qOpen = new Set();
@@ -625,7 +646,6 @@
   $('qXlsx').onclick = () => all().length && download(`الكميات-${stamp()}.xlsx`, X.qtyXlsx(all()));
   $('qCsv').onclick = () => all().length && download(`الكميات-${stamp()}.csv`, X.qtyCsv(all()), 'text/csv;charset=utf-8');
 
-  $('filters').addEventListener('click', e => { const f = e.target.dataset.filter; if (f) { filter = f; drawList(); } });
   $('hist').addEventListener('input', e => {
     const id = e.target.dataset.note; if (!id) return;
     const x = all().find(v => v._id === id); if (!x) return;
@@ -637,7 +657,7 @@
     if (!a && !u) return;
     const x = all().find(v => v._id === (a || u)); if (!x) return;
     x._approved = !!a; if (a) x._approvedAt = new Date().toISOString(); else delete x._approvedAt;
-    persist(); drawList(); toast(a ? 'اعتُمدت الفاتورة' : 'أُلغي الاعتماد');
+    persist(); if (cur && cur._id === x._id) { $('review').classList.remove('on'); cur = null; } drawList(); toast(a ? 'اعتُمدت الفاتورة وانتقلت إلى «المعتمدة»' : 'أُلغي الاعتماد وعادت إلى «المراجعة»');
   });
   $('hist').addEventListener('click', e => {
     const o = e.target.dataset.open, r = e.target.dataset.rm, ds = e.target.dataset.dismiss;
@@ -656,7 +676,7 @@
     clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on', 'act'), 5000);
   }
   $('xAll').onclick = () => all().length && download(`فواتير-${stamp()}.xlsx`, X.toXlsx(all(), ref && ref.vatCols));
-  $('xVat').onclick = () => { const l = shownList(); if (!l.length) return toast('لا توجد فواتير في هذا التصنيف'); if (!ref) toast('تنبيه: لم يُحمَّل ملف البيانات، فستكون SupID و ProjectID فارغة'); download(`VatReport-${stamp()}.xlsx`, X.vatXlsx(l, ref && ref.vatCols)); };
+  $('xVat').onclick = () => { const l = all().filter(x => x._approved); if (!l.length) return toast('لا توجد فواتير معتمدة'); if (!ref) toast('تنبيه: لم يُحمَّل ملف البيانات، فستكون SupID و ProjectID فارغة'); download(`VatReport-${stamp()}.xlsx`, X.vatXlsx(l, ref && ref.vatCols)); };
   $('cAll').onclick = () => all().length && download(`فواتير-${stamp()}.csv`, X.invoicesCsv(all()), 'text/csv;charset=utf-8');
   $('cItems').onclick = () => all().length && download(`بنود-${stamp()}.csv`, X.itemsCsv(all()), 'text/csv;charset=utf-8');
   $('clearAll').onclick = () => {
@@ -670,11 +690,15 @@
   $('pick').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
   $('folder').onchange = e => { addFiles(e.target.files, true); e.target.value = ''; };
   if (!('webkitdirectory' in document.createElement('input'))) $('folderBtn').hidden = true;
-  $('zoom').onclick = () => { const z = $('stage').classList.toggle('zoom'); $('zoom').setAttribute('aria-pressed', z); $('zoom').textContent = z ? 'تصغير' : 'تكبير'; };
+  // تكبير الصورة: أزرار + و − ، أو اضغط الصورة لفتحها بملء الشاشة
+  let zl = 1; const setZ = z => { zl = Math.max(1, Math.min(4, z)); $('pimg').style.width = (zl * 100) + '%'; $('zinfo').textContent = Math.round(zl * 100) + '%'; };
+  $('zoomIn').onclick = () => setZ(zl + 0.5); $('zoomOut').onclick = () => setZ(zl - 0.5);
+  $('zoom').onclick = () => lightbox(pages, pageIdx);
+  $('pimg').onclick = () => lightbox(pages, pageIdx);
   $('prevP').onclick = () => { if (pageIdx > 0) { pageIdx--; showPage(); } };
   $('nextP').onclick = () => { if (pageIdx < pages.length - 1) { pageIdx++; showPage(); } };
   $('closeV').onclick = () => $('again').click();
-  $('again').onclick = () => { $('review').classList.remove('on'); cur = null; drawList(); status(''); window.scrollTo(0, 0); };
+  $('again').onclick = () => { $('review').classList.remove('on'); cur = null; drawList(); };
   const dz = $('drop');
   ['dragenter', 'dragover'].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(t => dz.addEventListener(t, e => { e.preventDefault(); dz.classList.remove('over'); }));
@@ -694,6 +718,107 @@
     else addFiles(e.dataTransfer.files);
   });
   document.addEventListener('paste', e => { const f = e.clipboardData?.files; if (f && f.length) addFiles(f); });
-  refInfo(); gsUi(); drawList();
-  window.__invoiceApp = { addFiles, get cur() { return cur; }, get qr() { return qr; }, get raw() { return rawText; }, get busy() { return busy || queue.length > 0; }, all, dupMap };
+  // ---------- التبويبات ----------
+  function setTab(t, keep) {
+    tab = t;
+    document.querySelectorAll('#tabs [data-tab]').forEach(b => { const on = b.dataset.tab === t; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.dataset.pane.split(' ').includes(t)));
+    if (!keep && cur && (t === 'up' || t === 'exp' || (t === 'appr') !== !!cur._approved)) { $('review').classList.remove('on'); cur = null; }
+    drawList();
+    if (!keep && t === 'rev' && !cur) { const f = all().find(x => !x._approved); if (f) open(f._id); }
+    try { sessionStorage.setItem('invoice-reader-tab', t); } catch { }
+  }
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { setTab(b.dataset.tab); window.scrollTo(0, 0); } });
+  $('tabs').addEventListener('keydown', e => {
+    const ts = [...document.querySelectorAll('#tabs [data-tab]')], i = ts.findIndex(b => b.dataset.tab === tab);
+    const j = e.key === 'ArrowLeft' ? i + 1 : e.key === 'ArrowRight' ? i - 1 : -1; if (j < 0 || j >= ts.length) return;
+    e.preventDefault(); setTab(ts[j].dataset.tab); ts[j].focus();
+  });
+  // أزرار شاشة المراجعة: اعتماد / إلغاء الاعتماد، حذف، التالي
+  const nextOf = id => { const l = shownList(), i = l.findIndex(x => x._id === id); return l[i + 1] || l[i - 1] || null; };
+  $('vAppr').onclick = () => {
+    if (!cur) return; const x = cur, nx = nextOf(x._id);
+    x._approved = !x._approved; if (x._approved) x._approvedAt = new Date().toISOString(); else delete x._approvedAt;
+    persist(); toast(x._approved ? 'اعتُمدت الفاتورة' : 'أُلغي الاعتماد وعادت إلى «المراجعة»');
+    $('review').classList.remove('on'); cur = null;
+    if (nx) open(nx._id); else drawList();
+  };
+  $('vDel').onclick = () => {
+    if (!cur) return; const h = all(), i = h.findIndex(x => x._id === cur._id); if (i < 0) return; const nx = nextOf(cur._id);
+    const [gone] = h.splice(i, 1); persist(); $('review').classList.remove('on'); cur = null;
+    if (nx) open(nx._id); else drawList();
+    undo(`حُذفت فاتورة ${gone.vendor_name || ''}`, () => { h.splice(i, 0, gone); persist(); drawList(); });
+  };
+  $('vNext').onclick = () => { if (!cur) return; const l = shownList(), i = l.findIndex(x => x._id === cur._id); const nx = l[i + 1] || l[0]; if (nx && nx._id !== cur._id) open(nx._id); else toast('لا توجد فاتورة أخرى'); };
+  // عارض الصورة بملء الشاشة (تكبير وتصغير)
+  let lbPages = [], lbI = 0, lbZ = 1;
+  function lbShow() {
+    $('lbImg').src = lbPages[lbI] || ''; $('lbImg').style.width = (lbZ * 100) + '%';
+    $('lbInfo').textContent = (lbPages.length > 1 ? `صفحة ${lbI + 1} من ${lbPages.length} · ` : '') + Math.round(lbZ * 100) + '%';
+    $('lbPrev').hidden = $('lbNext').hidden = lbPages.length < 2;
+  }
+  function lightbox(p, i) {
+    if (!p || !p.length) return toast('لا توجد صورة محفوظة لهذه الفاتورة');
+    lbPages = p; lbI = i || 0; lbZ = 1; lbShow(); $('lb').hidden = false; document.body.classList.add('lbon'); $('lbClose').focus();
+  }
+  const lbClose = () => { $('lb').hidden = true; document.body.classList.remove('lbon'); };
+  $('lbClose').onclick = lbClose;
+  $('lbIn').onclick = () => { lbZ = Math.min(5, lbZ + 0.5); lbShow(); };
+  $('lbOut').onclick = () => { lbZ = Math.max(1, lbZ - 0.5); lbShow(); };
+  $('lbPrev').onclick = () => { if (lbI > 0) { lbI--; lbShow(); } };
+  $('lbNext').onclick = () => { if (lbI < lbPages.length - 1) { lbI++; lbShow(); } };
+  $('lbImg').ondblclick = () => { lbZ = lbZ > 1 ? 1 : 2.5; lbShow(); };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('lb').hidden) lbClose(); });
+  const viewImg = async id => lightbox(await pagesOf(id), 0);
+  // جداول التبويبات: آخر عملية، المحمّلة سابقًا، التصدير
+  const ST = x => x._sent ? `<span class="sent">في الشيت (InvID ${esc(x._sent)})</span>` : x._exportedAt ? '<span class="sent">مُصدّرة</span>' : x._approved ? '<span class="okb">معتمدة</span>' : '<span class="pendb">بانتظار المراجعة</span>';
+  const dt = s => s ? new Date(s).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const invRow = (x, extra) => `<tr><td data-l="الملف"><small class="fpath">📄 ${esc(x.file || '')}</small></td><td data-l="المورّد"><b>${esc(x._supName || x.vendor_name || '—')}</b></td><td data-l="رقم الفاتورة">${esc(x.invoice_number || '—')}</td><td data-l="التاريخ">${esc(x.invoice_date || '—')}</td><td data-l="الإجمالي" class="n">${esc(money(x))}</td><td data-l="الحالة">${extra || ST(x)}</td><td class="act"><button data-img="${esc(x._id)}">عرض الصورة</button><button data-go="${esc(x._id)}">${x._approved ? 'فتح' : 'مراجعة'}</button></td></tr>`;
+  const HEAD = last => `<thead><tr><th>الملف</th><th>المورّد</th><th>رقم الفاتورة</th><th>التاريخ</th><th class="n">الإجمالي</th><th>${last || 'الحالة'}</th><th></th></tr></thead>`;
+  function drawTabs() {
+    const h = all(), byId = Object.fromEntries(h.map(x => [x._id, x]));
+    const nRev = h.filter(x => !x._approved).length, nAppr = h.filter(x => x._approved).length, notExp = h.filter(x => x._approved && !isExported(x)), exp = h.filter(isExported);
+    $('bRev').textContent = nRev || ''; $('bAppr').textContent = nAppr || ''; $('bExp').textContent = notExp.length || '';
+    // آخر عملية
+    const items = run ? run.items : [], ok = items.filter(i => i.st === 'ok'), dup = items.filter(i => i.st === 'dup'), err = items.filter(i => i.st === 'error');
+    const pend = Object.values(live).filter(v => v.status === 'queued' || v.status === 'working');
+    $('lastRun').hidden = !run && !pend.length;
+    $('lrSum').innerHTML = run ? `<span>${esc(dt(run.at))}</span> · <b class="okc">حُمّلت ${ok.length}</b>${dup.length ? ` · <b class="dupc">لم تُحمّل لأنها مكررة ${dup.length}</b>` : ''}${err.length ? ` · <b class="errc">تعذّرت قراءتها ${err.length}</b>` : ''}${pend.length ? ` · <b>قيد القراءة ${pend.length}</b>` : ''}` : '';
+    const lrRows = items.map(i => {
+      const x = i.id && byId[i.id];
+      if (x) return invRow(x, `<span class="okc">حُمّلت</span> ${ST(x)}`);
+      return `<tr class="pend ${i.st === 'dup' ? 'dup' : 'error'}"><td data-l="الملف"><small class="fpath">📄 ${esc(i.file)}</small></td><td colspan="5" data-l="النتيجة">${i.st === 'ok' ? 'حُمّلت ثم حُذفت من القائمة' : i.st === 'dup' ? '<b class="dupc">لم تُحمّل (مكررة)</b>: ' + esc(i.msg) : '<b class="errc">تعذّرت القراءة</b>: ' + esc(i.msg)}</td><td></td></tr>`;
+    }).concat(pend.map(v => `<tr class="pend"><td data-l="الملف"><small class="fpath">📄 ${esc(v.file)}</small></td><td colspan="5">${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</td><td></td></tr>`)).join('');
+    $('lrTable').innerHTML = HEAD() + `<tbody>${lrRows || '<tr><td colspan="7" class="empty">لا شيء بعد.</td></tr>'}</tbody>`;
+    // المحمّلة سابقًا
+    const inRun = new Set(ok.map(i => i.id)), prev = h.filter(x => !inRun.has(x._id));
+    $('pvCount').textContent = `(${prev.length})`;
+    $('pvSum').textContent = prev.length ? `بانتظار المراجعة ${prev.filter(x => !x._approved).length} · معتمدة ${prev.filter(x => x._approved && !isExported(x)).length} · مُصدّرة ${prev.filter(isExported).length} · المجموع ${sumBy(prev)}` : '';
+    $('pvTable').innerHTML = HEAD() + `<tbody>${prev.map(x => invRow(x)).join('') || '<tr><td colspan="7" class="empty">لا توجد فواتير محمّلة قبل آخر عملية.</td></tr>'}</tbody>`;
+    // التصدير
+    $('exNote').textContent = nRev ? `ملاحظة: ${nRev} فاتورة ما زالت بانتظار المراجعة ولن تُصدّر قبل اعتمادها.` : '';
+    $('xNew').textContent = `تصدير المعتمدة غير المصدّرة إلى Excel (${notExp.length})`; $('xNew').disabled = !notExp.length;
+    $('neCount').textContent = `(${notExp.length})`; $('exCount').textContent = `(${exp.length})`;
+    $('neTable').innerHTML = HEAD() + `<tbody>${notExp.map(x => invRow(x)).join('') || '<tr><td colspan="7" class="empty">كل الفواتير المعتمدة صُدّرت ✓</td></tr>'}</tbody>`;
+    $('exTable').innerHTML = HEAD('طريقة التصدير') + `<tbody>${exp.map(x => invRow(x, [x._sent ? `Google Sheet (InvID ${esc(x._sent)})` : '', x._exportedAt ? `Excel · ${esc(dt(x._exportedAt))}` : ''].filter(Boolean).join('<br>'))).join('') || '<tr><td colspan="7" class="empty">لم تُصدّر أي فاتورة بعد.</td></tr>'}</tbody>`;
+  }
+  document.querySelectorAll('.tabtable').forEach(t => t.addEventListener('click', e => {
+    const im = e.target.dataset.img, go = e.target.dataset.go;
+    if (im) viewImg(im);
+    if (go) open(go, true);
+  }));
+  $('xNew').onclick = () => {
+    const l = all().filter(x => x._approved && !isExported(x)); if (!l.length) return toast('لا توجد فواتير معتمدة غير مصدّرة');
+    if (!ref) toast('تنبيه: لم يُحمَّل ملف البيانات، فستكون SupID و ProjectID فارغة');
+    download(`فواتير-معتمدة-${stamp()}.xlsx`, X.toXlsx(l, ref && ref.vatCols));
+    const now = new Date().toISOString(); l.forEach(x => x._exportedAt = now); persist(); drawList();
+    undo(`صُدّرت ${l.length} فاتورة وانتقلت إلى «تم تصديرها»`, () => { l.forEach(x => delete x._exportedAt); persist(); drawList(); });
+  };
+  document.addEventListener('click', e => { const u = e.target.dataset.unexport; if (!u) return; const x = all().find(v => v._id === u); if (x) { delete x._exportedAt; persist(); drawList(); } });
+  // حذف الصور المحفوظة لفواتير لم تعد موجودة
+  IDB.keys().then(ks => { const have = new Set(all().map(x => x._id)); (ks || []).forEach(k => { if (!have.has(k)) IDB.del(k); }); });
+  refInfo(); gsUi();
+  let t0 = 'up'; try { t0 = sessionStorage.getItem('invoice-reader-tab') || 'up'; } catch { }
+  setTab(t0);
+  window.__invoiceApp = { addFiles, get cur() { return cur; }, get qr() { return qr; }, get raw() { return rawText; }, get busy() { return busy || queue.length > 0; }, all, dupMap, setTab, get tab() { return tab; } };
 })();
