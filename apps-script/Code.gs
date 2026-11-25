@@ -87,6 +87,9 @@ function values_(sh) {
 }
 const str_ = v => String(v == null ? '' : v).trim().replace(/\.0+$/, '');
 const invKey_ = s => str_(s).toLowerCase().replace(/[^0-9a-zء-ي]/g, '').replace(/^0+(?=.)/, '');
+const dKey_ = v => v instanceof Date ? Utilities.formatDate(v, (typeof Session !== 'undefined' && Session.getScriptTimeZone()) || 'GMT', 'yyyy-MM-dd') : str_(v).slice(0, 10);
+// مفتاح التكرار: المورّد + رقم الفاتورة. للمورد غير المسجل (SupID فارغ) نضيف التاريخ حتى لا تتصادم فواتير موردين مختلفين
+const dupKey_ = (sup, no, date) => str_(sup) === '' ? '|' + invKey_(no) + '|' + dKey_(date) : str_(sup) + '|' + invKey_(no);
 
 // التطبيق يطلب البيانات المرجعية: GET ?email=...&token=...&action=ref
 function doGet(e) {
@@ -122,14 +125,14 @@ function doPost(e) {
     const existing = {}; let maxId = 0;
     inv.slice(1).forEach(r => {
       const id = Number(r[col('InvID')]); if (id > maxId) maxId = id;
-      if (r[col('InvoiceNo')] !== '') existing[str_(r[col('SupID')]) + '|' + invKey_(r[col('InvoiceNo')])] = r[col('InvID')];
+      if (r[col('InvoiceNo')] !== '') existing[dupKey_(r[col('SupID')], r[col('InvoiceNo')], r[col('InvDate')] || r[col('Date')])] = r[col('InvID')];
     });
     const vh = values_(vatSh)[0].map(str_);
     const today = new Date();
     const known = hashes_(ss), hashRows = [];
     const added = [], skipped = [], invRows = [], vatRows = [];
     (body.invoices || []).forEach(d => {
-      const key = str_(d.SupID) + '|' + invKey_(d.InvoiceNo);
+      const key = dupKey_(d.SupID, d.InvoiceNo, d.Date);
       if (!d.InvoiceNo) { skipped.push({ id: d.id, reason: 'بدون رقم فاتورة' }); return; }
       const fh = str_(d.FileHash).toLowerCase();
       if (fh && known[fh]) { skipped.push({ id: d.id, reason: 'نفس ملف الفاتورة أُرسل سابقًا (InvID ' + known[fh] + ')', invId: known[fh], byFile: true }); return; }

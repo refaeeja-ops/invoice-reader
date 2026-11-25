@@ -437,7 +437,9 @@
   let supEdit = null; // فاتورة يجري تغيير مورّدها يدويًا
   function link(x) {
     if (!ref) return;
-    if (!x._supManual) { const m = R.matchSupplier(ref, x); x._supId = m ? m.id : null; x._supBy = m ? m.by : null; }
+    if (!x._supManual) { const m = R.matchSupplier(ref, x); x._supId = m ? m.id : null; x._supBy = m ? m.by : null; x._unreg = !m; }
+    // المورّد غير موجود في SuppliersT: يُسجَّل «مورد غير مسجل» و«منتج غير مسجل» ويُسمح بالتصدير
+    if (x._unreg) { x._supId = null; x._supName = 'مورد غير مسجل'; x.product_id = null; const pr0 = R.project(ref, x.project_id); x.project_name = pr0 ? pr0.name : ''; x.product_name = 'منتج غير مسجل'; x._exists = null; return; }
     const s = R.supplier(ref, x._supId); x._supName = s ? s.name : '';
     const prods = x._supId != null ? R.productsFor(ref, x._supId) : [];
     if (x.product_id != null && prods.length && !prods.some(p => p.id === x.product_id) && !x._prodAny) { x.product_id = null; }
@@ -450,19 +452,21 @@
     if (!ref) return [];
     const n = [];
     if (x._exists && String(x._exists) !== String(x._sent)) n.push(['wn', `مسجلة سابقًا في InvoiceT${x._exists !== true ? ' (InvID ' + x._exists + ')' : ''}`]);
-    if (x._supId == null) n.push(['wn', 'المورّد غير موجود في SuppliersT: اختره من القائمة']);
+    if (x._unreg) n.push(['wn', 'المورّد غير موجود في SuppliersT: سيُسجَّل «مورد غير مسجل» والمنتج «منتج غير مسجل»، واسم المورّد ورقمه الضريبي في الملاحظات']);
+    else if (x._supId == null) n.push(['wn', 'اختر المورّد المسجل']);
     else if (x._supBy === 'name') n.push(['wn', 'طوبق المورّد بالاسم فقط، تأكد منه']);
     if (x.project_id == null) n.push(['todo', 'اختر المشروع']);
-    if (x.product_id == null) n.push(['todo', 'اختر المنتج']);
+    if (x.product_id == null && !x._unreg) n.push(['todo', 'اختر المنتج']);
     return n;
   }
   const opt = (v, label, sel) => `<option value="${esc(v)}"${sel ? ' selected' : ''}>${esc(label)}</option>`;
   function supCell(x) {
     if (!ref) return '';
     const id = esc(x._id);
+    if (x._unreg && supEdit !== x._id) return `<small class="supunreg">مورد غير مسجل في SuppliersT</small><button class="linkb" data-supedit="${id}">اختيار مورّد مسجل</button>`;
     if (x._supId != null && supEdit !== x._id) return `<small class="${x._supBy === 'name' ? 'supname' : 'supok'}">SupID ${x._supId}: ${esc(x._supName)}${x._supBy === 'name' ? ' (بالاسم)' : x._supBy === 'manual' ? ' (يدوي)' : ''}</small><button class="linkb" data-supedit="${id}">تغيير</button>`;
     const list = ref.suppliers.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-    return `<select data-sup="${id}" aria-label="اختر المورّد المسجل"${x._supId == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المورّد المسجل —', x._supId == null)}${x._supManual ? opt('auto', '↺ مطابقة تلقائية', false) : ''}${list.map(s => opt(s.id, s.id + ' - ' + s.name, s.id === x._supId)).join('')}</select>`;
+    return `<select data-sup="${id}" aria-label="اختر المورّد المسجل"${x._supId == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المورّد المسجل —', x._supId == null && !x._unreg)}${opt('unreg', '✱ مورد غير مسجل', !!x._unreg)}${x._supManual ? opt('auto', '↺ مطابقة تلقائية', false) : ''}${list.map(s => opt(s.id, s.id + ' - ' + s.name, s.id === x._supId)).join('')}</select>`;
   }
   function linkCell(x) {
     if (!ref) return '<span class="todo">حمّل ملف البيانات</span>';
@@ -472,7 +476,7 @@
     if (!prods.length || x._prodAny) { prods = ref.products.slice().sort((a, b) => a.name.localeCompare(b.name, 'ar')); all = true; }
     const cpd = R.product(ref, x.product_id); if (cpd && !prods.some(p => p.id === cpd.id)) prods.unshift(cpd);
     return `<label>المشروع<select data-proj="${id}"${x.project_id == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المشروع —', x.project_id == null)}${projs.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.project_id)).join('')}</select></label>
-      <label>المنتج${all && x._supId != null && !x._prodAny ? ' (لا منتجات مرتبطة بالمورّد)' : ''}<select data-prod="${id}"${x.product_id == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المنتج —', x.product_id == null)}${prods.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.product_id)).join('')}${!all ? opt('any', '… كل المنتجات', false) : ''}</select></label>`;
+      ${x._unreg ? '<label>المنتج<span class="unregp">منتج غير مسجل</span></label>' : `<label>المنتج${all && x._supId != null && !x._prodAny ? ' (لا منتجات مرتبطة بالمورّد)' : ''}<select data-prod="${id}"${x.product_id == null ? ' class="unset"' : ''}>${opt('', '⚠ — اختر المنتج —', x.product_id == null)}${prods.map(p => opt(p.id, p.id + ' - ' + p.name, p.id === x.product_id)).join('')}${!all ? opt('any', '… كل المنتجات', false) : ''}</select></label>`}`;
   }
   function refInfo() {
     $('refClear').hidden = !ref;
@@ -484,7 +488,7 @@
     try {
       const r = await R.load(f); ref = r;
       try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch { toast('الملف كبير على ذاكرة المتصفح: سيُستخدم حتى إغلاق الصفحة فقط'); }
-      all().forEach(x => { if (!x._supManual) delete x._supId; }); persist();
+      all().forEach(x => { if (!x._supManual) { delete x._supId; delete x._unreg; } }); persist();
       refInfo(); drawList(); toast('تم تحميل ملف البيانات ومطابقة الفواتير');
     } catch (err) { console.error(err); toast((err && err.message) || 'تعذّرت قراءة الملف'); }
   };
@@ -492,7 +496,7 @@
   $('hist').addEventListener('change', e => {
     const t = e.target, d = t.dataset, id = d.sup || d.proj || d.prod; if (!id) return;
     const x = all().find(v => v._id === id); if (!x) return;
-    if (d.sup) { if (t.value === 'auto') { x._supManual = false; } else { x._supManual = true; x._supId = t.value ? +t.value : null; x._supBy = 'manual'; } x._prodAny = false; supEdit = null; }
+    if (d.sup) { if (t.value === 'auto') { x._supManual = false; } else if (t.value === 'unreg') { x._supManual = true; x._unreg = true; x._supId = null; x._supBy = 'manual'; } else { x._supManual = true; x._unreg = false; x._supId = t.value ? +t.value : null; x._supBy = 'manual'; } x._prodAny = false; supEdit = null; }
     if (d.proj) x.project_id = t.value ? +t.value : null;
     if (d.prod) { if (t.value === 'any') { x._prodAny = true; } else { x.product_id = t.value ? +t.value : null; x._prodCleared = !t.value; } }
     persist(); drawList();
@@ -520,7 +524,7 @@
     const j = await gsGet(cfg);
     const r = R.fromSheets(j.sheets, 'Google Sheet: ' + (j.title || '')); r.hashes = j.hashes || {};
     ref = r; try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch { }
-    all().forEach(x => { if (!x._supManual) delete x._supId; }); persist(); refInfo(); drawList();
+    all().forEach(x => { if (!x._supManual) { delete x._supId; delete x._unreg; } }); persist(); refInfo(); drawList();
     if (!quiet) toast('حُدّثت البيانات المرجعية من Google Sheet');
   }
   $('gsSave').onclick = async () => {
@@ -538,9 +542,9 @@
     if (!gs) return amsg('Google Sheet غير مربوط. اربطه من تبويب «تحميل الفواتير» ← «البيانات المرجعية والربط».', true);
     const appr = all().filter(x => x._approved && !x._sent);
     if (!appr.length) return amsg(all().some(x => x._approved) ? 'كل الفواتير المعتمدة أُرسلت إلى Google Sheet سابقًا.' : 'لا توجد فواتير معتمدة. اعتمد الفواتير أولًا من تبويب «المراجعة».', true);
-    const ready = appr.filter(x => x._supId != null && x.project_id != null && x.product_id != null), missing = appr.length - ready.length;
+    const ready = appr.filter(x => (x._supId != null || x._unreg) && x.project_id != null && (x.product_id != null || x._unreg)), missing = appr.length - ready.length;
     if (!ready.length) return amsg(`لم يُرسل شيء: ${missing} فاتورة معتمدة ينقصها المورّد المسجل أو المشروع أو المنتج. اخترها من القوائم الحمراء.`, true);
-    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._supId, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x.product_id ?? '', ProductName: x.product_name || '', Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: x.note || '', FilePath: x.file || '', FileHash: x._hash || '' })) };
+    const payload = { email: gs.email || '', token: gs.token, invoices: ready.map(x => ({ id: x._id, InvoiceNo: String(x.invoice_number || ''), SupID: x._unreg ? '' : x._supId, Unreg: !!x._unreg, SupfName: x._supName || x.vendor_name || '', ProjectID: x.project_id, ProjectName: x.project_name || '', ProductID: x._unreg ? '' : (x.product_id ?? ''), ProductName: x._unreg ? 'منتج غير مسجل' : (x.product_name || ''), Date: x.invoice_date || '', Invamount: x.total === '' ? '' : x.total, invVat: x.tax_amount === '' ? '' : x.tax_amount, Note: [x._unreg ? `مورد غير مسجل: ${x.vendor_name || '—'}${x.vendor_tax_number ? ' (الرقم الضريبي ' + x.vendor_tax_number + ')' : ''}` : '', x.note || ''].filter(Boolean).join(' | '), FilePath: x.file || '', FileHash: x._hash || '' })) };
     $('gsSend').disabled = true; amsg(`جارٍ إرسال ${ready.length} فاتورة إلى Google Sheet…`);
     try {
       const r = await fetch(gs.url, { method: 'POST', body: JSON.stringify(payload), redirect: 'follow' }); const j = await r.json();
@@ -569,7 +573,7 @@
     const r = [];
     if (!x._approved) r.push('لم تُعتمد بعد، راجعها واعتمدها من تبويب «المراجعة»');
     else {
-      const miss = [x._supId == null && 'المورّد المسجل', x.project_id == null && 'المشروع', x.product_id == null && 'المنتج'].filter(Boolean);
+      const miss = [x._supId == null && !x._unreg && 'المورّد المسجل', x.project_id == null && 'المشروع', x.product_id == null && !x._unreg && 'المنتج'].filter(Boolean);
       if (x._sendErr) r.push(x._sendErr);
       if (miss.length) r.push('ينقصها ' + miss.join(' و') + '، فلا يمكن إرسالها إلى Google Sheet');
       if (!r.length) r.push('جاهزة، ولم يُضغط زر التصدير بعد (تبويب «المعتمدة»)');
