@@ -73,13 +73,16 @@ const vendKey_ = (vat, name) => { const d = str_(vat).replace(/\D/g, ''); return
 // عمود «الرقم الضريبي المختصر» = أول 10 خانات من اليسار من الرقم الضريبي. يُضاف في نهاية الترويسة إن لم يوجد، ويُعبّأ لكل الصفوف
 const APP_SHORT_COL = 'الرقم الضريبي المختصر';
 // الرقم المختصر يُكتب رقمًا صحيحًا (integer) لا نصًا
-const shortNum_ = v => { const d = String(v == null ? '' : v).replace(/\.0+$/, '').replace(/\D/g, '').slice(0, 10); return /^[1-9]\d{9}$/.test(d) ? Number(d) : d; };
+// توحيد الرقم الضريبي: أي صيغة (رقم، نص، مسافات، .0، صيغة علمية) ← أرقام فقط
+const vatDigits_ = v => typeof v === 'number' && isFinite(v) ? v.toFixed(0) : String(v == null ? '' : v).trim().replace(/\.0+$/, '').replace(/\D/g, '');
+// الرقم المختصر = أول 10 خانات كرقم صحيح (integer). الرقم الضريبي السعودي يبدأ بـ 3، فغير ذلك يُعد غير صالح ويرجع null
+const vatShort_ = v => { const d = vatDigits_(v).slice(0, 10); return /^3\d{9}$/.test(d) ? Number(d) : null; };
 function fillAppShort_(sh) {
   const v = values_(sh); if (!v.length) return;
   const h = v[0].map(str_); let c = h.indexOf(APP_SHORT_COL);
   if (c < 0) { c = h.length; sh.getRange(1, c + 1).setValue(APP_SHORT_COL); }
   if (v.length < 2) return;
-  const col = v.slice(1).map(r => [shortNum_(r[6])]);
+  const col = v.slice(1).map(r => { const n = vatShort_(r[6]), d = vatDigits_(r[6]); return [n !== null ? n : d ? 'غير صالح: ' + d : '']; });
   const rg = sh.getRange(2, c + 1, col.length, 1); rg.setNumberFormat('0'); rg.setValues(col);
 }
 function appInvoices_(ss, list, who) {
@@ -117,6 +120,7 @@ function onOpen() {
     .addSeparator()
     .addItem('نسخ «فواتير التطبيق» إلى InvoiceT', 'copyAppToInvoiceT')
     .addItem('تعبئة الرقم الضريبي (VATID) في InvoiceT', 'fillVatIds')
+    .addItem('توحيد VATID في SuppliersT (رقم صحيح)', 'normSupplierVat')
     .addSeparator()
     .addItem('طريقة الإعداد', 'showHelp')
     .addToUi();
@@ -202,9 +206,20 @@ function copyApp_(ss) {
   const sv = values_(supSh), sh = sv[0].map(str_);
   ['SupID', 'SupfName', 'VATID', 'Active', 'EnteredBy'].forEach(n => { if (hIdx_(sh, n) < 0) ensureCol_(supSh, sh, n); });
   const S = n => hIdx_(sh, n);
-  const short_ = v => str_(v).replace(/\D/g, '').slice(0, 10); // الرقم الضريبي المختصر = أول 10 أرقام
-  const supByVat = {}; let maxSup = 0;
-  sv.slice(1).forEach(r => { const id = Number(r[S('SupID')]); if (id > maxSup) maxSup = id; const k = short_(r[S('VATID')]); if (k.length === 10 && !supByVat[k]) supByVat[k] = r[S('SupID')]; });
+  // المقارنة دائمًا بين رقمين صحيحين: يُحوَّل VATID في SuppliersT (نصًا كان أو رقمًا) ورقم الفاتورة بنفس الدالة vatShort_
+  const supByVat = {}, warn = [], badSup = [], dupSup = {}; let maxSup = 0, asText = 0;
+  sv.slice(1).forEach((r, k) => {
+    const id = Number(r[S('SupID')]); if (id > maxSup) maxSup = id;
+    const raw = r[S('VATID')]; if (raw === '' || raw == null) return;
+    const n = vatShort_(raw);
+    if (n === null) { badSup.push('SupID ' + str_(r[S('SupID')]) + ' (' + str_(r[S('SupfName')]) + '): «' + str_(raw) + '»'); return; }
+    if (typeof raw !== 'number') asText++;
+    if (supByVat[n] !== undefined) { (dupSup[n] = dupSup[n] || [supByVat[n]]).push(r[S('SupID')]); return; }
+    supByVat[n] = r[S('SupID')];
+  });
+  if (asText) warn.push('في SuppliersT ' + asText + ' رقمًا ضريبيًا مخزنًا كنص، حُوّل إلى رقم صحيح للمقارنة فقط (لتوحيدها في الشيت: القائمة ← «توحيد VATID في SuppliersT»).');
+  if (badSup.length) warn.push('أرقام ضريبية غير صالحة في SuppliersT (ليست 10 خانات تبدأ بـ 3) فلا تُطابق: ' + badSup.join('، '));
+  Object.keys(dupSup).forEach(n => warn.push('نفس الرقم المختصر ' + n + ' مسجل لأكثر من مورد في SuppliersT: SupID ' + dupSup[n].join('، ') + ' (استُخدم الأول).'));
   // الفواتير
   const iv = values_(invSh), ih = iv[0].map(str_);
   ['InvID', 'InvoiceNo', 'SupID', 'InvDate', 'Invamount', 'InvVat', 'Paymethod', 'EnteredBy', 'InvNote', 'RevDate', 'VATID', 'ProjectID'].forEach(n => { if (hIdx_(ih, n) < 0) ensureCol_(invSh, ih, n); });
@@ -212,21 +227,24 @@ function copyApp_(ss) {
   let maxInv = 0; const existing = {};
   iv.slice(1).forEach(r => { const id = Number(r[I('InvID')]); if (id > maxInv) maxInv = id; if (str_(r[I('InvoiceNo')])) existing[str_(r[I('SupID')]) + '|' + invKey_(r[I('InvoiceNo')])] = r[I('InvID')]; });
   const newSup = [], newInv = [], marks = [], now = new Date();
-  let copied = 0, dup = 0, skippedDel = 0, skippedNo = 0, already = 0;
+  let copied = 0, dup = 0, skippedDel = 0, skippedNo = 0, skippedVat = 0, already = 0;
   const supLines = [], invLines = [], skipLines = [];
   av.slice(1).forEach((r, k) => {
     const rowNo = k + 2;
     if (str_(r[ac])) { already++; return; }
     if (/^محذوفة/.test(str_(r[11]))) { skippedDel++; skipLines.push('صف ' + rowNo + ' (' + str_(r[5]) + ' ' + str_(r[1]) + '): محذوفة في التطبيق'); return; }
     const no = str_(r[1]); if (!no) { skippedNo++; skipLines.push('صف ' + rowNo + ' (' + str_(r[5]) + '): بلا رقم فاتورة'); return; }
-    const vat = str_(r[6]).replace(/\D/g, ''), sk = short_(shc >= 0 ? r[shc] : vat), name = str_(r[5]) || 'مورد بدون اسم', who = str_(r[12]);
-    let sup = sk.length === 10 ? supByVat[sk] : undefined;
+    const vat = vatDigits_(r[6]), name = str_(r[5]) || 'مورد بدون اسم', who = str_(r[12]);
+    const fromCol = shc >= 0 ? vatShort_(r[shc]) : null, fromVat = vatShort_(vat), sk = fromCol !== null ? fromCol : fromVat;
+    if (fromCol !== null && fromVat !== null && fromCol !== fromVat) warn.push('صف ' + rowNo + ': الرقم المختصر في العمود (' + fromCol + ') لا يطابق أول 10 خانات من الرقم الضريبي (' + fromVat + '). استُخدم العمود.');
+    if (sk === null) { skippedVat++; skipLines.push('صف ' + rowNo + ' (' + name + ' ' + no + '): رقم ضريبي غير صالح «' + (vat || 'فارغ') + '». صحّحه في التطبيق وأعد الإرسال (لم يُنشأ مورد).'); return; }
+    let sup = supByVat[sk];
     if (sup === undefined || sup === '') {
       sup = ++maxSup;
       const row = sh.map(() => '');
-      row[S('SupID')] = sup; row[S('SupfName')] = name; row[S('VATID')] = shortNum_(sk); row[S('Active')] = true; row[S('EnteredBy')] = 'by application >> ' + who;
-      newSup.push(row); if (sk.length === 10) supByVat[sk] = sup;
-      supLines.push('SupID ' + sup + ': ' + name + ' | الرقم المختصر ' + (sk || '(لا يوجد)') + ' | ' + row[S('EnteredBy')]);
+      row[S('SupID')] = sup; row[S('SupfName')] = name; row[S('VATID')] = sk; row[S('Active')] = true; row[S('EnteredBy')] = 'by application >> ' + who;
+      newSup.push(row); supByVat[sk] = sup;
+      supLines.push('SupID ' + sup + ': ' + name + ' | الرقم المختصر ' + sk + ' (لم يوجد مطابق في SuppliersT) | ' + row[S('EnteredBy')]);
     }
     const key = str_(sup) + '|' + invKey_(no);
     if (existing[key]) { dup++; marks.push([rowNo, existing[key]]); skipLines.push('صف ' + rowNo + ' (' + name + ' ' + no + '): موجودة مسبقًا في InvoiceT برقم InvID ' + existing[key]); return; }
@@ -246,8 +264,9 @@ function copyApp_(ss) {
     '\n\nموردون جدد أُضيفوا إلى SuppliersT: ' + newSup.length + (supLines.length ? '\n' + lim(supLines, 15).join('\n') : ' (كل الموردين موجودون مسبقًا)') +
     (invLines.length ? '\n\nالفواتير المنسوخة:\n' + lim(invLines, 15).join('\n') : '') +
     (already ? '\n\nنُسخت في مرة سابقة فلم تُكرر: ' + already : '') +
-    (skipLines.length ? '\n\nلم تُنسخ:\n' + lim(skipLines, 15).join('\n') : '');
-  log_(ss, [supLines.map(l => ['مورد جديد', l]), invLines.map(l => ['فاتورة منسوخة', l]), skipLines.map(l => ['لم تُنسخ', l])].flat(), copied, newSup.length);
+    (skipLines.length ? '\n\nلم تُنسخ:\n' + lim(skipLines, 15).join('\n') : '') +
+    (warn.length ? '\n\n⚠ تحذيرات:\n' + lim(warn, 10).join('\n') : '');
+  log_(ss, [supLines.map(l => ['مورد جديد', l]), invLines.map(l => ['فاتورة منسوخة', l]), skipLines.map(l => ['لم تُنسخ', l]), warn.map(l => ['تحذير', l])].flat(), copied, newSup.length);
   return { copied, dup, newSup: newSup.length, msg };
 }
 // سجل دائم لكل عملية نسخ في ورقة «سجل النسخ»
@@ -256,6 +275,19 @@ function log_(ss, lines, copied, nSup) {
   if (!sh) { sh = ss.insertSheet('سجل النسخ'); sh.getRange(1, 1, 1, 3).setValues([['الوقت', 'النوع', 'التفاصيل']]); if (sh.setRightToLeft) sh.setRightToLeft(true); }
   const now = new Date(), rows = [[now, 'تشغيل', 'نُسخت ' + copied + ' فاتورة، وأُضيف ' + nSup + ' مورد']].concat(lines.map(l => [now, l[0], l[1]]));
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, 3).setValues(rows);
+}
+// يحوّل VATID في SuppliersT إلى رقم صحيح من 10 خانات. لا يغيّر غير الصالح، بل يعرضه للمراجعة
+function normSupplierVat() {
+  const ui = SpreadsheetApp.getUi(), sh = sheet_(SpreadsheetApp.getActiveSpreadsheet(), 'SuppliersT');
+  if (!sh) { ui.alert('لم أجد ورقة SuppliersT'); return; }
+  const v = values_(sh), h = v[0].map(str_), c = hIdx_(h, 'VATID'), ic = hIdx_(h, 'SupID'), nc = hIdx_(h, 'SupfName');
+  if (c < 0 || v.length < 2) { ui.alert('لا يوجد عمود VATID أو بيانات'); return; }
+  let conv = 0; const bad = [];
+  const col = v.slice(1).map(r => { const raw = r[c]; if (raw === '' || raw == null) return [raw];
+    const n = vatShort_(raw); if (n === null) { bad.push('SupID ' + str_(r[ic]) + ' ' + str_(r[nc]) + ': «' + str_(raw) + '»'); return [raw]; }
+    if (raw !== n) conv++; return [n]; });
+  const rg = sh.getRange(2, c + 1, col.length, 1); rg.setNumberFormat('0'); rg.setValues(col);
+  ui.alert('توحيد VATID في SuppliersT', 'حُوّل ' + conv + ' رقمًا إلى رقم صحيح من 10 خانات.' + (bad.length ? '\n\n⚠ لم تُغيَّر لأنها غير صالحة (راجعها يدويًا):\n' + bad.join('\n') : ''), ui.ButtonSet.OK);
 }
 function showHelp() {
   SpreadsheetApp.getUi().alert('طريقة الإعداد (مرة واحدة)',
