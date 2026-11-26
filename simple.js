@@ -264,7 +264,7 @@
     const w = issues(x);
     return `<article class="inv" id="c-${esc(x.id)}">
       <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small></div><span class="amt">${esc(money(x.total))}</span></header>
-      <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}
+      <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
       <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button><button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}">حذف الفاتورة</button></footer>
@@ -428,7 +428,7 @@
 
   // ---------- Excel ----------
   const XL = [['invoice_number', 'رقم الفاتورة', 18], ['invoice_date', 'تاريخ الفاتورة', 14], ['total', 'المبلغ الإجمالي', 16], ['tax_amount', 'مبلغ الضريبة', 14],
-    ['vendor_name', 'اسم المورد', 32], ['vendor_tax_number', 'الرقم الضريبي', 20], ['payment_method', 'طريقة الدفع', 14], ['note', 'ملاحظات', 50], ['file', 'الملف', 30]];
+    ['vendor_name', 'اسم المورد', 32], ['vendor_tax_number', 'الرقم الضريبي', 20], ['payment_method', 'طريقة الدفع', 14], ['project', 'المشروع', 12], ['note', 'ملاحظات', 50], ['file', 'الملف', 30]];
   $('xl').onclick = () => {
     const rows = [XL.map(c => c[1]), ...list.map(x => XL.map(([k]) => {
       if (k === 'note') return noteOf(x);
@@ -448,6 +448,80 @@
     u.querySelector('button').onclick = () => { clearTimeout(undoBar.t); undoBar.c = null; u.hidden = true; undo(); };
     undoBar.t = setTimeout(() => { u.hidden = true; if (undoBar.c) { undoBar.c(); undoBar.c = null; } }, 7000);
   }
+
+
+  // ---------- المشروع المرتبط بالفاتورة ----------
+  const PK = 'invoice-simple-projects-v1';
+  let projects;
+  try { projects = JSON.parse(localStorage.getItem(PK)); } catch { projects = null; }
+  if (!Array.isArray(projects)) projects = ['3', '5', '6', '7'].map(name => ({ name, hidden: false }));
+  const saveProjects = () => { try { localStorage.setItem(PK, JSON.stringify(projects)); } catch { } };
+  const projKey = s => P.normDigits(String(s || '')).trim().toLowerCase();
+  function projHtml(x) {
+    const cur = x.project || '', vis = projects.filter(p => !p.hidden);
+    const extra = cur && !vis.some(p => p.name === cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (مخفي)</option>` : '';
+    return `<div class="f f-project${cur ? '' : ' nopj'}"><span class="fh"><label for="pj-${esc(x.id)}">المشروع</label></span>
+      <select id="pj-${esc(x.id)}" data-proj="${esc(x.id)}"><option value=""${cur ? '' : ' selected'}>اختر المشروع</option>${vis.map(p => `<option value="${esc(p.name)}"${p.name === cur ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}${extra}
+      <option disabled>──────</option><option value="__add">＋ إضافة مشروع جديد…</option><option value="__manage">إدارة قائمة المشاريع…</option></select></div>`;
+  }
+  document.addEventListener('change', e => {
+    const el = e.target; if (!el.dataset || !el.dataset.proj) return;
+    const x = list.find(y => y.id === el.dataset.proj); if (!x) return;
+    if (el.value === '__add' || el.value === '__manage') { const m = el.value; el.value = x.project || ''; openProj(m === '__add' ? 'add' : 'manage', x.id); return; }
+    x.project = el.value; save(); el.closest('.f').classList.toggle('nopj', !x.project);
+    toast(x.project ? `رُبطت الفاتورة بالمشروع ${x.project}` : 'أُزيل المشروع من الفاتورة');
+  });
+  // نافذة إضافة المشاريع وإخفائها، وكل تغيير يمر بخطوة تأكيد
+  const pj = { forId: null, ask: null };
+  function openProj(mode, forId) {
+    pj.forId = forId || null; pj.ask = null; pj.last = document.activeElement;
+    $('pjNew').value = ''; drawProj(); $('pj').hidden = false; document.body.style.overflow = 'hidden';
+    (mode === 'add' ? $('pjNew') : $('pjClose')).focus();
+  }
+  function closeProj() { $('pj').hidden = true; document.body.style.overflow = ''; pj.ask = null; if (pj.last && document.contains(pj.last)) pj.last.focus(); }
+  function drawProj() {
+    const used = n => list.filter(x => x.project === n).length;
+    const a = pj.ask;
+    $('pjAsk').hidden = !a;
+    if (a) {
+      $('pjAskT').textContent = a.type === 'add' ? `تأكيد إضافة المشروع «${a.name}» إلى القائمة؟` : a.type === 'hide' ? `تأكيد إخفاء المشروع «${a.name}» من القائمة؟` : `إظهار المشروع «${a.name}» في القائمة من جديد؟`;
+      $('pjAskS').textContent = a.type === 'add' ? (pj.forId ? 'سيُضاف للقائمة ويُربط بهذه الفاتورة.' : 'سيظهر في قائمة المشاريع لكل الفواتير.') : a.type === 'hide' ? (used(a.name) ? `لن يظهر عند اختيار مشروع لفاتورة جديدة. الفواتير المرتبطة به (${used(a.name)}) تبقى كما هي.` : 'لن يظهر عند اختيار مشروع. يمكنك إظهاره لاحقًا من هنا.') : 'سيعود للظهور عند اختيار مشروع.';
+      $('pjYes').textContent = a.type === 'add' ? 'نعم، أضف' : a.type === 'hide' ? 'نعم، أخفِ' : 'نعم، أظهر';
+      $('pjYes').className = a.type === 'hide' ? 'del' : 'primary';
+    }
+    $('pjList').innerHTML = projects.map((p, i) => `<li class="${p.hidden ? 'off' : ''}"><b>${esc(p.name)}</b><small>${p.hidden ? 'مخفي' : 'ظاهر'}${used(p.name) ? ' · ' + used(p.name) + ' فاتورة' : ''}</small>
+      <button data-pjt="${i}"${a ? ' disabled' : ''}>${p.hidden ? 'إظهار' : 'إخفاء'}</button></li>`).join('');
+    $('pjAdd').disabled = !!a; $('pjNew').disabled = !!a;
+  }
+  $('pjForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = P.normDigits($('pjNew').value).trim().replace(/\s+/g, ' ');
+    if (!name) { $('pjNew').focus(); return; }
+    const ex = projects.find(p => projKey(p.name) === projKey(name));
+    if (ex && !ex.hidden) { toast(`المشروع ${ex.name} موجود في القائمة`); return; }
+    pj.ask = ex ? { type: 'show', name: ex.name } : { type: 'add', name }; drawProj(); $('pjYes').focus();
+  });
+  $('pjList').addEventListener('click', e => {
+    const b = e.target.closest('[data-pjt]'); if (!b) return;
+    const p = projects[+b.dataset.pjt]; pj.ask = { type: p.hidden ? 'show' : 'hide', name: p.name }; drawProj(); $('pjYes').focus();
+  });
+  $('pjNo').onclick = () => { pj.ask = null; drawProj(); $('pjNew').focus(); };
+  $('pjYes').onclick = () => {
+    const a = pj.ask; if (!a) return;
+    if (a.type === 'add') { projects.push({ name: a.name, hidden: false }); $('pjNew').value = ''; }
+    else { const p = projects.find(q => q.name === a.name); if (p) p.hidden = a.type === 'hide'; }
+    saveProjects();
+    if (a.type !== 'hide' && pj.forId) { const x = list.find(y => y.id === pj.forId); if (x) { x.project = a.name; save(); } }
+    pj.ask = null;
+    const msg = a.type === 'add' ? `أُضيف المشروع ${a.name}` : a.type === 'hide' ? `أُخفي المشروع ${a.name}` : `ظهر المشروع ${a.name}`;
+    if (a.type === 'add' && pj.forId) { closeProj(); draw(); const el = $('pj-' + pj.forId); if (el) { el.scrollIntoView({ block: 'center' }); el.focus({ preventScroll: true }); } }
+    else { drawProj(); draw(); }
+    toast(msg);
+  };
+  $('pjClose').onclick = closeProj;
+  $('pj').addEventListener('click', e => { if (e.target === $('pj')) closeProj(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('pj').hidden) { if (pj.ask) { pj.ask = null; drawProj(); } else closeProj(); } });
+  $('pjOpen').onclick = () => openProj('manage');
 
   // ---------- قوالب الموردين: مكان كل خانة على فاتورة المورد ----------
   // يُحفظ المكان كنسبة من عرض الصفحة وطولها (لا بالبكسل)، مع رقم الصفحة أو «الأخيرة».
