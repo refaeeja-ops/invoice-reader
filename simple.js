@@ -1242,19 +1242,19 @@
     const b = $('gsSend'); if (!b) return;
     b.hidden = !GURL || (!list.length && !trash.some(x => x.sentAt));
     const n = toSend().length;
-    b.disabled = sending || !n;
-    b.textContent = sending ? 'جارٍ الإرسال إلى Google Sheet…' : n ? `☁️ إرسال إلى Google Sheet (${n})` : '✓ كل الفواتير في Google Sheet';
+    b.disabled = sending;
+    b.textContent = sending ? 'جارٍ الإرسال والنقل إلى InvoiceT…' : n ? `☁️ إرسال ونقل إلى InvoiceT (${n})` : '☁️ نقل إلى InvoiceT';
   }
   $('gsSend').onclick = async () => {
     if (!gs) { toast('اربط التطبيق بـ Google Sheet أولًا: اكتب بريدك ورمز الدخول'); showTab('z'); const f = $('zsEmail'); if (f) { f.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => f.focus({ preventScroll: true }), 300); } return; }
-    const items = toSend(); if (!items.length || sending) return;
+    if (sending) return; const items = toSend();
     sending = true; sendLabel();
     const sig = new Map(items.map(x => [x.id, sentSig(x)]));
     try {
       const n2s = v => { const t = n2(v); return typeof t === 'number' ? t : (t || ''); };
       const invoices = items.map(x => ({ id: x.id, InvoiceNo: String(x.invoice_number || ''), Date: x.invoice_date || '', Total: n2s(x.total), Vat: n2s(x.tax_amount), Vendor: x.vendor_name || '',
         VATID: x.vendor_tax_number || '', Payment: x.payment_method || '', Project: x.project || '', Note: noteOf(x), File: x.file || '', Deleted: !!x.deletedAt, DeleteReason: x.delReason || '' }));
-      const r = await fetch(GURL, { method: 'POST', body: JSON.stringify({ email: gs.email, token: gs.token, action: 'appInvoices', invoices }), redirect: 'follow' });
+      const r = await fetch(GURL, { method: 'POST', body: JSON.stringify(items.length ? { email: gs.email, token: gs.token, action: 'appInvoices', invoices, copy: true } : { email: gs.email, token: gs.token, action: 'copyToInvoiceT' }), redirect: 'follow' });
       let j; try { j = await r.json(); } catch { throw new Error('رد غير متوقع من الشيت'); }
       if (!j.ok) throw new Error(j.error || 'تعذّر الإرسال');
       if (!j.results) throw new Error('الشيت لا يستقبل الفواتير بعد: حدّث كود Apps Script وانشر نسخة جديدة');
@@ -1263,10 +1263,22 @@
         if (o.skipped) { x.sendErr = o.skipped; sk++; return; }
         x.sentAt = now; x.sentRow = o.row; x.sentSig = sig.get(x.id); delete x.sendErr; ok++; });
       save(); saveTrash();
-      toast(sk ? `أُرسلت ${ok} فاتورة، ولم تُرسل ${sk} لأنها مكررة في الشيت` : `أُرسلت ${ok} فاتورة إلى Google Sheet`);
-    } catch (e) { console.warn(e); toast('تعذّر الإرسال: ' + ((e && e.message) || 'تحقق من الاتصال')); }
+      const head = items.length ? (sk ? `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق»، ولم تُرسل ${sk} لأنها مكررة في الشيت.` : `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق».`) : '';
+      if (!j.copy) showRep(head + '\n\nلم يتم النقل إلى InvoiceT: حدّث كود Apps Script في الشيت وانشر نسخة جديدة (New version).', true);
+      else if (j.copy.error) showRep(head + '\n\nتعذّر النقل إلى InvoiceT: ' + j.copy.error, true);
+      else showRep((head ? head + '\n\n' : '') + j.copy.msg, false);
+    } catch (e) { console.warn(e); showRep('تعذّر الإرسال: ' + ((e && e.message) || 'تحقق من الاتصال'), true); }
     sending = false; draw();
   };
+
+  // تقرير الإرسال والنقل (يبقى ظاهرًا حتى يُغلق)
+  function showRep(t, bad) {
+    const b = $('gsRep'); if (!b) { toast(t); return; }
+    b.hidden = false; b.classList.toggle('bad', !!bad);
+    b.innerHTML = `<div class="gsrep-h"><b>${bad ? 'نتيجة الإرسال' : 'تم الإرسال والنقل إلى InvoiceT'}</b><button type="button" class="ghost" id="gsRepX" aria-label="إغلاق">✕ إغلاق</button></div><div class="gsrep-b">${esc(t)}</div>`;
+    $('gsRepX').onclick = () => { b.hidden = true; };
+    b.scrollIntoView({ block: 'nearest', behavior: RM ? 'auto' : 'smooth' });
+  }
 
   // إرفاق ملف لفاتورة موجودة ليس لها صورة محفوظة (لا يعيد القراءة ولا يغير البيانات)
   document.addEventListener('change', async e => {

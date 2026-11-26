@@ -217,7 +217,7 @@ function copyApp_(ss) {
     if (str_(r[ac])) { already++; return; }
     if (/^محذوفة/.test(str_(r[11]))) { skippedDel++; skipLines.push('صف ' + rowNo + ' (' + str_(r[5]) + ' ' + str_(r[1]) + '): محذوفة في التطبيق'); return; }
     const no = str_(r[1]); if (!no) { skippedNo++; skipLines.push('صف ' + rowNo + ' (' + str_(r[5]) + '): بلا رقم فاتورة'); return; }
-    const vat = str_(r[6]).replace(/\D/g, ''), sk = short_(shc >= 0 ? r[shc] : vat), name = str_(r[5]), who = str_(r[12]);
+    const vat = str_(r[6]).replace(/\D/g, ''), sk = short_(shc >= 0 ? r[shc] : vat), name = str_(r[5]) || 'مورد بدون اسم', who = str_(r[12]);
     let sup = sk.length === 10 ? supByVat[sk] : undefined;
     if (sup === undefined || sup === '') {
       sup = ++maxSup;
@@ -316,7 +316,13 @@ function doPost(e) {
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (body.action === 'appInvoices') return json_({ ok: true, results: appInvoices_(ss, body.invoices, who) });
+    if (body.action === 'appInvoices') {
+      const results = appInvoices_(ss, body.invoices, who);
+      if (!body.copy) return json_({ ok: true, results });
+      let copy; try { copy = copyApp_(ss); } catch (er) { copy = { error: String(er && er.message || er) }; }
+      return json_({ ok: true, results, copy });
+    }
+    if (body.action === 'copyToInvoiceT') { try { return json_({ ok: true, results: [], copy: copyApp_(ss) }); } catch (er) { return json_({ ok: false, error: String(er && er.message || er) }); } }
     if (body.action === 'zones') { zonesWrite_(ss, body.put, who); const z = zonesRead_(ss); return json_({ ok: true, zones: z.zones, deleted: z.deleted }); }
     const invSh = sheet_(ss, 'InvoiceT'), vatSh = sheet_(ss, 'VatReport');
     if (!invSh || !vatSh) return json_({ ok: false, error: 'لم أجد ورقة InvoiceT أو VatReport' });
