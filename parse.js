@@ -447,6 +447,6 @@
     return (r.subtotal != null && near(sum, r.subtotal, 0.1)) || (r.total != null && near(sum, r.total, 0.1)) || (r.total != null && r.tax_amount != null && near(sum + r.tax_amount, r.total, 0.1));
   }
 
-  const api = { score, itemsOk, normDigits, toNum, numsIn, parseZatcaQR, checkVat, parseInvoice, parseItem, checks, findDate, fmt };
+  const api = { score, itemsOk, invCands, normDigits, toNum, numsIn, parseZatcaQR, checkVat, parseInvoice, parseItem, checks, findDate, fmt };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.InvoiceParse = api;
 })(typeof self !== 'undefined' ? self : this);

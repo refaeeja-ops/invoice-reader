@@ -64,6 +64,56 @@ button:disabled{opacity:.5;cursor:default}
 .undo{position:fixed;bottom:18px;inset-inline:0;margin:auto;width:max-content;max-width:92vw;background:var(--ink);color:var(--paper);padding:6px 6px 6px 14px;border-radius:6px;display:flex;gap:12px;align-items:center;z-index:61}
 .undo button{min-height:36px;background:var(--paper);color:var(--ink)}
 .full{color:#fff;opacity:.8;font-size:13px}
+/* زر تحديد مكان الخانة + شارة المصدر */
+.f .fh{display:flex;align-items:center;gap:6px;min-height:34px}
+.f .fh label{flex:1;cursor:pointer}
+.pkb{min-height:34px;width:34px;padding:0;border-radius:6px;color:var(--blue);flex:none}
+.pkb:hover{background:var(--soft)}
+.pkb.need{background:#ffe600;border-color:#111;color:#111}
+.zb{font-style:normal;font-size:11px;padding:0 6px;border-radius:3px;background:var(--ink);color:#ffe600;white-space:nowrap}
+.zb.m{background:#ffe600;color:#111}
+/* نافذة التحديد */
+.pk{position:fixed;inset:0;z-index:55;background:#000b;display:flex;align-items:center;justify-content:center;padding:10px}
+.pkin{background:var(--paper);color:var(--ink);border-radius:8px;width:min(1180px,100%);height:min(100%,940px);display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;padding:12px;overflow:hidden}
+.pkv{display:grid;grid-template-rows:auto minmax(0,1fr);gap:8px;min-height:0}
+.pkbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pkbar .sp{flex:1}
+.pkbar button{min-width:44px;padding:6px 10px}
+.pkbar #pkZ{min-width:3.6em;text-align:center;font-variant-numeric:tabular-nums}
+.pkbar #pkPg{white-space:nowrap}
+button,.btn{touch-action:manipulation}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0}.seg button+button{border-inline-start:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.pkvp{position:relative;overflow:auto;background:#2a2d38;border-radius:6px;min-height:0;overscroll-behavior:contain}
+.pkvp:focus-visible{outline:3px solid var(--blue)}
+.pkcv{width:max-content;margin:auto;padding:12px}
+.pkpaper{position:relative;user-select:none;-webkit-user-select:none;background:#fff}
+.pkpaper img{display:block;width:100%;height:auto;pointer-events:none}
+.pkpad{position:absolute;inset:0;touch-action:none;cursor:crosshair}
+.pkpad.move{cursor:grab}.pkpad.move:active{cursor:grabbing}
+.pksel{position:absolute;outline:2.5px solid #111;background:#ffe600a0;mix-blend-mode:multiply;pointer-events:none}
+.pkold{position:absolute;outline:2px dashed #c81d33;background:#c81d3315;pointer-events:none}
+.pkold span{position:absolute;top:-1.7em;inset-inline-start:-2px;font-size:11px;background:#c81d33;color:#fff;padding:0 6px;border-radius:2px;white-space:nowrap}
+.pkside{overflow:auto;display:flex;flex-direction:column;gap:10px}
+.pkside h2{font-size:20px}.pkside p{margin:0;color:var(--mute);font-size:14px}
+.pkro{border:1px dashed var(--line);border-radius:6px;padding:10px;display:grid;gap:6px}
+.pkro input{font:inherit;font-size:16px;font-weight:700;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:7px 9px;min-height:44px}
+.pkro small{color:var(--mute);font-size:12px;overflow-wrap:anywhere}
+.pkchk{display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer}
+.pkchk input{width:22px;height:22px;flex:none;margin-top:2px}
+.pkbtns{display:flex;gap:8px;flex-wrap:wrap}
+.pkkeys{font-size:12px!important}
+@media (max-width:760px){.pk{padding:0}.pkin{border-radius:0;height:100%;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:8px;padding:8px}
+  .pkside{gap:6px;max-height:46vh}.pkside>p,.pkkeys{display:none}.pkside h2{font-size:17px}.pkbar button{min-width:40px;min-height:40px;padding:4px 8px}}
+/* قوالب الموردين */
+#zList{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:12px}
+.zc{border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:6px}
+.zc small{color:var(--mute)}
+.zchip{display:inline-block;background:#ffe600;color:#111;font-size:13px;padding:0 8px;border-radius:3px;margin:0 0 4px 6px}
+.zask{border:1px solid var(--stamp);border-radius:6px;padding:10px;font-size:14px}
+.zask b{display:block;color:var(--stamp)}
+.zbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 @media (max-width:560px){.grid{grid-template-columns:1fr 1fr}.f-vendor_name,.f-vendor_tax_number{grid-column:1/-1}.inv footer button{flex:1}}
 </style>
 </head>
@@ -89,6 +139,10 @@ button:disabled{opacity:.5;cursor:default}
     <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><button class="primary" id="xl" disabled>تنزيل ملف Excel</button><span class="note" id="sum"></span></div>
     <div id="list"></div>
   </section>
+  <section class="slip" id="zSec" hidden aria-labelledby="zT">
+    <div class="lhead"><h2 id="zT">قوالب الموردين</h2><span class="note">أماكن الخانات التي حددتها لكل مورد. تُطبّق تلقائيًا على فواتيره الجديدة، والخانات المأخوذة منها عليها شارة «من قالب المورد».</span></div>
+    <div id="zList"></div>
+  </section>
   <p style="text-align:center;margin:0"><a href="full.html" style="color:var(--mute);font-size:13px">النسخة الكاملة السابقة</a> <small style="color:var(--mute)">· الإصدار <span id="ver"></span></small></p>
 </main>
 <datalist id="pays"><option>نقدًا</option><option>مدى</option><option>بطاقة ائتمان</option><option>تحويل بنكي</option><option>آجل</option><option>شيك</option><option>Apple Pay</option></datalist>
@@ -96,11 +150,34 @@ button:disabled{opacity:.5;cursor:default}
   <div class="lbbar"><span id="lbT"></span><button id="lbPrev">السابقة</button><span id="lbPg"></span><button id="lbNext">التالية</button><button id="lbOut" aria-label="تصغير">−</button><span id="lbZ"></span><button id="lbIn" aria-label="تكبير">+</button><a class="btn" id="lbOrig" target="_blank" rel="noopener">الملف الأصلي</a><button id="lbClose" class="primary">إغلاق</button></div>
   <div class="lbstage"><img id="lbImg" alt="صورة الفاتورة"><p id="lbNone">لا توجد صورة محفوظة لهذه الفاتورة.</p></div>
 </div>
+<div class="pk" id="pk" hidden role="dialog" aria-modal="true" aria-labelledby="pkT">
+  <div class="pkin">
+    <div class="pkv">
+      <div class="pkbar" role="toolbar" aria-label="أدوات العرض">
+        <span class="seg" role="group" aria-label="وضع السحب"><button id="pkDraw" aria-pressed="true" title="رسم مستطيل">▭ رسم</button><button id="pkMove" aria-pressed="false" title="تحريك الصفحة (أو اضغط مسافة مع السحب)">✥ تحريك</button></span>
+        <span class="sp"></span>
+        <button id="pkOut" aria-label="تصغير">−</button><span id="pkZ" aria-live="polite">100%</span><button id="pkIn" aria-label="تكبير">+</button><button id="pkFit">ملاءمة</button>
+        <span class="sp"></span>
+        <button id="pkPrev" aria-label="الصفحة السابقة">›</button><span id="pkPg"></span><button id="pkNext" aria-label="الصفحة التالية">‹</button>
+      </div>
+      <div class="pkvp" id="pkVp" dir="ltr" tabindex="0" aria-label="صفحة الفاتورة. الأسهم للتحريك، و + و − للتكبير"><div class="pkcv"><div class="pkpaper" id="pkPaper"><img id="pkImg" alt="صفحة الفاتورة" draggable="false"><div class="pkold" id="pkOld" hidden><span>المكان المحفوظ</span></div><div class="pksel" id="pkSel" hidden></div><div class="pkpad" id="pkPad"></div></div></div></div>
+    </div>
+    <div class="pkside">
+      <h2 id="pkT"></h2>
+      <p id="pkP"></p>
+      <div class="pkro" id="pkRo" hidden><span id="pkRoS"></span><input id="pkVal" aria-labelledby="pkRoS"><small id="pkRaw"></small></div>
+      <label class="pkchk" id="pkSaveL"><input type="checkbox" id="pkSave" checked><span id="pkSaveT"></span></label>
+      <p id="pkNo"></p>
+      <div class="pkbtns"><button class="primary" id="pkOk" disabled>اعتمد القيمة</button><button id="pkCancel">إلغاء</button></div>
+      <p class="pkkeys">على الجوال: إصبع واحد للرسم، وإصبعان للتحريك والتكبير. على الحاسب: Ctrl مع العجلة للتكبير، والمسافة مع السحب للتحريك، و PageUp و PageDown للصفحات.</p>
+    </div>
+  </div>
+</div>
 <div class="undo" id="undo" hidden><span></span><button>تراجع</button></div>
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611251843'; window.APP_VERSION = V;
+(function () { var V = '202611260307'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -108,10 +185,10 @@ button:disabled{opacity:.5;cursor:default}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611251843"></script>
-<script src="export.js?v=202611251843"></script>
-<script src="digits.js?v=202611251843"></script>
-<script src="simple.js?v=202611251843"></script>
+<script src="parse.js?v=202611260307"></script>
+<script src="export.js?v=202611260307"></script>
+<script src="digits.js?v=202611260307"></script>
+<script src="simple.js?v=202611260307"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

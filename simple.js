@@ -24,36 +24,39 @@
     const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
     x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, c.width, c.height); return c;
   }
+  // صفحة PDF واحدة: صورة + النص الرقمي + أماكن الكلمات (نسبة من الصفحة) لقراءة منطقة محددة بدقة
+  async function renderPdfPage(doc, p) {
+    const pg = await doc.getPage(p), v0 = pg.getViewport({ scale: 1 });
+    const v = pg.getViewport({ scale: Math.min(3, 2200 / Math.max(v0.width, v0.height)) });
+    const c = document.createElement('canvas'); c.width = Math.round(v.width); c.height = Math.round(v.height);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    await pg.render({ canvasContext: x, viewport: v }).promise;
+    let text = '', items = [];
+    try {
+      const tc = await pg.getTextContent(), rows = [];
+      tc.items.forEach(it => {
+        if (!it.str || !it.str.trim()) return;
+        const y = it.transform[5], xx = it.transform[4];
+        let row = rows.find(r => Math.abs(r.y - y) < Math.max(3, Math.abs(it.transform[3]) * 0.5));
+        if (!row) rows.push(row = { y, parts: [] });
+        row.parts.push({ x: xx, s: it.str });
+        const [px, py] = v.convertToViewportPoint(xx, y), h = Math.hypot(it.transform[2], it.transform[3]) * v.scale, w = (it.width || 0) * v.scale;
+        items.push({ s: it.str, x: px / c.width, y: (py - h) / c.height, w: w / c.width, h: h / c.height });
+      });
+      rows.sort((a, b) => b.y - a.y);
+      text = rows.map(r => {
+        const rtl = /[؀-ۿ]/.test(r.parts.map(p => p.s).join(''));
+        r.parts.sort((a, b) => rtl ? b.x - a.x : a.x - b.x);
+        return r.parts.map(p => p.s.trim()).join('  ');
+      }).join('\n');
+    } catch (e) { items = []; }
+    return { canvas: c, text, items };
+  }
   async function pdfPages(file) {
     if (!window.pdfjsLib) throw new Error('تعذّر تحميل قارئ PDF.');
     const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
     const n = Math.min(doc.numPages, 5), out = [];
-    for (let p = 1; p <= n; p++) {
-      const pg = await doc.getPage(p), v0 = pg.getViewport({ scale: 1 });
-      const v = pg.getViewport({ scale: Math.min(3, 2200 / Math.max(v0.width, v0.height)) });
-      const c = document.createElement('canvas'); c.width = Math.round(v.width); c.height = Math.round(v.height);
-      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-      await pg.render({ canvasContext: x, viewport: v }).promise;
-      // نص PDF الرقمي (أدق من قراءة الصورة إن وُجد)
-      let text = '';
-      try {
-        const tc = await pg.getTextContent(), rows = [];
-        tc.items.forEach(it => {
-          if (!it.str || !it.str.trim()) return;
-          const y = it.transform[5], xx = it.transform[4];
-          let row = rows.find(r => Math.abs(r.y - y) < Math.max(3, Math.abs(it.transform[3]) * 0.5));
-          if (!row) rows.push(row = { y, parts: [] });
-          row.parts.push({ x: xx, s: it.str });
-        });
-        rows.sort((a, b) => b.y - a.y);
-        text = rows.map(r => {
-          const rtl = /[؀-ۿ]/.test(r.parts.map(p => p.s).join(''));
-          r.parts.sort((a, b) => rtl ? b.x - a.x : a.x - b.x);
-          return r.parts.map(p => p.s.trim()).join('  ');
-        }).join('\n');
-      } catch (e) { }
-      out.push({ canvas: c, text });
-    }
+    for (let p = 1; p <= n; p++) out.push(await renderPdfPage(doc, p));
     return { pages: out, total: doc.numPages };
   }
 
@@ -183,7 +186,7 @@
     }
     d.qr_raw = qRaw || ''; d._qr = q; d._raw = raw.slice(0, 20000);
     d.file = pathOf(file) || 'صورة من الكاميرا'; d.file_name = file.name || '';
-    return { d, pages: list.map(p => toUrl(p.canvas)) };
+    return { d, pages: list.map(p => toUrl(p.canvas)), src: list };
   }
   function toUrl(c) { // صورة للعرض فقط، بحجم أصغر لتوفير الذاكرة
     const r = Math.min(1, 1600 / Math.max(c.width, c.height));
@@ -245,6 +248,7 @@
   const noteOf = x => [x.note, ...issues(x)].filter(Boolean).join(' | ');
 
   // ---------- العرض ----------
+  const PICK_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg>';
   const fieldHtml = (x, [k, label, type]) => {
     const v = x[k] ?? '', miss = blank(v) && k !== 'payment_method';
     const attrs = `data-id="${esc(x.id)}" data-k="${k}" id="f-${esc(x.id)}-${k}"`;
@@ -252,7 +256,9 @@
     if (type === 'date') input = `<input type="date" ${attrs} value="${esc(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '')}">`;
     else if (type === 'pay') input = `<input ${attrs} list="pays" value="${esc(v)}" placeholder="مثال: مدى">`;
     else input = `<input ${attrs} value="${esc(type === 'num' && !blank(v) && isFinite(+v) ? (+v).toFixed(2) : v)}"${type !== 'text' ? ' inputmode="decimal" class="num"' : ''} placeholder="${miss ? 'لم يُقرأ — أدخله' : ''}">`;
-    return `<label class="f f-${k}${miss ? ' miss' : ''}"><span>${label}</span>${input}</label>`;
+    const zs = x.zsrc && x.zsrc[k];
+    const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : ''}">${zs === 'pick' ? 'محددة يدويًا' : 'من قالب المورد'}</em>` : '';
+    return `<div class="f f-${k}${miss ? ' miss' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}</div>`;
   };
   function card(x) {
     const w = issues(x);
@@ -272,6 +278,7 @@
     $('sum').textContent = list.length ? (nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة') : '';
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
       + (list.map(card).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
+    drawZones();
   }
   // تحديث ملاحظات وحالة بطاقة واحدة بدون إعادة رسم (حتى لا يضيع مكان الكتابة)
   function refreshCard(x) {
@@ -281,7 +288,9 @@
     box.outerHTML = html;
     c.querySelector('header b').textContent = x.vendor_name || 'مورد غير معروف';
     c.querySelector('.amt').textContent = money(x.total);
-    F.forEach(([k]) => { const el = $(`f-${x.id}-${k}`); if (el) el.closest('.f').classList.toggle('miss', blank(x[k]) && k !== 'payment_method'); });
+    F.forEach(([k]) => { const el = $(`f-${x.id}-${k}`); if (!el) return; const f = el.closest('.f'), m = blank(x[k]) && k !== 'payment_method';
+      f.classList.toggle('miss', m); const pb = f.querySelector('.pkb'); if (pb) pb.classList.toggle('need', m);
+      if (!(x.zsrc && x.zsrc[k])) { const zb = f.querySelector('.zb'); if (zb) zb.remove(); } });
     const nIss = list.filter(y => issues(y).length).length;
     $('sum').textContent = nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة';
   }
@@ -291,7 +300,7 @@
     let v = el.value.trim();
     if (k === 'total' || k === 'tax_amount') v = n2(v);
     if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\s/g, '');
-    x[k] = v; (x.edited = x.edited || {})[k] = 1; save(); refreshCard(x);
+    x[k] = v; (x.edited = x.edited || {})[k] = 1; if (x.zsrc) delete x.zsrc[k]; save(); refreshCard(x);
   });
   document.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -302,6 +311,14 @@
       undoBar(`حُذفت الفاتورة`, () => { list.splice(i, 0, x); save(); draw(); }, () => IMG.del(x.id));
     }
     if (b.dataset.view) view(b.dataset.view);
+    if (b.dataset.pick) openPick(b.dataset.pick, b.dataset.pk);
+    if (b.dataset.zdel) { zConfirm = b.dataset.zdel; drawZones(); const n = document.querySelector('[data-zno]'); if (n) n.focus(); }
+    if (b.dataset.zno !== undefined) { const k = zConfirm; zConfirm = null; drawZones(); const d = document.querySelector(`[data-zdel="${CSS.escape(k || '')}"]`); if (d) d.focus(); }
+    if (b.dataset.zok) {
+      const k = b.dataset.zok, t = zones[k]; if (!t) return;
+      delete zones[k]; zConfirm = null; saveZones(); drawZones();
+      undoBar(`حُذف قالب «${t.name || 'المورد'}»`, () => { zones[k] = t; saveZones(); drawZones(); }, () => { });
+    }
     if (b.dataset.reread) reread(b.dataset.reread);
   });
 
@@ -374,19 +391,21 @@
         const x = list.find(y => y.id === job.id);
         deep = true;
         try {
-          const { d, pages } = await processFile(job.file, say);
+          const { d, pages, src } = await processFile(job.file, say);
           let changed = 0;
-          F.forEach(([k]) => { const nv = k === 'total' || k === 'tax_amount' ? (d[k] ?? '') : (d[k] || ''); if (x && !(x.edited && x.edited[k]) && !blank(nv) && nv !== x[k]) { x[k] = nv; changed++; } });
+          F.forEach(([k]) => { const nv = k === 'total' || k === 'tax_amount' ? (d[k] ?? '') : (d[k] || ''); if (x && !(x.edited && x.edited[k]) && !blank(nv) && nv !== x[k]) { x[k] = nv; if (x.zsrc) delete x.zsrc[k]; changed++; } });
+          if (x && zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { changed += await applyZones(x, src); } catch (e) { console.warn(e); } }
           if (x) { save(); IMG.get(job.id).then(r0 => IMG.put(job.id, { pages, blob: (r0 && r0.blob) || job.file })); }
           toast(changed ? `أُعيدت القراءة: تحدّثت ${changed} من الخانات` : 'أُعيدت القراءة ولم تتغير البيانات');
         } catch (e) { console.error(e); toast('تعذّرت إعادة القراءة'); }
         deep = false; delete live[job.id]; done++; draw(); continue;
       }
       try {
-        const { d, pages } = await processFile(job.file, say);
+        const { d, pages, src } = await processFile(job.file, say);
         const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: sig(job.file),
           invoice_number: d.invoice_number || '', invoice_date: d.invoice_date || '', total: d.total ?? '', tax_amount: d.tax_amount ?? '',
           vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: d.payment_method || '', note: '' };
+        if (zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { await applyZones(x, src); } catch (e) { console.warn(e); } }
         list.unshift(x); save();
         IMG.put(job.id, { pages, blob: job.file.size < 25e6 ? job.file : null });
       } catch (e) {
@@ -430,8 +449,293 @@
     undoBar.t = setTimeout(() => { u.hidden = true; if (undoBar.c) { undoBar.c(); undoBar.c = null; } }, 7000);
   }
 
+  // ---------- قوالب الموردين: مكان كل خانة على فاتورة المورد ----------
+  // يُحفظ المكان كنسبة من عرض الصفحة وطولها (لا بالبكسل)، مع رقم الصفحة أو «الأخيرة».
+  const ZK = 'invoice-simple-zones-v1';
+  let zones = {}, zConfirm = null;
+  try { zones = JSON.parse(localStorage.getItem(ZK)) || {}; } catch { zones = {}; }
+  const saveZones = () => { try { localStorage.setItem(ZK, JSON.stringify(zones)); } catch { toast('تعذّر حفظ القالب: مساحة المتصفح ممتلئة'); } };
+  const vatOf = x => { const d = P.normDigits(x.vendor_tax_number || '').replace(/\D/g, ''); return d.length === 15 ? d : ''; };
+  const nameKey = s => P.normDigits(s || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  function vendorKey(x) { const v = vatOf(x); if (v) return 'vat:' + v; const n = nameKey(x.vendor_name); return n.length >= 3 ? 'name:' + n : ''; }
+  function zoneFor(x) { // نبحث بالرقم الضريبي أولًا ثم باسم المورد
+    const v = vatOf(x); if (v && zones['vat:' + v]) return 'vat:' + v;
+    const n = nameKey(x.vendor_name); if (n.length < 3) return '';
+    if (zones['name:' + n]) return 'name:' + n;
+    return Object.keys(zones).find(k => zones[k].nameKey === n) || '';
+  }
+  const pgIndex = (pg, n) => pg === 'last' ? n - 1 : (pg < n ? pg : -1);
+  // الصفحة الأولى للبيانات العلوية، و«الأخيرة» للمبالغ؛ فيصلح القالب لفاتورة من صفحة أو عدة صفحات
+  const pgFor = (k, i, n) => n === 1 ? (['total', 'tax_amount', 'payment_method'].includes(k) ? 'last' : 0) : (i === 0 ? 0 : i === n - 1 ? 'last' : i);
+  const pgName = pg => pg === 'last' ? 'الصفحة الأخيرة' : 'صفحة ' + (pg + 1);
+  const label = k => (F.find(f => f[0] === k) || [, k])[1];
+
+  // قارئ مستقل للمناطق حتى لا يتداخل مع قراءة الفواتير الجارية
+  let zw = null, zq = Promise.resolve();
+  async function zoneWorker() {
+    if (!zw) zw = Tesseract.createWorker('ara+eng', 1, { workerPath: abs('vendor/worker.min.js'), corePath: abs('vendor/core'), langPath: abs('vendor/lang'), gzip: true })
+      .then(async w => { await w.setParameters({ preserve_interword_spaces: '1' }); return w; });
+    try { return await zw; } catch (e) { zw = null; throw e; }
+  }
+  const serial = fn => (zq = zq.then(fn, fn));
+  // قراءة النص داخل مستطيل: من نص PDF الرقمي إن وُجد، وإلا بقراءة المنطقة المقصوصة فقط
+  function readRegion(src, r) {
+    if (src.items && src.items.length) {
+      const hit = src.items.filter(it => { const cx = it.x + it.w / 2, cy = it.y + it.h / 2; return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h; });
+      if (hit.length) {
+        const rows = [];
+        hit.sort((a, b) => a.y - b.y).forEach(it => { let row = rows.find(q => Math.abs(q.y - it.y) < it.h * 0.6); if (!row) rows.push(row = { y: it.y, p: [] }); row.p.push(it); });
+        return Promise.resolve(rows.map(q => { const rtl = /[؀-ۿ]/.test(q.p.map(i => i.s).join('')); q.p.sort((a, b) => rtl ? b.x - a.x : a.x - b.x); return q.p.map(i => i.s.trim()).join(' '); }).join('\n'));
+      }
+    }
+    return serial(async () => {
+      const C = src.canvas, W = C.width, H = C.height, pad = 0.004;
+      const sx = Math.max(0, (r.x - pad) * W), sy = Math.max(0, (r.y - pad) * H);
+      const sw = Math.min(W, (r.x + r.w + pad) * W) - sx, sh = Math.min(H, (r.y + r.h + pad) * H) - sy;
+      if (sw < 4 || sh < 4) return '';
+      const k = Math.min(4, Math.max(1, 70 / sh), 2400 / sw), m = 24;
+      const c = document.createElement('canvas'); c.width = Math.round(sw * k) + 2 * m; c.height = Math.round(sh * k) + 2 * m;
+      const g = c.getContext('2d', { willReadFrequently: true }); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+      g.imageSmoothingQuality = 'high'; g.drawImage(C, sx, sy, sw, sh, m, m, c.width - 2 * m, c.height - 2 * m);
+      const d = g.getImageData(0, 0, c.width, c.height), a = d.data;
+      for (let i = 0; i < a.length; i += 4) { const y = 0.299 * a[i] + 0.587 * a[i + 1] + 0.114 * a[i + 2]; a[i] = a[i + 1] = a[i + 2] = y; }
+      g.putImageData(d, 0, 0);
+      const w = await zoneWorker();
+      await w.setParameters({ tessedit_pageseg_mode: sh * k < 130 ? '7' : '6' });
+      const { data } = await w.recognize(c);
+      return data.text || '';
+    });
+  }
+  // استخراج قيمة الخانة من النص المقروء
+  const PAYMAP = [[/نقد|cash|كاش/i, 'نقدًا'], [/مدى|mada/i, 'مدى'], [/apple/i, 'Apple Pay'], [/visa|master|ائتمان|فيزا|credit\s*card/i, 'بطاقة ائتمان'], [/تحويل|transfer|bank/i, 'تحويل بنكي'], [/آجل|اجل|credit|on\s*account/i, 'آجل'], [/شيك|cheque|check/i, 'شيك']];
+  function extract(k, raw) {
+    const t = P.normDigits(raw || '').replace(/[ \t]+/g, ' ').trim(); if (!t) return '';
+    if (k === 'total' || k === 'tax_amount') {
+      const ns = P.numsIn(t).filter(o => o.n > 0 && !/^\d{1,2}%/.test(t.slice(o.i)));
+      if (!ns.length) return '';
+      const dec = ns.filter(o => /[.,]\d{2}$/.test(o.raw));
+      return Math.round((dec.length ? dec : ns).reduce((a, b) => b.n > a.n ? b : a).n * 100) / 100;
+    }
+    if (k === 'invoice_date') return P.findDate(t) || '';
+    if (k === 'vendor_tax_number') {
+      const runs = (t.match(/\d[\d ]{12,}\d/g) || []).map(s => s.replace(/ /g, ''));
+      return runs.find(s => /^(3\d{13}3|100\d{12})$/.test(s)) || runs.find(s => s.length === 15) || runs.sort((a, b) => b.length - a.length)[0] || '';
+    }
+    if (k === 'invoice_number') {
+      const c = P.invCands ? P.invCands(t.replace(/\n/g, ' ')) : [];
+      const lab = v => v.replace(/^(?:ref|reference|no|num|number|invoice|inv|bill|doc)\s*[.:#]\s*(?=[A-Za-z0-9/-]*\d)/i, '');
+      if (c.length) return lab(c.sort((a, b) => b.t.length - a.t.length)[0].t);
+      const m = t.match(/[A-Za-z0-9][A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*/g); return m ? m.sort((a, b) => b.length - a.length)[0] : '';
+    }
+    if (k === 'payment_method') { const p = PAYMAP.find(([re]) => re.test(t)); if (p) return p[1]; }
+    return t.replace(/\n+/g, ' ').replace(/^(اسم\s*)?(المورد|البائع|التاجر|الشركة|طريقة\s*الدفع|الدفع)\s*[:：-]?\s*/, '').replace(/^(vendor|seller|supplier|payment(\s*method)?)(\s*name)?\s*[:：-]?\s*/i, '').trim();
+  }
+  // تطبيق القالب على فاتورة مقروءة. يعيد عدد الخانات التي أُخذت من القالب.
+  async function applyZones(x, src) {
+    const key = zoneFor(x); if (!key || !src || !src.length) return 0;
+    let n = 0;
+    for (const [k, r] of Object.entries(zones[key].fields || {})) {
+      if (x.edited && x.edited[k]) continue;
+      const i = pgIndex(r.pg, src.length); if (i < 0) continue;
+      const v = extract(k, await readRegion(src[i], r));
+      if (!blank(v)) { if (x[k] !== v) n++; x[k] = v; (x.zsrc = x.zsrc || {})[k] = 'tpl'; }
+    }
+    return n;
+  }
+  function drawZones() {
+    const keys = Object.keys(zones).filter(k => Object.keys(zones[k].fields || {}).length);
+    $('zSec').hidden = !keys.length;
+    $('zList').innerHTML = keys.map(k => { const t = zones[k];
+      return `<div class="zc"><b>${esc(t.name || (t.vat ? 'مورد بالرقم الضريبي' : 'مورد'))}</b><small>${t.vat ? 'الرقم الضريبي ' + esc(t.vat) : 'بدون رقم ضريبي، يُعرف بالاسم'}</small>
+        <div>${Object.entries(t.fields).map(([f, r]) => `<span class="zchip">${esc(label(f))} · ${pgName(r.pg)}</span>`).join('')}</div>
+        ${zConfirm === k ? `<div class="zask" role="alert"><b>حذف قالب هذا المورد؟</b>ستعود فواتيره الجديدة للقراءة العادية، وتحتاج لتحديد الخانات من جديد.<div class="zbtns"><button class="del" data-zok="${esc(k)}">نعم، احذف</button><button data-zno="">تراجع</button></div></div>`
+          : `<div class="zbtns"><button class="del" data-zdel="${esc(k)}">حذف القالب</button></div>`}</div>`; }).join('');
+  }
+
+  // ---------- نافذة تحديد مكان الخانة ----------
+  const pk = { x: null, k: null, pages: [], src: [], rec: null, pdf: null, pg: 0, rect: null, zoom: 1, mode: 'draw', tok: 0 };
+  const pkVp = $('pkVp'), pkPaper = $('pkPaper'), pkImg = $('pkImg'), pkSel = $('pkSel'), pkPad = $('pkPad');
+  async function getRec(id, x) {
+    let rec = await IMG.get(id);
+    if (!rec && x.old) { const u = await OLD.get(id); if (u && u.length) rec = { pages: u.map(v => typeof v === 'string' ? v : URL.createObjectURL(v)) }; }
+    return rec;
+  }
+  async function pageSrc(i) { // نسخة عالية الدقة من الصفحة للقراءة (تُحمّل عند الحاجة فقط)
+    if (pk.src[i]) return pk.src[i];
+    const b = pk.rec && pk.rec.blob;
+    let s = null;
+    try {
+      if (b && (b.type === 'application/pdf' || /\.pdf$/i.test(b.name || '')) && window.pdfjsLib) {
+        pk.pdf = pk.pdf || await pdfjsLib.getDocument({ data: await b.arrayBuffer() }).promise;
+        s = await renderPdfPage(pk.pdf, i + 1);
+      } else if (b && i === 0 && /^image\//.test(b.type || 'image/')) {
+        const u = URL.createObjectURL(b); try { s = { canvas: toCanvas(await loadImg(u), 2400) }; } finally { URL.revokeObjectURL(u); }
+      }
+    } catch (e) { console.warn(e); }
+    if (!s) s = { canvas: toCanvas(await loadImg(pk.pages[i]), 2400) };
+    return (pk.src[i] = s);
+  }
+  async function openPick(id, k) {
+    const x = list.find(y => y.id === id); if (!x) return;
+    const rec = await getRec(id, x);
+    if (!rec || !rec.pages || !rec.pages.length) { toast('لا توجد صورة محفوظة لهذه الفاتورة. أعد رفعها لتحديد الأماكن.'); return; }
+    Object.assign(pk, { x, k, rec, pages: rec.pages, src: [], pdf: null, rect: null, mode: 'draw', last: document.activeElement });
+    const key = zoneFor(x), z = key && zones[key].fields[k];
+    $('pkT').textContent = 'حدد مكان: ' + label(k);
+    $('pkP').textContent = 'كبّر الصفحة وحرّكها حتى ترى ' + label(k) + ' بوضوح، ثم اسحب مستطيلًا حول القيمة. لا يضر أن يدخل معها اسم الخانة.';
+    $('pkRo').hidden = true; $('pkOk').disabled = true; $('pkVal').value = '';
+    const canSave = !!(vendorKey(x) || key);
+    $('pkSaveL').hidden = !canSave; $('pkSave').checked = true;
+    $('pkSaveT').textContent = 'احفظ هذا المكان لكل فواتير «' + (x.vendor_name || 'هذا المورد') + '»';
+    $('pkNo').textContent = canSave ? '' : 'لن يُحفظ المكان قالبًا لأن اسم المورد ورقمه الضريبي غير معروفين. أكملهما أولًا ليُحفظ.';
+    $('pk').hidden = false; document.body.style.overflow = 'hidden';
+    setMode('draw');
+    await showPg(z ? Math.max(0, pgIndex(z.pg, pk.pages.length)) : 0);
+    pkVp.focus({ preventScroll: true });
+  }
+  function closePick() { $('pk').hidden = true; document.body.style.overflow = ''; pk.tok++; pk.src = []; pk.pdf = null; if (pk.last) pk.last.focus(); }
+  function showPg(i) {
+    const n = pk.pages.length; pk.pg = Math.max(0, Math.min(n - 1, i));
+    pk.rect = null; pkSel.hidden = true; $('pkRo').hidden = true; $('pkOk').disabled = true;
+    $('pkPg').textContent = n > 1 ? `صفحة ${pk.pg + 1} من ${n}` : ''; $('pkPrev').hidden = $('pkNext').hidden = n < 2;
+    $('pkPrev').disabled = pk.pg === 0; $('pkNext').disabled = pk.pg === n - 1;
+    const key = zoneFor(pk.x), z = key && zones[key].fields[pk.k], old = $('pkOld');
+    old.hidden = !(z && pgIndex(z.pg, n) === pk.pg);
+    if (!old.hidden) Object.assign(old.style, { left: z.x * 100 + '%', top: z.y * 100 + '%', width: z.w * 100 + '%', height: z.h * 100 + '%' });
+    return new Promise(ok => { pkImg.onload = () => { setZoom(1); pkVp.scrollTop = 0; ok(); }; pkImg.onerror = ok; pkImg.src = pk.pages[pk.pg]; });
+  }
+  // التكبير والتحريك
+  const ZMIN = 1, ZMAX = 6, RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fitW = () => { const a = (pkImg.naturalWidth || 1) / (pkImg.naturalHeight || 1); return Math.max(160, Math.min(pkVp.clientWidth - 24, (pkVp.clientHeight - 24) * a)); };
+  function setZoom(z, cx, cy) {
+    z = Math.max(ZMIN, Math.min(ZMAX, z));
+    const a = pkPaper.getBoundingClientRect();
+    if (cx == null) { const v = pkVp.getBoundingClientRect(); cx = v.left + v.width / 2; cy = v.top + v.height / 2; }
+    const fx = a.width ? (cx - a.left) / a.width : .5, fy = a.height ? (cy - a.top) / a.height : .5;
+    pk.zoom = z; pkPaper.style.width = fitW() * z + 'px';
+    const b = pkPaper.getBoundingClientRect();
+    pkVp.scrollLeft += b.left + fx * b.width - cx; pkVp.scrollTop += b.top + fy * b.height - cy;
+    $('pkZ').textContent = Math.round(z * 100) + '%'; $('pkOut').disabled = z <= ZMIN; $('pkIn').disabled = z >= ZMAX;
+  }
+  let zAnim = 0, glide = 0, rafId = 0, job = null, spaceHeld = false;
+  const frame = fn => { job = fn; if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; const f = job; job = null; if (f) f(); }); };
+  function animZoom(to, cx, cy) {
+    to = Math.max(ZMIN, Math.min(ZMAX, to)); cancelAnimationFrame(zAnim);
+    if (RM) { setZoom(to, cx, cy); return; }
+    const from = pk.zoom, t0 = performance.now();
+    const step = t => { const q = Math.min(1, (t - t0) / 170), e = 1 - (1 - q) ** 3; setZoom(from + (to - from) * e, cx, cy); if (q < 1) zAnim = requestAnimationFrame(step); };
+    zAnim = requestAnimationFrame(step);
+  }
+  function startGlide(vx, vy) {
+    cancelAnimationFrame(glide); if (RM) return; let last = performance.now();
+    const step = t => { const dt = Math.min(32, t - last); last = t; pkVp.scrollLeft -= vx * dt; pkVp.scrollTop -= vy * dt; const f = Math.pow(.94, dt / 16); vx *= f; vy *= f; if (Math.hypot(vx, vy) > .02) glide = requestAnimationFrame(step); };
+    glide = requestAnimationFrame(step);
+  }
+  const effMode = () => spaceHeld ? 'move' : pk.mode;
+  function setMode(m) { pk.mode = m; $('pkDraw').setAttribute('aria-pressed', m === 'draw'); $('pkMove').setAttribute('aria-pressed', m === 'move'); pkPad.classList.toggle('move', effMode() === 'move'); }
+  {
+    const pts = new Map(); let st = null, pan = null, pinch = null, hold = false, tmp = null, lastPt = null, edge = 0;
+    const pt = c => { const b = pkPad.getBoundingClientRect(); return { x: Math.max(0, Math.min(1, (c.x - b.left) / b.width)), y: Math.max(0, Math.min(1, (c.y - b.top) / b.height)) }; };
+    const two = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+    const showSel = r => { pkSel.hidden = false; Object.assign(pkSel.style, { left: r.x * 100 + '%', top: r.y * 100 + '%', width: r.w * 100 + '%', height: r.h * 100 + '%' }); };
+    const upd = p => { tmp = { x: Math.min(st.x, p.x), y: Math.min(st.y, p.y), w: Math.abs(p.x - st.x), h: Math.abs(p.y - st.y) }; showSel(tmp); };
+    function edgeLoop() { // عند الاقتراب من حافة العارض أثناء الرسم تتحرك الصفحة تلقائيًا
+      if (!st || !lastPt) { edge = 0; return; }
+      const v = pkVp.getBoundingClientRect(), M = 36, sp = d => d < M ? (M - d) / M * 14 : 0;
+      const dx = sp(lastPt.x - v.left) - sp(v.right - lastPt.x), dy = sp(lastPt.y - v.top) - sp(v.bottom - lastPt.y);
+      if (dx || dy) { pkVp.scrollLeft -= dx; pkVp.scrollTop -= dy; upd(pt(lastPt)); }
+      edge = requestAnimationFrame(edgeLoop);
+    }
+    pkPad.addEventListener('pointerdown', e => {
+      cancelAnimationFrame(glide); cancelAnimationFrame(zAnim);
+      pkPad.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) { if (st) { st = null; cancelAnimationFrame(edge); if (pk.rect) showSel(pk.rect); else pkSel.hidden = true; } pan = null; const t = two(); pinch = { d: t.d, z: pk.zoom, x: t.x, y: t.y }; hold = true; return; }
+      if (pts.size > 2 || hold) return;
+      e.preventDefault();
+      if (effMode() === 'draw' && e.button === 0) { st = pt({ x: e.clientX, y: e.clientY }); lastPt = { x: e.clientX, y: e.clientY }; upd(st); edge = requestAnimationFrame(edgeLoop); }
+      else pan = { x: e.clientX, y: e.clientY, l: pkVp.scrollLeft, t: pkVp.scrollTop, h: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }] };
+    });
+    pkPad.addEventListener('pointermove', e => {
+      if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && pts.size === 2) { frame(() => { if (!pinch || pts.size < 2) return; const t = two(); setZoom(pinch.z * t.d / pinch.d, t.x, t.y); pkVp.scrollLeft -= t.x - pinch.x; pkVp.scrollTop -= t.y - pinch.y; pinch.x = t.x; pinch.y = t.y; }); return; }
+      if (st) { lastPt = { x: e.clientX, y: e.clientY }; frame(() => { if (st) upd(pt(lastPt)); }); }
+      else if (pan) { const c = { x: e.clientX, y: e.clientY }; pan.h.push({ ...c, t: e.timeStamp }); if (pan.h.length > 6) pan.h.shift(); frame(() => { if (!pan) return; pkVp.scrollLeft = pan.l - (c.x - pan.x); pkVp.scrollTop = pan.t - (c.y - pan.y); }); }
+    });
+    const end = e => {
+      pts.delete(e.pointerId);
+      if (pinch) { if (pts.size < 2) pinch = null; if (!pts.size) hold = false; return; }
+      if (!pts.size) hold = false;
+      if (pan) { const h = pan.h, a = h[0], b = h[h.length - 1], dt = b.t - a.t; pan = null; if (e.type === 'pointerup' && dt > 0 && e.timeStamp - b.t < 80) startGlide((b.x - a.x) / dt, (b.y - a.y) / dt); return; }
+      if (!st) return;
+      cancelAnimationFrame(edge); upd(pt({ x: e.clientX, y: e.clientY })); const r = tmp; st = null; lastPt = null;
+      if (r.w < 0.012 || r.h < 0.006) { if (pk.rect) showSel(pk.rect); else pkSel.hidden = true; return; }
+      pk.rect = { ...r, pg: pgFor(pk.k, pk.pg, pk.pages.length) };
+      readPicked();
+    };
+    pkPad.addEventListener('pointerup', end); pkPad.addEventListener('pointercancel', end);
+    pkPad.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  async function readPicked() {
+    const tok = ++pk.tok, r = pk.rect, k = pk.k;
+    $('pkRo').hidden = false; $('pkRoS').textContent = 'جارٍ قراءة المنطقة…'; $('pkVal').value = ''; $('pkOk').disabled = true; $('pkRaw').textContent = '';
+    try {
+      const raw = await readRegion(await pageSrc(pk.pg), r); if (tok !== pk.tok) return;
+      const v = extract(k, raw);
+      $('pkVal').value = blank(v) ? '' : (typeof v === 'number' ? v.toFixed(2) : v);
+      $('pkRoS').textContent = blank(v) ? 'لم أجد قيمة واضحة داخل المستطيل. ارسمه مرة أخرى، أو اكتب القيمة هنا:' : 'القيمة المقروءة (يمكنك تصحيحها):';
+      $('pkRaw').textContent = raw.trim() ? 'النص في المنطقة: ' + raw.replace(/\s+/g, ' ').trim().slice(0, 140) : '';
+    } catch (e) { console.error(e); if (tok !== pk.tok) return; $('pkRoS').textContent = 'تعذّرت قراءة المنطقة. اكتب القيمة هنا:'; }
+    $('pkOk').disabled = !$('pkVal').value.trim();
+  }
+  $('pkVal').addEventListener('input', () => { $('pkOk').disabled = !$('pkVal').value.trim() || !pk.rect; });
+  $('pkOk').onclick = () => {
+    const x = pk.x, k = pk.k, r = pk.rect; if (!x || !r) return;
+    let v = $('pkVal').value.trim();
+    if (k === 'total' || k === 'tax_amount') v = n2(v);
+    if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\D/g, '');
+    if (k === 'invoice_date') v = P.findDate(v) || v;
+    const oldKey = zoneFor(x);
+    x[k] = v; (x.edited = x.edited || {})[k] = 1;
+    let saved = false;
+    if (!$('pkSaveL').hidden && $('pkSave').checked) {
+      const key = vendorKey(x) || oldKey;
+      if (key) {
+        if (oldKey && oldKey !== key && zones[oldKey]) { zones[key] = { ...zones[oldKey], fields: { ...zones[oldKey].fields, ...((zones[key] || {}).fields || {}) } }; delete zones[oldKey]; }
+        const t = zones[key] = zones[key] || { fields: {} };
+        Object.assign(t, { name: x.vendor_name || t.name || '', vat: vatOf(x) || t.vat || '', nameKey: nameKey(x.vendor_name) || t.nameKey || '', at: new Date().toISOString() });
+        t.fields[k] = { pg: r.pg, x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) };
+        saveZones(); saved = true;
+      }
+    }
+    (x.zsrc = x.zsrc || {})[k] = saved ? 'tpl' : 'pick';
+    save(); closePick(); draw();
+    toast(saved ? `حُفظ مكان «${label(k)}» لفواتير ${x.vendor_name || 'المورد'} القادمة` : `تم تحديث «${label(k)}»`);
+  };
+  $('pkCancel').onclick = closePick;
+  $('pkDraw').onclick = () => setMode('draw'); $('pkMove').onclick = () => setMode('move');
+  $('pkIn').onclick = () => animZoom(pk.zoom * 1.4); $('pkOut').onclick = () => animZoom(pk.zoom / 1.4); $('pkFit').onclick = () => animZoom(1);
+  $('pkPrev').onclick = () => showPg(pk.pg - 1); $('pkNext').onclick = () => showPg(pk.pg + 1);
+  pkVp.addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); cancelAnimationFrame(zAnim); const z = pk.zoom * Math.exp(-e.deltaY * .0025), x = e.clientX, y = e.clientY; frame(() => setZoom(z, x, y)); }, { passive: false });
+  new ResizeObserver(() => { if (!$('pk').hidden) pkPaper.style.width = fitW() * pk.zoom + 'px'; }).observe(pkVp);
+  document.addEventListener('keydown', e => {
+    if ($('pk').hidden) return;
+    if (e.key === 'Escape') { closePick(); return; }
+    if (e.target.closest('input')) return;
+    if (e.code === 'Space' && !e.target.closest('button')) { e.preventDefault(); if (!spaceHeld) { spaceHeld = true; setMode(pk.mode); } return; }
+    if (e.key === 'PageDown') { e.preventDefault(); showPg(pk.pg + 1); }
+    else if (e.key === 'PageUp') { e.preventDefault(); showPg(pk.pg - 1); }
+    else if (e.target === pkVp) {
+      const m = { ArrowLeft: [-60, 0], ArrowRight: [60, 0], ArrowUp: [0, -60], ArrowDown: [0, 60] }[e.key];
+      if (m) { e.preventDefault(); pkVp.scrollBy({ left: m[0], top: m[1], behavior: RM ? 'auto' : 'smooth' }); }
+      else if (e.key === '+' || e.key === '=') { e.preventDefault(); animZoom(pk.zoom * 1.25); }
+      else if (e.key === '-') { e.preventDefault(); animZoom(pk.zoom / 1.25); }
+      else if (e.key === '0') animZoom(1);
+    }
+  });
+  document.addEventListener('keyup', e => { if (e.code === 'Space' && spaceHeld) { spaceHeld = false; setMode(pk.mode); } });
+
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });
   draw();
-  window.__invoiceApp = { addFiles, get busy() { return busy || queue.length > 0; }, get list() { return list; } };
+  window.__invoiceApp = { addFiles, zones: () => zones, extract, get busy() { return busy || queue.length > 0; }, get list() { return list; } };
 })();
