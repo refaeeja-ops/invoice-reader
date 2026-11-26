@@ -197,6 +197,10 @@ button,.btn{touch-action:manipulation}
 .usn li b{font-family:"Readex Pro",sans-serif;white-space:nowrap}.usn li small{font-family:"IBM Plex Sans Arabic",sans-serif;font-weight:400;color:var(--mute)}
 .usn li.ok b{color:var(--ok)}.usn li.bad b{color:var(--stamp)}
 .upsum details{font-size:14px}.upsum summary{cursor:pointer;color:var(--blue)}.upsum details ul{margin:4px 0 0;padding-inline-start:20px;max-height:200px;overflow:auto;overflow-wrap:anywhere}
+.wipe h2{font-size:20px}.wipe .note{color:var(--mute);font-size:14px;margin:6px 0 10px}
+.wpbox{border:2px solid var(--stamp);border-radius:8px;padding:12px;display:grid;gap:8px;background:var(--warnbg)}
+.wpbox>b{color:var(--stamp);font-size:17px}.wpbox p{margin:0;font-size:14px}
+.wpbox input{font:inherit;font-size:18px;letter-spacing:.05em;direction:ltr;text-align:center;border:1.5px solid var(--line);border-radius:6px;padding:7px 9px;min-height:44px;max-width:220px;background:var(--paper);color:var(--ink)}
 @media (max-width:560px){.grid{grid-template-columns:1fr 1fr}.f-vendor_name,.f-vendor_tax_number{grid-column:1/-1}.inv footer button{flex:1}}
 </style>
 </head>
@@ -231,6 +235,12 @@ button,.btn{touch-action:manipulation}
   <section class="slip" id="trSec" hidden aria-labelledby="trT">
     <div class="lhead"><h2 id="trT">الفواتير المحذوفة <span id="trCount"></span></h2><span class="note">لا تدخل في ملف Excel. افتح أي فاتورة لمراجعة بياناتها وصورتها، أو استرجعها للقائمة.</span></div>
     <ul id="trList"></ul>
+  </section>
+  <section class="slip wipe" aria-labelledby="wpT">
+    <h2 id="wpT">تصدير وحذف جميع الفواتير</h2>
+    <p class="note">لبدء دفعة جديدة: يُنزَّل ملف Excel بكل الفواتير وبياناتها، ثم تُحذف كلها من التطبيق بعد التأكيد والرمز.</p>
+    <button type="button" class="del" id="wpBtn">🗑 تصدير وحذف جميع الفواتير</button>
+    <div class="wpbox" id="wpBox" hidden role="alert"></div>
   </section>
   <p style="text-align:center;margin:0"><a href="full.html" style="color:var(--mute);font-size:13px">النسخة الكاملة السابقة</a> <small style="color:var(--mute)">· الإصدار <span id="ver"></span></small></p>
 </main>
@@ -275,7 +285,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260838'; window.APP_VERSION = V;
+(function () { var V = '202611260843'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -283,11 +293,11 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611260838"></script>
-<script src="parse.js?v=202611260838"></script>
-<script src="export.js?v=202611260838"></script>
-<script src="digits.js?v=202611260838"></script>
-<script src="simple.js?v=202611260838"></script>
+<script src="config.js?v=202611260843"></script>
+<script src="parse.js?v=202611260843"></script>
+<script src="export.js?v=202611260843"></script>
+<script src="digits.js?v=202611260843"></script>
+<script src="simple.js?v=202611260843"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

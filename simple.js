@@ -209,7 +209,7 @@
     let p = null;
     const db = () => p || (p = new Promise((ok, no) => { try { const r = indexedDB.open(name, 1); r.onupgradeneeded = () => r.result.createObjectStore(store); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); } catch (e) { no(e); } }));
     const tx = async (mode, fn) => { const d = await db(); return new Promise((ok, no) => { const t = d.transaction(store, mode), r = fn(t.objectStore(store)); t.oncomplete = () => ok(r && r.result); t.onerror = () => no(t.error); }); };
-    return { put: (k, v) => tx('readwrite', s => s.put(v, k)).catch(() => { }), get: k => tx('readonly', s => s.get(k)).catch(() => null), del: k => tx('readwrite', s => s.delete(k)).catch(() => { }) };
+    return { put: (k, v) => tx('readwrite', s => s.put(v, k)).catch(() => { }), get: k => tx('readonly', s => s.get(k)).catch(() => null), del: k => tx('readwrite', s => s.delete(k)).catch(() => { }), clear: () => tx('readwrite', s => s.clear()).catch(() => { }) };
   };
   const IMG = DB('invoice-simple-files', 'f'), OLD = DB('invoice-reader-img', 'img');
 
@@ -301,7 +301,7 @@
     $('sum').textContent = list.length ? (nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة') : '';
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
       + (list.map(x => card(x)).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
-    drawZones(); drawTrash(); rvAllLabel(); mountViewers();
+    drawZones(); drawTrash(); drawWipe(); rvAllLabel(); mountViewers();
     if (keepWhy) { const t = $('dr-' + delAsk), ok = document.querySelector(`[data-delok="${CSS.escape(delAsk)}"]`); if (t) t.value = keepWhy; if (ok) ok.disabled = !keepWhy.trim(); }
   }
   function drawTrash() {
@@ -506,17 +506,60 @@
   // ---------- Excel ----------
   const XL = [['invoice_number', 'رقم الفاتورة', 18], ['invoice_date', 'تاريخ الفاتورة', 14], ['total', 'المبلغ الإجمالي', 16], ['tax_amount', 'مبلغ الضريبة', 14],
     ['vendor_name', 'اسم المورد', 32], ['vendor_tax_number', 'الرقم الضريبي', 20], ['payment_method', 'طريقة الدفع', 14], ['project', 'المشروع', 12], ['note', 'ملاحظات', 50], ['file', 'الملف', 30]];
+  const xlCell = (x, k) => {
+    if (k === 'note') return noteOf(x);
+    if (k === 'total' || k === 'tax_amount') { const v = n2(x[k]); return typeof v === 'number' ? v : (v || ''); }
+    return x[k] || '';
+  };
+  function download(blob, name) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  }
   $('xl').onclick = () => {
-    const rows = [XL.map(c => c[1]), ...list.map(x => XL.map(([k]) => {
-      if (k === 'note') return noteOf(x);
-      if (k === 'total' || k === 'tax_amount') { const v = n2(x[k]); return typeof v === 'number' ? v : (v || ''); }
-      return x[k] || '';
-    }))];
-    const blob = X.xlsx([{ name: 'الفواتير', rows, widths: XL.map(c => c[2]) }]);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `الفواتير-${new Date().toISOString().slice(0, 10)}.xlsx`;
-    document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    const rows = [XL.map(c => c[1]), ...list.map(x => XL.map(([k]) => xlCell(x, k)))];
+    download(X.xlsx([{ name: 'الفواتير', rows, widths: XL.map(c => c[2]) }]), `الفواتير-${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast('جارٍ تنزيل ملف Excel');
   };
+
+  // ---------- تصدير كل الفواتير ثم حذفها (يطلب تأكيدًا ورمزًا) ----------
+  const WIPE_CODE = '100-200';
+  const wipeCodeOk = v => P.normDigits(String(v || '')).replace(/\s/g, '').replace(/[‐-―−ـ]/g, '-') === WIPE_CODE;
+  const stamp = s => { if (!s) return ''; const d = new Date(s); return isNaN(d) ? s : d.toISOString().slice(0, 16).replace('T', ' '); };
+  const XL2 = [...XL.slice(0, -1), ['file', 'الملف', 30], ['at', 'وقت القراءة', 17], ['edited', 'خانات عُدّلت يدويًا', 26], ['tpl', 'خانات من قالب المورد', 26]];
+  const xlFull = (x, k) => k === 'at' ? stamp(x.at) : k === 'edited' ? Object.keys(x.edited || {}).map(label).join('، ')
+    : k === 'tpl' ? Object.keys(x.zsrc || {}).filter(f => x.zsrc[f] !== 'pick').map(label).join('، ') : xlCell(x, k);
+  function wipeBook() {
+    const sh = [{ name: 'الفواتير', rows: [XL2.map(c => c[1]), ...list.map(x => XL2.map(([k]) => xlFull(x, k)))], widths: XL2.map(c => c[2]) }];
+    if (trash.length) { const T = [...XL2, ['delReason', 'سبب الحذف', 30], ['deletedAt', 'وقت الحذف', 17]];
+      sh.push({ name: 'المحذوفة', rows: [T.map(c => c[1]), ...trash.map(x => T.map(([k]) => k === 'delReason' ? x.delReason || '' : k === 'deletedAt' ? stamp(x.deletedAt) : xlFull(x, k)))], widths: T.map(c => c[2]) }); }
+    return X.xlsx(sh);
+  }
+  function drawWipe() {
+    const n = list.length, m = trash.length, el = $('wpBox');
+    $('wpBtn').disabled = !n && !m; $('wpBtn').hidden = !el.hidden;
+    if (el.hidden) return;
+    el.innerHTML = `<b>تصدير وحذف جميع الفواتير؟</b>
+      <p>سيُنزَّل ملف Excel فيه ${n} فاتورة${m ? ` و${m} فاتورة محذوفة (في ورقة مستقلة)` : ''} بكل بياناتها، ثم تُحذف كل الفواتير وصورها من هذا المتصفح. قوالب الموردين وقائمة المشاريع تبقى كما هي.</p>
+      <label for="wpCode">اكتب رمز التأكيد للمتابعة</label><input id="wpCode" inputmode="numeric" autocomplete="off" placeholder="الرمز">
+      <div class="zbtns"><button type="button" class="del" id="wpGo" disabled>صدّر إلى Excel واحذف الكل</button><button type="button" id="wpNo">تراجع</button></div>`;
+  }
+  $('wpBtn').onclick = () => { if (busy || queue.length) { toast('انتظر حتى تنتهي قراءة الفواتير الجارية'); return; } $('wpBox').hidden = false; drawWipe(); $('wpCode').focus(); };
+  document.addEventListener('input', e => { if (e.target.id === 'wpCode') $('wpGo').disabled = !wipeCodeOk(e.target.value); });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'wpNo') { $('wpBox').hidden = true; drawWipe(); $('wpBtn').focus(); }
+    if (b.id === 'wpGo') {
+      if (!wipeCodeOk($('wpCode').value)) { toast('الرمز غير صحيح'); return; }
+      if (busy || queue.length) { toast('انتظر حتى تنتهي قراءة الفواتير الجارية'); return; }
+      let blob; try { blob = wipeBook(); } catch (er) { console.error(er); toast('تعذّر إنشاء ملف Excel، لم يُحذف شيء'); return; }
+      download(blob, `all-invoices-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}.xlsx`);
+      const oldL = list.slice(), oldT = trash.slice();
+      list.length = 0; trash.length = 0; for (const k in rrS) delete rrS[k]; upSum = null; drawSum();
+      save(); saveTrash(); $('wpBox').hidden = true; draw();
+      undoBar(`صُدّرت ${oldL.length + oldT.length} فاتورة إلى Excel وحُذفت`, () => { list.push(...oldL); trash.push(...oldT); save(); saveTrash(); draw(); },
+        () => { for (const k in rvPages) delete rvPages[k]; IMG.clear(); });
+    }
+  });
 
   // ---------- شريط التراجع ----------
   function undoBar(msg, undo, commit) {
