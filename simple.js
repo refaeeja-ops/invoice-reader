@@ -203,7 +203,7 @@
   const TK = 'invoice-simple-trash-v1';
   let trash; try { trash = JSON.parse(localStorage.getItem(TK)) || []; } catch { trash = []; }
   const saveTrash = () => { try { localStorage.setItem(TK, JSON.stringify(trash)); } catch { toast('مساحة المتصفح ممتلئة'); } };
-  const trOpen = {}; let trAsk = null;
+  const trOpen = {}; let trAsk = null, delAsk = null;
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { toast('مساحة المتصفح ممتلئة: نزّل ملف Excel ثم احذف الفواتير القديمة'); } };
   const DB = (name, store) => {
     let p = null;
@@ -285,10 +285,15 @@
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
       ${rrHtml(x)}${rvHtml(x)}
-      <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button><button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}">حذف الفاتورة</button></footer>
+      <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button><button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}"${delAsk === x.id ? ' hidden' : ''}>حذف الفاتورة</button></footer>
+      ${delAsk === x.id ? `<div class="delask" role="alert"><label for="dr-${esc(x.id)}"><b>سبب حذف هذه الفاتورة (إلزامي)</b></label>
+        <textarea id="dr-${esc(x.id)}" data-delwhy="${esc(x.id)}" rows="2" placeholder="مثال: فاتورة مكررة، أو ليست لنا"></textarea>
+        <small>تنتقل الفاتورة إلى «الفواتير المحذوفة» أسفل الصفحة مع السبب، ويمكن استرجاعها.</small>
+        <div class="zbtns"><button type="button" class="del" data-delok="${esc(x.id)}" disabled>احذف الفاتورة</button><button type="button" data-delno="">تراجع</button></div></div>` : ''}
     </article>`;
   }
   function draw() {
+    const dw = delAsk && $('dr-' + delAsk), keepWhy = dw ? dw.value : '';
     const pend = Object.values(live).filter(v => !v.reread);
     $('count').textContent = list.length ? `(${list.length})` : '';
     $('xl').disabled = !list.length; $('xl').textContent = `تنزيل ملف Excel${list.length ? ' (' + list.length + ')' : ''}`;
@@ -297,12 +302,13 @@
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
       + (list.map(card).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
     drawZones(); drawTrash(); rvAllLabel(); mountViewers();
+    if (keepWhy) { const t = $('dr-' + delAsk), ok = document.querySelector(`[data-delok="${CSS.escape(delAsk)}"]`); if (t) t.value = keepWhy; if (ok) ok.disabled = !keepWhy.trim(); }
   }
   function drawTrash() {
     $('trSec').hidden = !trash.length; $('trCount').textContent = trash.length ? `(${trash.length})` : '';
     const d = s => { try { return new Date(s).toLocaleString('ar-SA-u-nu-latn', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return ''; } };
     $('trList').innerHTML = trash.map(x => { const id = esc(x.id), o = !!trOpen[x.id];
-      return `<li><div class="trrow"><span class="trn"><b>📄 ${esc(x.file || x.file_name || 'بدون اسم')}</b><small>${esc(x.vendor_name || 'مورد غير معروف')}${x.total !== '' && x.total != null ? ' · ' + esc(money(x.total)) : ''}${x.deletedAt ? ' · حُذفت ' + esc(d(x.deletedAt)) : ''}</small></span>
+      return `<li><div class="trrow"><span class="trn"><b>📄 ${esc(x.file || x.file_name || 'بدون اسم')}</b><small>${esc(x.vendor_name || 'مورد غير معروف')}${x.total !== '' && x.total != null ? ' · ' + esc(money(x.total)) : ''}${x.deletedAt ? ' · حُذفت ' + esc(d(x.deletedAt)) : ''}</small>${x.delReason ? `<span class="trwhy">سبب الحذف: ${esc(x.delReason)}</span>` : ''}</span>
         <button type="button" data-trview="${id}" aria-expanded="${o}">${o ? 'إغلاق' : 'مراجعة'}</button><button type="button" data-trback="${id}">↩ استرجاع</button><button type="button" class="del" data-trdel="${id}">حذف نهائي</button>
         ${trAsk === x.id ? `<div class="trask" role="alert"><b>حذف هذه الفاتورة نهائيًا؟</b>ستُحذف بياناتها وصورتها من المتصفح ولا تظهر هنا بعد ذلك.<div class="zbtns"><button type="button" class="del" data-trok="${id}">نعم، احذف نهائيًا</button><button type="button" data-trno="">تراجع</button></div></div>` : ''}</div>
         ${o ? card(x, true) : ''}</li>`; }).join('');
@@ -322,6 +328,7 @@
     $('sum').textContent = nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة';
   }
   document.addEventListener('input', e => {
+    if (e.target.dataset.delwhy) { const ok = document.querySelector(`[data-delok="${CSS.escape(e.target.dataset.delwhy)}"]`); if (ok) ok.disabled = !e.target.value.trim(); return; }
     const el = e.target, id = el.dataset.id, k = el.dataset.k; if (!id || !k) return;
     const x = list.find(y => y.id === id); if (!x) return;
     let v = el.value.trim();
@@ -333,9 +340,15 @@
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.del) {
       const x = list.find(y => y.id === b.dataset.del); if (!x) return;
-      if (!confirm(`حذف فاتورة ${x.vendor_name || ''} رقم ${x.invoice_number || '—'}؟`)) return;
+      delAsk = x.id; draw(); const t = $('dr-' + x.id); if (t) { t.focus({ preventScroll: true }); t.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); }
+    }
+    if (b.dataset.delno !== undefined) { const id = delAsk; delAsk = null; draw(); const d = document.querySelector(`[data-del="${CSS.escape(id || '')}"]`); if (d) d.focus({ preventScroll: true }); }
+    if (b.dataset.delok) {
+      const x = list.find(y => y.id === b.dataset.delok); if (!x) return;
+      const why = ($('dr-' + x.id) || {}).value; if (!why || !why.trim()) { const t = $('dr-' + x.id); if (t) t.focus(); return; }
+      x.delReason = why.trim(); delAsk = null;
       const i = list.indexOf(x); list.splice(i, 1); x.deletedAt = new Date().toISOString(); trash.unshift(x); delete rrS[x.id]; save(); saveTrash(); draw();
-      undoBar(`نُقلت الفاتورة إلى «الفواتير المحذوفة» أسفل الصفحة`, () => { trash.splice(trash.indexOf(x), 1); delete x.deletedAt; list.splice(i, 0, x); save(); saveTrash(); draw(); }, () => { });
+      undoBar(`نُقلت الفاتورة إلى «الفواتير المحذوفة» أسفل الصفحة`, () => { trash.splice(trash.indexOf(x), 1); delete x.deletedAt; delete x.delReason; list.splice(i, 0, x); save(); saveTrash(); draw(); }, () => { });
     }
     if (b.dataset.view) view(b.dataset.view);
     if (b.dataset.pick) openPick(b.dataset.pick, b.dataset.pk);
@@ -350,7 +363,7 @@
     if (b.dataset.trview) { const id = b.dataset.trview; trOpen[id] = !trOpen[id]; if (trOpen[id]) rv.open[id] = true; draw(); }
     if (b.dataset.trback) {
       const x = trash.find(y => y.id === b.dataset.trback); if (!x) return;
-      trash.splice(trash.indexOf(x), 1); delete x.deletedAt; delete trOpen[x.id]; list.unshift(x); save(); saveTrash(); draw();
+      trash.splice(trash.indexOf(x), 1); delete x.deletedAt; delete x.delReason; delete trOpen[x.id]; list.unshift(x); save(); saveTrash(); draw();
       toast('استُرجعت الفاتورة إلى القائمة'); const c = $('c-' + x.id); if (c) c.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' });
     }
     if (b.dataset.trdel) { trAsk = b.dataset.trdel; draw(); const n = document.querySelector('[data-trno]'); if (n) n.focus(); }
