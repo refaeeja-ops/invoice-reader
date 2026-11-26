@@ -102,6 +102,8 @@ function onOpen() {
     .addItem('عرض المستخدمين المسموح لهم', 'listUsers')
     .addItem('إيقاف مستخدم', 'removeUser')
     .addSeparator()
+    .addItem('تعبئة الرقم الضريبي (VATID) في InvoiceT', 'fillVatIds')
+    .addSeparator()
     .addItem('طريقة الإعداد', 'showHelp')
     .addToUi();
 }
@@ -140,6 +142,27 @@ function removeUser() {
   const u = users_(), email = normEmail_(r.getResponseText());
   if (!u[email]) { ui.alert('هذا البريد غير موجود في القائمة'); return; }
   delete u[email]; saveUsers_(u); ui.alert('أُوقف ' + email + '. لن يستطيع التحديث بعد الآن.');
+}
+// يملأ خانات VATID الفارغة في InvoiceT من SuppliersT حسب SupID. لا يضيف صفوفًا ولا يغيّر قيمة موجودة.
+function fillVatIds() {
+  const ui = SpreadsheetApp.getUi(), ss = SpreadsheetApp.getActiveSpreadsheet();
+  const invSh = sheet_(ss, 'InvoiceT'), supSh = sheet_(ss, 'SuppliersT');
+  if (!invSh || !supSh) { ui.alert('لم أجد ورقة InvoiceT أو SuppliersT'); return; }
+  const sup = values_(supSh), sh = sup[0].map(str_), si = sh.indexOf('SupID'), sv = sh.findIndex(h => h.toLowerCase() === 'vatid');
+  if (si < 0 || sv < 0) { ui.alert('ورقة SuppliersT يجب أن تحتوي العمودين SupID و VATID'); return; }
+  const vat = {}; sup.slice(1).forEach(r => { const id = str_(r[si]), v = str_(r[sv]).replace(/\D/g, ''); if (id && v) vat[id] = v; });
+  const inv = values_(invSh); if (inv.length < 2) { ui.alert('لا توجد فواتير في InvoiceT'); return; }
+  const ih = inv[0].map(str_); ensureCol_(invSh, ih, 'VATID');
+  const ii = ih.indexOf('SupID'), iv = ih.indexOf('VATID');
+  if (ii < 0) { ui.alert('ورقة InvoiceT لا تحتوي العمود SupID'); return; }
+  const col = inv.slice(1).map(r => [iv < r.length ? r[iv] : '']);
+  let filled = 0, missing = 0, kept = 0;
+  inv.slice(1).forEach((r, k) => {
+    if (str_(col[k][0])) { kept++; return; }
+    const v = vat[str_(r[ii])]; if (v) { col[k][0] = v; filled++; } else if (str_(r[ii])) missing++;
+  });
+  const rg = invSh.getRange(2, iv + 1, col.length, 1); rg.setNumberFormat('@'); rg.setValues(col);
+  ui.alert('تعبئة الرقم الضريبي', 'عُبّئت ' + filled + ' فاتورة.\nبقيت كما هي (فيها رقم مسبقًا): ' + kept + '.\nموردها بلا رقم ضريبي في SuppliersT: ' + missing + '.', ui.ButtonSet.OK);
 }
 function showHelp() {
   SpreadsheetApp.getUi().alert('طريقة الإعداد (مرة واحدة)',
