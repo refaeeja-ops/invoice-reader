@@ -200,6 +200,10 @@
   const KEY = 'invoice-simple-v1';
   let list = [];
   try { list = JSON.parse(localStorage.getItem(KEY)) || []; } catch { list = []; }
+  const TK = 'invoice-simple-trash-v1';
+  let trash; try { trash = JSON.parse(localStorage.getItem(TK)) || []; } catch { trash = []; }
+  const saveTrash = () => { try { localStorage.setItem(TK, JSON.stringify(trash)); } catch { toast('مساحة المتصفح ممتلئة'); } };
+  const trOpen = {}; let trAsk = null;
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { toast('مساحة المتصفح ممتلئة: نزّل ملف Excel ثم احذف الفواتير القديمة'); } };
   const DB = (name, store) => {
     let p = null;
@@ -267,8 +271,14 @@
     const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : zs === 'new' ? ' g' : ''}">${zs === 'pick' ? 'محددة يدويًا' : zs === 'new' ? 'حُدّث بالقالب' : 'من قالب المورد'}</em>` : '';
     return `<div class="f f-${k}${miss ? ' miss' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}</div>`;
   };
-  function card(x) {
+  function card(x, tr) {
     const w = issues(x);
+    if (tr) return `<article class="inv trash" id="c-${esc(x.id)}" aria-label="فاتورة محذوفة">
+      <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small></div><span class="amt">${esc(money(x.total))}</span></header>
+      <fieldset disabled><div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
+        <label class="f wide"><span>ملاحظات</span><textarea rows="2">${esc(x.note || '')}</textarea></label></div></fieldset>
+      ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+      ${rvHtml(x)}</article>`;
     return `<article class="inv" id="c-${esc(x.id)}">
       <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small></div><span class="amt">${esc(money(x.total))}</span></header>
       <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
@@ -286,7 +296,16 @@
     $('sum').textContent = list.length ? (nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة') : '';
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
       + (list.map(card).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
-    drawZones(); rvAllLabel(); mountViewers();
+    drawZones(); drawTrash(); rvAllLabel(); mountViewers();
+  }
+  function drawTrash() {
+    $('trSec').hidden = !trash.length; $('trCount').textContent = trash.length ? `(${trash.length})` : '';
+    const d = s => { try { return new Date(s).toLocaleString('ar-SA-u-nu-latn', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return ''; } };
+    $('trList').innerHTML = trash.map(x => { const id = esc(x.id), o = !!trOpen[x.id];
+      return `<li><div class="trrow"><span class="trn"><b>📄 ${esc(x.file || x.file_name || 'بدون اسم')}</b><small>${esc(x.vendor_name || 'مورد غير معروف')}${x.total !== '' && x.total != null ? ' · ' + esc(money(x.total)) : ''}${x.deletedAt ? ' · حُذفت ' + esc(d(x.deletedAt)) : ''}</small></span>
+        <button type="button" data-trview="${id}" aria-expanded="${o}">${o ? 'إغلاق' : 'مراجعة'}</button><button type="button" data-trback="${id}">↩ استرجاع</button><button type="button" class="del" data-trdel="${id}">حذف نهائي</button>
+        ${trAsk === x.id ? `<div class="trask" role="alert"><b>حذف هذه الفاتورة نهائيًا؟</b>ستُحذف بياناتها وصورتها من المتصفح ولا تظهر هنا بعد ذلك.<div class="zbtns"><button type="button" class="del" data-trok="${id}">نعم، احذف نهائيًا</button><button type="button" data-trno="">تراجع</button></div></div>` : ''}</div>
+        ${o ? card(x, true) : ''}</li>`; }).join('');
   }
   // تحديث ملاحظات وحالة بطاقة واحدة بدون إعادة رسم (حتى لا يضيع مكان الكتابة)
   function refreshCard(x) {
@@ -315,8 +334,8 @@
     if (b.dataset.del) {
       const x = list.find(y => y.id === b.dataset.del); if (!x) return;
       if (!confirm(`حذف فاتورة ${x.vendor_name || ''} رقم ${x.invoice_number || '—'}؟`)) return;
-      const i = list.indexOf(x); list.splice(i, 1); save(); draw();
-      undoBar(`حُذفت الفاتورة`, () => { list.splice(i, 0, x); save(); draw(); }, () => IMG.del(x.id));
+      const i = list.indexOf(x); list.splice(i, 1); x.deletedAt = new Date().toISOString(); trash.unshift(x); delete rrS[x.id]; save(); saveTrash(); draw();
+      undoBar(`نُقلت الفاتورة إلى «الفواتير المحذوفة» أسفل الصفحة`, () => { trash.splice(trash.indexOf(x), 1); delete x.deletedAt; list.splice(i, 0, x); save(); saveTrash(); draw(); }, () => { });
     }
     if (b.dataset.view) view(b.dataset.view);
     if (b.dataset.pick) openPick(b.dataset.pick, b.dataset.pk);
@@ -328,6 +347,19 @@
       undoBar(`حُذف قالب «${t.name || 'المورد'}»`, () => { zones[k] = t; saveZones(); drawZones(); }, () => { });
     }
     if (b.dataset.reread) reread(b.dataset.reread);
+    if (b.dataset.trview) { const id = b.dataset.trview; trOpen[id] = !trOpen[id]; if (trOpen[id]) rv.open[id] = true; draw(); }
+    if (b.dataset.trback) {
+      const x = trash.find(y => y.id === b.dataset.trback); if (!x) return;
+      trash.splice(trash.indexOf(x), 1); delete x.deletedAt; delete trOpen[x.id]; list.unshift(x); save(); saveTrash(); draw();
+      toast('استُرجعت الفاتورة إلى القائمة'); const c = $('c-' + x.id); if (c) c.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' });
+    }
+    if (b.dataset.trdel) { trAsk = b.dataset.trdel; draw(); const n = document.querySelector('[data-trno]'); if (n) n.focus(); }
+    if (b.dataset.trno !== undefined) { const id = trAsk; trAsk = null; draw(); const d = document.querySelector(`[data-trdel="${CSS.escape(id || '')}"]`); if (d) d.focus(); }
+    if (b.dataset.trok) {
+      const x = trash.find(y => y.id === b.dataset.trok); if (!x) return;
+      const i = trash.indexOf(x); trash.splice(i, 1); trAsk = null; delete trOpen[x.id]; saveTrash(); draw();
+      undoBar('حُذفت الفاتورة نهائيًا', () => { trash.splice(i, 0, x); saveTrash(); draw(); }, () => IMG.del(x.id));
+    }
     if (b.dataset.rvtg) { const id = b.dataset.rvtg; rv.open[id] = !isOpen(id); draw(); const t = document.querySelector(`[data-rvtg="${CSS.escape(id)}"]`); if (t) t.focus({ preventScroll: true }); }
     if (b.id === 'rvAll') { rv.hideAll = !rv.hideAll; rv.open = {}; draw(); }
     if (b.dataset.rr) rerunVendor(b.dataset.rr);
@@ -856,7 +888,7 @@
   }
   function mountViewers() {
     for (const id in rvLive) { rvLive[id].ro.disconnect(); delete rvLive[id]; }
-    list.forEach(x => { const h = document.getElementById('rvh-' + x.id); if (h) rvLive[x.id] = makeViewer(h, x); });
+    list.concat(trash).forEach(x => { const h = document.getElementById('rvh-' + x.id); if (h) rvLive[x.id] = makeViewer(h, x); });
   }
   function makeViewer(host, x) {
     const id = x.id, st = rv.st[id] = rv.st[id] || { pg: 0, zoom: 1, l: 0, t: 0 };
