@@ -522,8 +522,12 @@
   };
 
   // ---------- تصدير كل الفواتير ثم حذفها (يطلب تأكيدًا ورمزًا) ----------
-  const WIPE_CODE = '100-200';
-  const wipeCodeOk = v => P.normDigits(String(v || '')).replace(/\s/g, '').replace(/[‐-―−ـ]/g, '-') === WIPE_CODE;
+  // الرمز لا يُحفظ نصًا في الكود: نقارن بصمته فقط (SHA-256)
+  const WIPE_HASH = '411530bcc824c1ca5dfed1470d536c65212254a4bfe79ff4e766eb1c1ea5b417';
+  async function wipeCodeOk(v) {
+    const t = P.normDigits(String(v || '')).replace(/\s/g, '').replace(/[‐-―−ـ]/g, '-'); if (!t) return false;
+    try { const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('invoice-wipe:' + t)); return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('') === WIPE_HASH; } catch { return false; }
+  }
   const stamp = s => { if (!s) return ''; const d = new Date(s); return isNaN(d) ? s : d.toISOString().slice(0, 16).replace('T', ' '); };
   const XL2 = [...XL.slice(0, -1), ['file', 'الملف', 30], ['at', 'وقت القراءة', 17], ['edited', 'خانات عُدّلت يدويًا', 26], ['tpl', 'خانات من قالب المورد', 26]];
   const xlFull = (x, k) => k === 'at' ? stamp(x.at) : k === 'edited' ? Object.keys(x.edited || {}).map(label).join('، ')
@@ -544,12 +548,12 @@
       <div class="zbtns"><button type="button" class="del" id="wpGo" disabled>صدّر إلى Excel واحذف الكل</button><button type="button" id="wpNo">تراجع</button></div>`;
   }
   $('wpBtn').onclick = () => { if (busy || queue.length) { toast('انتظر حتى تنتهي قراءة الفواتير الجارية'); return; } $('wpBox').hidden = false; drawWipe(); $('wpCode').focus(); };
-  document.addEventListener('input', e => { if (e.target.id === 'wpCode') $('wpGo').disabled = !wipeCodeOk(e.target.value); });
-  document.addEventListener('click', e => {
+  document.addEventListener('input', async e => { if (e.target.id !== 'wpCode') return; const ok = await wipeCodeOk(e.target.value); const g = $('wpGo'); if (g && $('wpCode') === e.target) g.disabled = !ok; });
+  document.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.id === 'wpNo') { $('wpBox').hidden = true; drawWipe(); $('wpBtn').focus(); }
     if (b.id === 'wpGo') {
-      if (!wipeCodeOk($('wpCode').value)) { toast('الرمز غير صحيح'); return; }
+      if (!(await wipeCodeOk($('wpCode').value))) { toast('الرمز غير صحيح'); return; }
       if (busy || queue.length) { toast('انتظر حتى تنتهي قراءة الفواتير الجارية'); return; }
       let blob; try { blob = wipeBook(); } catch (er) { console.error(er); toast('تعذّر إنشاء ملف Excel، لم يُحذف شيء'); return; }
       download(blob, `all-invoices-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}.xlsx`);
