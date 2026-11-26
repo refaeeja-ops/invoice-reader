@@ -335,6 +335,7 @@
     const miss = F.filter(([k]) => k !== 'payment_method' && blank(x[k])).map(f => f[1]);
     if (miss.length) w.push('لم تُقرأ: ' + miss.join('، '));
     const vm = P.checkVat(x.vendor_tax_number); if (vm) w.push(vm);
+    if (P.blockedVat(x.vendor_tax_number)) w.push('الرقم الضريبي ' + x.vendor_tax_number + ' لا يُقبل كرقم للمورد (رقمنا كمشترٍ). صحّحه إلى رقم المورد.');
     const T = +x.total, V = +x.tax_amount;
     if (!blank(x.total) && !blank(x.tax_amount) && isFinite(T) && isFinite(V)) {
       if (V >= T) w.push('مبلغ الضريبة أكبر من الإجمالي أو يساويه.');
@@ -364,8 +365,8 @@
   const SUPK = 'invoice-simple-sup-v1';
   let supVats = null; try { const o = JSON.parse(localStorage.getItem(SUPK) || 'null'); if (o && Array.isArray(o.v)) supVats = new Set(o.v); } catch (e) { }
   const vatShort = v => { const d = P.normDigits(String(v ?? '')).replace(/\.0+$/, '').replace(/\D/g, '').slice(0, 10); return /^3\d{9}$/.test(d) ? d : ''; };
-  const noSup = x => !!(supVats && vatShort(x.vendor_tax_number) && !supVats.has(vatShort(x.vendor_tax_number)));
-  const noSupHtml = x => noSup(x) ? `<p class="nosupline" role="note">⚠ الرقم الضريبي ${esc(vatShort(x.vendor_tax_number))} غير مسجل في SuppliersT: مورد جديد، سيُضاف عند النقل إلى InvoiceT.</p>` : '';
+  const noSup = x => P.blockedVat(x.vendor_tax_number) || !!(supVats && vatShort(x.vendor_tax_number) && !supVats.has(vatShort(x.vendor_tax_number)));
+  const noSupHtml = x => P.blockedVat(x.vendor_tax_number) ? '' : noSup(x) ? `<p class="nosupline" role="note">⚠ الرقم الضريبي ${esc(vatShort(x.vendor_tax_number))} غير مسجل في SuppliersT: مورد جديد، سيُضاف عند النقل إلى InvoiceT.</p>` : '';
   async function supSync() {
     if (!gs || !GURL) return;
     try {
@@ -884,7 +885,7 @@
       if (x.edited && x.edited[k]) continue;
       const i = pgIndex(r.pg, src.length); if (i < 0) continue;
       const v = extract(k, await readRegion(src[i], r));
-      if (!blank(v)) { if (x[k] !== v) n++; x[k] = v; (x.zsrc = x.zsrc || {})[k] = 'tpl'; (x.zrect = x.zrect || {})[k] = { ...r }; }
+      if (!blank(v) && !(k === 'vendor_tax_number' && P.blockedVat(v))) { if (x[k] !== v) n++; x[k] = v; (x.zsrc = x.zsrc || {})[k] = 'tpl'; (x.zrect = x.zrect || {})[k] = { ...r }; }
     }
     return n;
   }
@@ -1044,6 +1045,7 @@
     let v = $('pkVal').value.trim();
     if (k === 'total' || k === 'tax_amount') v = n2(v);
     if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\D/g, '');
+    if (k === 'vendor_tax_number' && P.blockedVat(v)) { toast('هذا الرقم الضريبي لا يُقبل كرقم للمورد (رقمنا كمشترٍ). حدّد رقم المورد.'); $('pkVal').focus(); return; }
     if (k === 'invoice_date') v = P.findDate(v) || v;
     if (k === 'payment_method') v = payNorm(v);
     const oldKey = zoneFor(x);

@@ -76,7 +76,9 @@ const APP_SHORT_COL = 'الرقم الضريبي المختصر';
 // توحيد الرقم الضريبي: أي صيغة (رقم، نص، مسافات، .0، صيغة علمية) ← أرقام فقط
 const vatDigits_ = v => typeof v === 'number' && isFinite(v) ? v.toFixed(0) : String(v == null ? '' : v).trim().replace(/\.0+$/, '').replace(/\D/g, '');
 // الرقم المختصر = أول 10 خانات كرقم صحيح (integer). الرقم الضريبي السعودي يبدأ بـ 3، فغير ذلك يُعد غير صالح ويرجع null
-const vatShort_ = v => { const d = vatDigits_(v).slice(0, 10); return /^3\d{9}$/.test(d) ? Number(d) : null; };
+// أرقام لا تُقبل أبدًا كرقم للمورد (رقمنا كمشترٍ المطبوع على الفواتير)
+const BLOCKED_VAT_ = [3112734016];
+const vatShort_ = v => { const d = vatDigits_(v).slice(0, 10); return /^3\d{9}$/.test(d) && BLOCKED_VAT_.indexOf(Number(d)) < 0 ? Number(d) : null; };
 function fillAppShort_(sh) {
   const v = values_(sh); if (!v.length) return;
   const h = v[0].map(str_); let c = h.indexOf(APP_SHORT_COL);
@@ -237,7 +239,8 @@ function copyApp_(ss) {
     const vat = vatDigits_(r[6]), name = str_(r[5]) || 'مورد بدون اسم', who = str_(r[12]);
     const fromCol = shc >= 0 ? vatShort_(r[shc]) : null, fromVat = vatShort_(vat), sk = fromCol !== null ? fromCol : fromVat;
     if (fromCol !== null && fromVat !== null && fromCol !== fromVat) warn.push('صف ' + rowNo + ': الرقم المختصر في العمود (' + fromCol + ') لا يطابق أول 10 خانات من الرقم الضريبي (' + fromVat + '). استُخدم العمود.');
-    if (sk === null) { skippedVat++; skipLines.push('صف ' + rowNo + ' (' + name + ' ' + no + '): رقم ضريبي غير صالح «' + (vat || 'فارغ') + '». صحّحه في التطبيق وأعد الإرسال (لم يُنشأ مورد).'); return; }
+    if (sk === null) { skippedVat++; const bl = BLOCKED_VAT_.indexOf(Number(vat.slice(0, 10))) >= 0;
+      skipLines.push('صف ' + rowNo + ' (' + name + ' ' + no + '): ' + (bl ? 'الرقم الضريبي «' + vat + '» مرفوض لأنه ليس رقم المورد (رقمنا كمشترٍ)' : 'رقم ضريبي غير صالح «' + (vat || 'فارغ') + '»') + '. صحّحه في التطبيق وأعد الإرسال (لم يُنشأ مورد).'); return; }
     let sup = supByVat[sk];
     if (sup === undefined || sup === '') {
       sup = ++maxSup;

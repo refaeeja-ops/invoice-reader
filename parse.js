@@ -1,6 +1,9 @@
 /* قارئ الفواتير: تحليل رمز QR (هيئة الزكاة) ونص الفاتورة بقواعد بسيطة. مجاني وبدون خوادم. */
 (function (root) {
   'use strict';
+  // أرقام ضريبية لا تُقبل أبدًا كرقم للمورد (مثل رقمنا نحن كمشترٍ المطبوع على الفواتير). المقارنة بأول 10 خانات
+  const BLOCKED_VAT = ['3112734016'];
+  const blockedVat = v => { const d = normDigits(String(v || '')).replace(/\D/g, '').slice(0, 10); return d.length === 10 && BLOCKED_VAT.includes(d); };
 
   // ---------- أرقام ----------
   const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩', FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
@@ -279,7 +282,7 @@
 
     // 1) من رمز QR أولًا (أدق مصدر)
     if (qr) {
-      set('vendor_name', qr.seller, 'qr'); set('vendor_tax_number', qr.vat_number, 'qr');
+      set('vendor_name', qr.seller, 'qr'); if (!blockedVat(qr.vat_number)) set('vendor_tax_number', qr.vat_number, 'qr');
       const d = findDate(qr.timestamp) || (qr.timestamp || '').slice(0, 10); set('invoice_date', d, 'qr');
       set('total', qr.total, 'qr'); set('tax_amount', qr.vat, 'qr');
     }
@@ -290,7 +293,7 @@
       const L = line;
       // الرقم الضريبي
       const vm = L.replace(/[\s-]/g, '').match(/3\d{13}3|100\d{12}|\d{15}/g);
-      if (vm) vm.forEach(v => vatCands.push({ v, labeled: K.vat.test(L) || K.vat.test(lines[idx - 1] || '') }));
+      if (vm) vm.filter(v => !blockedVat(v)).forEach(v => vatCands.push({ v, labeled: K.vat.test(L) || K.vat.test(lines[idx - 1] || '') }));
       // رقم الفاتورة
       if (!r.invoice_number && K.invNo.test(L)) {
         const tok = invNoNear(L, lines[idx + 1] || '', lines[idx - 1] || '');
@@ -447,6 +450,6 @@
     return (r.subtotal != null && near(sum, r.subtotal, 0.1)) || (r.total != null && near(sum, r.total, 0.1)) || (r.total != null && r.tax_amount != null && near(sum + r.tax_amount, r.total, 0.1));
   }
 
-  const api = { score, itemsOk, invCands, normDigits, toNum, numsIn, parseZatcaQR, checkVat, parseInvoice, parseItem, checks, findDate, fmt };
+  const api = { blockedVat, BLOCKED_VAT, score, itemsOk, invCands, normDigits, toNum, numsIn, parseZatcaQR, checkVat, parseInvoice, parseItem, checks, findDate, fmt };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.InvoiceParse = api;
 })(typeof self !== 'undefined' ? self : this);
