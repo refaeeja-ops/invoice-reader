@@ -284,7 +284,7 @@
     else input = `<input ${attrs} value="${esc(type === 'num' && !blank(v) && isFinite(+v) ? (+v).toFixed(2) : v)}"${type !== 'text' ? ' inputmode="decimal" class="num"' : ''} placeholder="${miss ? 'لم يُقرأ — أدخله' : ''}">`;
     const zs = x.zsrc && x.zsrc[k];
     const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : zs === 'new' ? ' g' : ''}">${zs === 'pick' ? 'محددة يدويًا' : zs === 'new' ? 'حُدّث بالقالب' : 'من قالب المورد'}</em>` : '';
-    return `<div class="f f-${k}${miss ? ' miss' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}</div>`;
+    return `<div class="f f-${k}${miss ? ' miss' : ''}${k === 'payment_method' && blank(v) ? ' nopay' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}</div>`;
   };
   function card(x, tr) {
     const w = issues(x);
@@ -338,7 +338,7 @@
     c.querySelector('.amt').textContent = money(x.total);
     const hd = c.querySelector('header > div'); if (hd) { const ob = hd.querySelector('.sb'); if (ob) ob.remove(); hd.insertAdjacentHTML('beforeend', sentBadge(x)); } sendLabel();
     F.forEach(([k]) => { const el = $(`f-${x.id}-${k}`); if (!el) return; const f = el.closest('.f'), m = blank(x[k]) && k !== 'payment_method';
-      f.classList.toggle('miss', m); const pb = f.querySelector('.pkb'); if (pb) pb.classList.toggle('need', m);
+      f.classList.toggle('miss', m); if (k === 'payment_method') f.classList.toggle('nopay', blank(x[k])); const pb = f.querySelector('.pkb'); if (pb) pb.classList.toggle('need', m);
       if (!(x.zsrc && x.zsrc[k])) { const zb = f.querySelector('.zb'); if (zb) zb.remove(); } });
     const nIss = list.filter(y => issues(y).length).length;
     $('sum').textContent = nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة';

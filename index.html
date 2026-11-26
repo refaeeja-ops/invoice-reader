@@ -122,7 +122,8 @@ button,.btn{touch-action:manipulation}
 .zbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 /* المشروع */
 .f select{font:inherit;font-size:16px;font-weight:700;color:var(--val);background:var(--inbg);border:1.5px solid var(--line);border-radius:5px;padding:7px 9px;width:100%;min-height:42px}
-.f.nopj select{border-color:var(--blue);border-style:dashed}
+.f.nopj select,.f.nopay select{border:2px solid var(--stamp);background-color:var(--warnbg);color:var(--stamp)}
+.f.nopj .fh label,.f.nopay .fh label{color:var(--stamp);font-weight:700}
 .pj{position:fixed;inset:0;z-index:56;background:#000b;display:flex;align-items:center;justify-content:center;padding:12px}
 .pjin{background:var(--paper);color:var(--ink);border-radius:8px;width:min(460px,100%);max-height:100%;overflow:auto;padding:18px;display:grid;gap:12px}
 .pjin h2{font-size:20px}
@@ -287,7 +288,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260945'; window.APP_VERSION = V;
+(function () { var V = '202611261155'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -295,11 +296,11 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611260945"></script>
-<script src="parse.js?v=202611260945"></script>
-<script src="export.js?v=202611260945"></script>
-<script src="digits.js?v=202611260945"></script>
-<script src="simple.js?v=202611260945"></script>
+<script src="config.js?v=202611261155"></script>
+<script src="parse.js?v=202611261155"></script>
+<script src="export.js?v=202611261155"></script>
+<script src="digits.js?v=202611261155"></script>
+<script src="simple.js?v=202611261155"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
