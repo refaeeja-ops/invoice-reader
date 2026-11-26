@@ -202,7 +202,6 @@ button,.btn{touch-action:manipulation}
   </section>
   <p style="text-align:center;margin:0"><a href="full.html" style="color:var(--mute);font-size:13px">النسخة الكاملة السابقة</a> <small style="color:var(--mute)">· الإصدار <span id="ver"></span></small></p>
 </main>
-<datalist id="pays"><option>نقدًا</option><option>مدى</option><option>بطاقة ائتمان</option><option>تحويل بنكي</option><option>آجل</option><option>شيك</option><option>Apple Pay</option></datalist>
 <div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-labelledby="lbT">
   <div class="lbbar"><span id="lbT"></span><button id="lbPrev">السابقة</button><span id="lbPg"></span><button id="lbNext">التالية</button><button id="lbOut" aria-label="تصغير">−</button><span id="lbZ"></span><button id="lbIn" aria-label="تكبير">+</button><a class="btn" id="lbOrig" target="_blank" rel="noopener">الملف الأصلي</a><button id="lbClose" class="primary">إغلاق</button></div>
   <div class="lbstage"><img id="lbImg" alt="صورة الفاتورة"><p id="lbNone">لا توجد صورة محفوظة لهذه الفاتورة.</p></div>
@@ -244,7 +243,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260739'; window.APP_VERSION = V;
+(function () { var V = '202611260750'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -252,10 +251,10 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611260739"></script>
-<script src="export.js?v=202611260739"></script>
-<script src="digits.js?v=202611260739"></script>
-<script src="simple.js?v=202611260739"></script>
+<script src="parse.js?v=202611260750"></script>
+<script src="export.js?v=202611260750"></script>
+<script src="digits.js?v=202611260750"></script>
+<script src="simple.js?v=202611260750"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

@@ -218,13 +218,19 @@
     save();
   }
 
+  // ---------- طريقة الدفع: قائمة ثابتة، وأي قيمة مقروءة تُحوَّل لأقرب خيار ----------
+  const PAYS = ['نقدي', 'بطاقة- مدى', 'تحويل بنكي', 'حساب مدين', 'حساب دائن'];
+  const PAYMAP = [[/حساب\s*مدين|مدين|debit\s*account/i, 'حساب مدين'], [/حساب\s*دائن|دائن|آجل|اجل|on\s*account|credit(?!\s*card)/i, 'حساب دائن'],
+    [/تحويل|transfer|bank|بنكي|حوالة/i, 'تحويل بنكي'], [/مدى|mada|بطاق|card|visa|master|ائتمان|فيزا|apple|شبكة/i, 'بطاقة- مدى'], [/نقد|cash|كاش|كاشير/i, 'نقدي']];
+  const payNorm = v => { const t = String(v ?? '').trim(); if (!t || PAYS.includes(t)) return t; const m = PAYMAP.find(([re]) => re.test(t)); return m ? m[1] : t; };
+  list.forEach(x => { if (x && x.payment_method) x.payment_method = payNorm(x.payment_method); });
+
   // ---------- الخانات ----------
   const F = [
     ['invoice_number', 'رقم الفاتورة', 'text'], ['invoice_date', 'تاريخ الفاتورة', 'date'],
     ['total', 'المبلغ الإجمالي', 'num'], ['tax_amount', 'مبلغ الضريبة', 'num'],
     ['vendor_name', 'اسم المورد أو التاجر', 'text'], ['vendor_tax_number', 'الرقم الضريبي للمورد', 'vat'],
     ['payment_method', 'طريقة الدفع', 'pay']];
-  const PAYS = ['نقدًا', 'مدى', 'بطاقة ائتمان', 'تحويل بنكي', 'آجل', 'شيك', 'Apple Pay'];
   const blank = v => v === '' || v == null;
   const n2 = v => { if (blank(v)) return ''; const s = P.normDigits(String(v)).replace(/[٬,\s]/g, '').replace('٫', '.'); return s !== '' && isFinite(+s) ? +s : String(v); };
   const money = v => blank(v) ? '' : (isFinite(+v) ? (+v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(v));
@@ -254,7 +260,7 @@
     const attrs = `data-id="${esc(x.id)}" data-k="${k}" id="f-${esc(x.id)}-${k}"`;
     let input;
     if (type === 'date') input = `<input type="date" ${attrs} value="${esc(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '')}">`;
-    else if (type === 'pay') input = `<input ${attrs} list="pays" value="${esc(v)}" placeholder="مثال: مدى">`;
+    else if (type === 'pay') input = `<select ${attrs}><option value="">اختر طريقة الدفع</option>${(blank(v) || PAYS.includes(v) ? PAYS : [v, ...PAYS]).map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
     else input = `<input ${attrs} value="${esc(type === 'num' && !blank(v) && isFinite(+v) ? (+v).toFixed(2) : v)}"${type !== 'text' ? ' inputmode="decimal" class="num"' : ''} placeholder="${miss ? 'لم يُقرأ — أدخله' : ''}">`;
     const zs = x.zsrc && x.zsrc[k];
     const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : zs === 'new' ? ' g' : ''}">${zs === 'pick' ? 'محددة يدويًا' : zs === 'new' ? 'حُدّث بالقالب' : 'من قالب المورد'}</em>` : '';
@@ -399,7 +405,7 @@
         try {
           const { d, pages, src } = await processFile(job.file, say);
           let changed = 0;
-          F.forEach(([k]) => { const nv = k === 'total' || k === 'tax_amount' ? (d[k] ?? '') : (d[k] || ''); if (x && !(x.edited && x.edited[k]) && !blank(nv) && nv !== x[k]) { x[k] = nv; if (x.zsrc) delete x.zsrc[k]; changed++; } });
+          F.forEach(([k]) => { const nv = k === 'total' || k === 'tax_amount' ? (d[k] ?? '') : k === 'payment_method' ? payNorm(d[k]) : (d[k] || ''); if (x && !(x.edited && x.edited[k]) && !blank(nv) && nv !== x[k]) { x[k] = nv; if (x.zsrc) delete x.zsrc[k]; changed++; } });
           if (x && zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { changed += await applyZones(x, src); } catch (e) { console.warn(e); } }
           if (x) { save(); delete rvPages[job.id]; IMG.get(job.id).then(r0 => IMG.put(job.id, { pages, blob: (r0 && r0.blob) || job.file })); }
           toast(changed ? `أُعيدت القراءة: تحدّثت ${changed} من الخانات` : 'أُعيدت القراءة ولم تتغير البيانات');
@@ -410,7 +416,7 @@
         const { d, pages, src } = await processFile(job.file, say);
         const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: sig(job.file),
           invoice_number: d.invoice_number || '', invoice_date: d.invoice_date || '', total: d.total ?? '', tax_amount: d.tax_amount ?? '',
-          vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: d.payment_method || '', note: '' };
+          vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: payNorm(d.payment_method), note: '' };
         if (zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { await applyZones(x, src); } catch (e) { console.warn(e); } }
         list.unshift(x); save();
         IMG.put(job.id, { pages, blob: job.file.size < 25e6 ? job.file : null });
@@ -587,7 +593,6 @@
     });
   }
   // استخراج قيمة الخانة من النص المقروء
-  const PAYMAP = [[/نقد|cash|كاش/i, 'نقدًا'], [/مدى|mada/i, 'مدى'], [/apple/i, 'Apple Pay'], [/visa|master|ائتمان|فيزا|credit\s*card/i, 'بطاقة ائتمان'], [/تحويل|transfer|bank/i, 'تحويل بنكي'], [/آجل|اجل|credit|on\s*account/i, 'آجل'], [/شيك|cheque|check/i, 'شيك']];
   function extract(k, raw) {
     const t = P.normDigits(raw || '').replace(/[ \t]+/g, ' ').trim(); if (!t) return '';
     if (k === 'total' || k === 'tax_amount') {
@@ -776,6 +781,7 @@
     if (k === 'total' || k === 'tax_amount') v = n2(v);
     if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\D/g, '');
     if (k === 'invoice_date') v = P.findDate(v) || v;
+    if (k === 'payment_method') v = payNorm(v);
     const oldKey = zoneFor(x);
     x[k] = v; (x.edited = x.edited || {})[k] = 1;
     let saved = false;
