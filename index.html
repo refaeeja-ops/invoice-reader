@@ -3,15 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#2340c8">
+<meta name="theme-color" content="#1838b8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#16233f" media="(prefers-color-scheme: dark)">
 <title>قارئ الفواتير</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
 <style>
 :root{color-scheme:light dark;
---bg:light-dark(#eef0f6,#0e1222);--band:light-dark(#2340c8,#1a2a7a);--paper:light-dark(#fff,#171c33);
---ink:light-dark(#121528,#e9ebf5);--mute:light-dark(#5a5f78,#a3a8c3);--line:light-dark(#dfe2ee,#2c3354);
---blue:light-dark(#2340c8,#8ea2ff);--stamp:light-dark(#c81d33,#ff7b8b);--ok:light-dark(#11743f,#5fd69a);--soft:light-dark(#f3f5fc,#1e2442);--warnbg:light-dark(#fff3f4,#2a1720)}
+--bg:light-dark(#dfe3ee,#0f1420);--band:light-dark(#1838b8,#16233f);--paper:light-dark(#fff,#1a2132);
+--ink:light-dark(#0f1222,#f3f5fb);--mute:light-dark(#4a5068,#a9b2cc);--line:light-dark(#a9b1c8,#4a5878);--cardline:light-dark(#c3c9da,#2e3852);
+--lbl:light-dark(#2f3550,#c6cde0);--val:light-dark(#0f1222,#fff);--inbg:light-dark(#f3f5fa,#242d44);--tplbg:light-dark(#fffbd6,#2f2d16);
+--blue:light-dark(#1838b8,#8fb4ff);--stamp:light-dark(#b3121f,#ff8a8a);--stampink:light-dark(#8f0d18,#ffb3b3);--ok:light-dark(#0b6a35,#7ee2a8);--soft:light-dark(#f3f5fa,#242d44);--warnbg:light-dark(#ffe9eb,#3a1d24)}
 *{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif;overflow-x:clip}
 h1,h2{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.2;margin:0}
@@ -19,7 +20,7 @@ h1,h2{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.2
 .top h1{font-size:clamp(28px,5vw,40px)}
 .top p{margin:6px 0 0;opacity:.92}
 main{max-width:1000px;margin:-56px auto 48px;padding:0 max(3vw,12px);display:grid;gap:18px}
-.slip{background:var(--paper);border-radius:6px;padding:clamp(16px,3vw,26px);box-shadow:0 1px 0 var(--line),0 18px 40px -24px #0b1550aa}
+.slip{background:var(--paper);border-radius:6px;padding:clamp(16px,3vw,26px);box-shadow:0 1px 0 var(--cardline),0 18px 40px -24px #0b1550aa}
 .drop{border:2px dashed var(--line);border-radius:6px;padding:22px 14px;text-align:center}
 .drop.over{border-color:var(--blue);background:var(--soft)}
 .drop p{margin:0;color:var(--mute)}
@@ -35,19 +36,22 @@ button:disabled{opacity:.5;cursor:default}
 .lhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
 .lhead h2{font-size:22px}.lhead .note{color:var(--mute);font-size:14px;flex-basis:100%}
 #list{display:grid;gap:14px}
-.inv{border:1px solid var(--line);border-radius:6px;padding:14px;background:var(--paper)}
+.inv{border:1px solid var(--cardline);border-radius:6px;padding:14px;background:var(--paper)}
 .inv.pend{color:var(--mute);background:var(--soft)}
 .inv header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px}
 .inv header b{font-size:17px;display:block}
 .fp{color:var(--mute);font-size:12px;word-break:break-all;display:block}
 .amt{font-family:"Readex Pro",sans-serif;font-weight:700;color:var(--blue);font-size:20px;white-space:nowrap;direction:ltr}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
-.f{display:grid;gap:3px;font-size:13px;color:var(--mute)}.f.wide{grid-column:1/-1}
-.f input,.f textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:7px 9px;width:100%;min-height:42px}
+.f{display:grid;gap:3px;font-size:14px;font-weight:500;color:var(--lbl)}.f.wide{grid-column:1/-1}
+.f input,.f textarea{font:inherit;font-size:16px;font-weight:700;color:var(--val);background:var(--inbg);border:1.5px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;min-height:42px}
+.f textarea{font-weight:400}
+.f input::placeholder,.f textarea::placeholder{font-weight:400;color:var(--mute)}
+.f:has(.zb) input{background:var(--tplbg)}
 .f input.num{direction:ltr;text-align:right}
 .f.miss input{border:2px solid var(--stamp);background:var(--warnbg)}
-.f.miss span{color:var(--stamp);font-weight:500}
-.warn{margin:10px 0 0;padding:8px 12px 8px 8px;list-style:none;background:var(--warnbg);border-inline-start:4px solid var(--stamp);border-radius:4px;color:var(--stamp);font-size:14px;display:grid;gap:2px}
+.f.miss span,.f.miss label{color:var(--stamp);font-weight:700}
+.warn{margin:10px 0 0;padding:8px 12px 8px 8px;list-style:none;background:var(--warnbg);border-inline-start:4px solid var(--stamp);border-radius:4px;color:var(--stampink);font-size:14px;display:grid;gap:2px}
 .warn li::before{content:"⚠ "}
 .okline{margin:10px 0 0;color:var(--ok);font-size:14px}
 .inv footer{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
@@ -70,7 +74,7 @@ button:disabled{opacity:.5;cursor:default}
 .pkb{min-height:34px;width:34px;padding:0;border-radius:6px;color:var(--blue);flex:none}
 .pkb:hover{background:var(--soft)}
 .pkb.need{background:#ffe600;border-color:#111;color:#111}
-.zb{font-style:normal;font-size:11px;padding:0 6px;border-radius:3px;background:var(--ink);color:#ffe600;white-space:nowrap}
+.zb{font-style:normal;font-size:11px;font-weight:500;padding:0 6px;border-radius:3px;background:light-dark(#111,#ffe600);color:light-dark(#ffe600,#111);white-space:nowrap}
 .zb.m{background:#ffe600;color:#111}
 /* نافذة التحديد */
 .pk{position:fixed;inset:0;z-index:55;background:#000b;display:flex;align-items:center;justify-content:center;padding:10px}
@@ -121,7 +125,7 @@ button,.btn{touch-action:manipulation}
 .zask b{display:block;color:var(--stamp)}
 .zbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 /* المشروع */
-.f select{font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:7px 9px;width:100%;min-height:42px}
+.f select{font:inherit;font-size:16px;font-weight:700;color:var(--val);background:var(--inbg);border:1.5px solid var(--line);border-radius:5px;padding:7px 9px;width:100%;min-height:42px}
 .f.nopj select{border-color:var(--blue);border-style:dashed}
 .pj{position:fixed;inset:0;z-index:56;background:#000b;display:flex;align-items:center;justify-content:center;padding:12px}
 .pjin{background:var(--paper);color:var(--ink);border-radius:8px;width:min(460px,100%);max-height:100%;overflow:auto;padding:18px;display:grid;gap:12px}
@@ -209,7 +213,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260323'; window.APP_VERSION = V;
+(function () { var V = '202611260335'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -217,10 +221,10 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611260323"></script>
-<script src="export.js?v=202611260323"></script>
-<script src="digits.js?v=202611260323"></script>
-<script src="simple.js?v=202611260323"></script>
+<script src="parse.js?v=202611260335"></script>
+<script src="export.js?v=202611260335"></script>
+<script src="digits.js?v=202611260335"></script>
+<script src="simple.js?v=202611260335"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
