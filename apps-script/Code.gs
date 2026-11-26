@@ -70,6 +70,16 @@ function appSheet_(ss) {
 const safe_ = v => { const t = String(v == null ? '' : v); return /^[=+\-@]/.test(t) && !/^-?\d+(\.\d+)?$/.test(t) ? "'" + t : t; };
 const num_ = v => v === '' || v == null || isNaN(Number(v)) ? safe_(v) : Number(v);
 const vendKey_ = (vat, name) => { const d = str_(vat).replace(/\D/g, ''); return d.length === 15 ? 'v' + d : 'n' + str_(name).toLowerCase().replace(/[^0-9a-z\u0600-\u06ff]/g, ''); };
+// عمود «الرقم الضريبي المختصر» = أول 10 خانات من اليسار من الرقم الضريبي. يُضاف في نهاية الترويسة إن لم يوجد، ويُعبّأ لكل الصفوف
+const APP_SHORT_COL = 'الرقم الضريبي المختصر';
+function fillAppShort_(sh) {
+  const v = values_(sh); if (!v.length) return;
+  const h = v[0].map(str_); let c = h.indexOf(APP_SHORT_COL);
+  if (c < 0) { c = h.length; sh.getRange(1, c + 1).setValue(APP_SHORT_COL); }
+  if (v.length < 2) return;
+  const col = v.slice(1).map(r => [str_(r[6]).replace(/\D/g, '').slice(0, 10)]);
+  const rg = sh.getRange(2, c + 1, col.length, 1); rg.setNumberFormat('@'); rg.setValues(col);
+}
 function appInvoices_(ss, list, who) {
   const sh = appSheet_(ss), rows = values_(sh), now = new Date();
   const byId = {}, byKey = {};
@@ -93,6 +103,7 @@ function appInvoices_(ss, list, who) {
     sh.getRange(r0, 1, add.length, APP_HEAD.length).setValues(add);
     out.forEach(o => { if (o.add !== undefined) { o.row = r0 + o.add; delete o.add; } });
   }
+  fillAppShort_(sh);
   return out;
 }
 
@@ -180,6 +191,7 @@ function copyApp_(ss) {
   const app = sheet_(ss, APP_SHEET), invSh = sheet_(ss, 'InvoiceT'), supSh = sheet_(ss, 'SuppliersT');
   if (!app) return { msg: 'لا توجد ورقة «' + APP_SHEET + '» بعد. أرسل الفواتير من التطبيق أولًا.' };
   if (!invSh || !supSh) throw new Error('لم أجد ورقة InvoiceT أو SuppliersT');
+  fillAppShort_(app);
   // ورقة التطبيق: عمود لتسجيل InvID بعد النسخ
   const av = values_(app), ah = av[0].map(str_);
   let ac = ah.indexOf(APP_COPY_COL); if (ac < 0) { ac = ah.length; app.getRange(1, ac + 1).setValue(APP_COPY_COL); }
@@ -192,7 +204,7 @@ function copyApp_(ss) {
   sv.slice(1).forEach(r => { const id = Number(r[S('SupID')]); if (id > maxSup) maxSup = id; const k = short_(r[S('VATID')]); if (k.length === 10 && !supByVat[k]) supByVat[k] = r[S('SupID')]; });
   // الفواتير
   const iv = values_(invSh), ih = iv[0].map(str_);
-  ['InvID', 'InvoiceNo', 'SupID', 'InvDate', 'Invamount', 'InvVat', 'Paymethod', 'EnteredBy', 'InvNote', 'RevDate', 'VATID'].forEach(n => { if (hIdx_(ih, n) < 0) ensureCol_(invSh, ih, n); });
+  ['InvID', 'InvoiceNo', 'SupID', 'InvDate', 'Invamount', 'InvVat', 'Paymethod', 'EnteredBy', 'InvNote', 'RevDate', 'VATID', 'ProjectID'].forEach(n => { if (hIdx_(ih, n) < 0) ensureCol_(invSh, ih, n); });
   const I = n => hIdx_(ih, n);
   let maxInv = 0; const existing = {};
   iv.slice(1).forEach(r => { const id = Number(r[I('InvID')]); if (id > maxInv) maxInv = id; if (str_(r[I('InvoiceNo')])) existing[str_(r[I('SupID')]) + '|' + invKey_(r[I('InvoiceNo')])] = r[I('InvID')]; });
@@ -217,6 +229,7 @@ function copyApp_(ss) {
     row[I('InvID')] = id; row[I('InvoiceNo')] = no; row[I('SupID')] = sup; row[I('InvDate')] = r[2]; row[I('Invamount')] = r[3]; row[I('InvVat')] = r[4];
     row[I('Paymethod')] = r[7]; row[I('EnteredBy')] = 'application'; row[I('InvNote')] = [str_(r[10]), str_(r[0])].filter(Boolean).join(' | ');
     row[I('RevDate')] = r[13] || now; row[I('VATID')] = vat;
+    const pj = str_(r[8]); row[I('ProjectID')] = /^\d+$/.test(pj) ? Number(pj) : pj;
     newInv.push(row); existing[key] = id; marks.push([rowNo, id]); copied++;
   });
   if (newSup.length) { const r0 = supSh.getLastRow() + 1; supSh.getRange(r0, S('VATID') + 1, newSup.length, 1).setNumberFormat('@'); supSh.getRange(r0, 1, newSup.length, sh.length).setValues(newSup); }
