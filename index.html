@@ -246,7 +246,7 @@ body:not(.tab-z) #zSec{display:none!important}
     <div class="upsum" id="upSum" hidden aria-live="polite"></div>
   </section>
   <section class="slip" aria-labelledby="lT">
-    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="gssend" id="gsSend" hidden>☁️ إرسال إلى Google Sheet</button><button class="rvall" id="cropAll" aria-pressed="true" hidden>إخفاء المقتطعات</button><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
+    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="gssend" id="gsSend" hidden>☁️ إرسال إلى Google Sheet</button><button class="rvall" id="cropAll" aria-pressed="false" hidden>✂ إظهار المقتطعات</button><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
     <div id="gsRep" class="gsrep" hidden role="status"></div>
     <div id="list"></div>
   </section>
@@ -308,7 +308,7 @@ body:not(.tab-z) #zSec{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611261510'; window.APP_VERSION = V;
+(function () { var V = '202611261516'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -316,11 +316,11 @@ body:not(.tab-z) #zSec{display:none!important}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611261510"></script>
-<script src="parse.js?v=202611261510"></script>
-<script src="export.js?v=202611261510"></script>
-<script src="digits.js?v=202611261510"></script>
-<script src="simple.js?v=202611261510"></script>
+<script src="config.js?v=202611261516"></script>
+<script src="parse.js?v=202611261516"></script>
+<script src="export.js?v=202611261516"></script>
+<script src="digits.js?v=202611261516"></script>
+<script src="simple.js?v=202611261516"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

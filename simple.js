@@ -406,7 +406,7 @@
   }
   const cropRetry = {}, cropS = {}; // cropS: اختيار كل فاتورة على حدة (يتقدم على الزر الشامل)
   const cropHid = id => cropS[id] ?? cropOff;
-  let cropOff = false; try { cropOff = localStorage.getItem('invoice-simple-crops-off') === '1'; } catch (e) { }
+  let cropOff = true; // المقتطعات مقفلة عند كل فتح للتطبيق إلا إذا طلبها المستخدم
   function card(x, tr) {
     const w = issues(x);
     if (tr) return `<article class="inv trash" id="c-${esc(x.id)}" aria-label="فاتورة محذوفة">
@@ -421,7 +421,7 @@
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       <div class="nosupbox">${noSupHtml(x)}</div>${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
       ${rrHtml(x)}${rvHtml(x)}
-      <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button>${LOC_KEYS.some(k => hasRect(x, k)) ? `<button data-croptg="${esc(x.id)}" aria-pressed="${!cropHid(x.id)}">${cropHid(x.id) ? '✂ إظهار المقتطعات' : 'إخفاء المقتطعات'}</button>` : ''}<button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}"${delAsk === x.id ? ' hidden' : ''}>حذف الفاتورة</button></footer>
+      <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button>${cropOff && LOC_KEYS.some(k => hasRect(x, k)) ? `<button data-croptg="${esc(x.id)}" aria-pressed="${!cropHid(x.id)}">${cropHid(x.id) ? '✂ إظهار المقتطعات' : 'إخفاء المقتطعات'}</button>` : ''}<button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}"${delAsk === x.id ? ' hidden' : ''}>حذف الفاتورة</button></footer>
       ${delAsk === x.id ? `<div class="delask" role="alert"><label for="dr-${esc(x.id)}"><b>سبب حذف هذه الفاتورة (إلزامي)</b></label>
         <textarea id="dr-${esc(x.id)}" data-delwhy="${esc(x.id)}" rows="2" placeholder="مثال: فاتورة مكررة، أو ليست لنا"></textarea>
         <small>تنتقل الفاتورة إلى «الفواتير المحذوفة» أسفل الصفحة مع السبب، ويمكن استرجاعها.</small>
@@ -517,7 +517,7 @@
     if (b.dataset.rvtg) { const id = b.dataset.rvtg; rv.open[id] = !isOpen(id); draw(); const t = document.querySelector(`[data-rvtg="${CSS.escape(id)}"]`); if (t) t.focus({ preventScroll: true }); }
     if (b.id === 'rvAll') { rv.hideAll = !rv.hideAll; rv.open = {}; draw(); }
     if (b.dataset.croptg) { const id = b.dataset.croptg; cropS[id] = !cropHid(id); draw(); const t = document.querySelector(`[data-croptg="${CSS.escape(id)}"]`); if (t) t.focus({ preventScroll: true }); }
-    if (b.id === 'cropAll') { for (const k in cropS) delete cropS[k]; cropOff = !cropOff; try { localStorage.setItem('invoice-simple-crops-off', cropOff ? '1' : '0'); } catch (e) { } draw(); }
+    if (b.id === 'cropAll') { for (const k in cropS) delete cropS[k]; cropOff = !cropOff; draw(); }
     if (b.dataset.cz) { // تكبير: نفتح صورة الفاتورة في البطاقة على موضع الخانة
       const id = b.dataset.cz, k = b.dataset.ck; rv.open[id] = true; rv.cur[id] = k; draw();
       const h = $('rvh-' + id); if (h) { h.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => { if (rvLive[id]) rvLive[id].focus(k); }, 350); }
