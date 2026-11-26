@@ -219,9 +219,9 @@
   }
 
   // ---------- طريقة الدفع: قائمة ثابتة، وأي قيمة مقروءة تُحوَّل لأقرب خيار ----------
-  const PAYS = ['نقدي', 'بطاقة- مدى', 'تحويل بنكي', 'حساب مدين', 'حساب دائن'];
-  const PAYMAP = [[/حساب\s*مدين|مدين|debit\s*account/i, 'حساب مدين'], [/حساب\s*دائن|دائن|آجل|اجل|on\s*account|credit(?!\s*card)/i, 'حساب دائن'],
-    [/تحويل|transfer|bank|بنكي|حوالة/i, 'تحويل بنكي'], [/مدى|mada|بطاق|card|visa|master|ائتمان|فيزا|apple|شبكة/i, 'بطاقة- مدى'], [/نقد|cash|كاش|كاشير/i, 'نقدي']];
+  const PAYS = ['نقدي', 'بطاقة- مدى', 'Apple Pay', 'تحويل بنكي', 'آجل', 'حساب مدين', 'حساب دائن'];
+  const PAYMAP = [[/حساب\s*مدين|مدين|debit\s*account/i, 'حساب مدين'], [/حساب\s*دائن|دائن/i, 'حساب دائن'], [/آجل|اجل|on\s*account|credit(?!\s*card)/i, 'آجل'], [/apple/i, 'Apple Pay'],
+    [/تحويل|transfer|bank|بنكي|حوالة/i, 'تحويل بنكي'], [/مدى|mada|بطاق|card|visa|master|ائتمان|فيزا|شبكة/i, 'بطاقة- مدى'], [/نقد|cash|كاش|كاشير/i, 'نقدي']];
   const payNorm = v => { const t = String(v ?? '').trim(); if (!t || PAYS.includes(t)) return t; const m = PAYMAP.find(([re]) => re.test(t)); return m ? m[1] : t; };
   list.forEach(x => { if (x && x.payment_method) x.payment_method = payNorm(x.payment_method); });
 
