@@ -593,7 +593,7 @@
     await showPg(z ? Math.max(0, pgIndex(z.pg, pk.pages.length)) : 0);
     pkVp.focus({ preventScroll: true });
   }
-  function closePick() { $('pk').hidden = true; document.body.style.overflow = ''; pk.tok++; pk.src = []; pk.pdf = null; if (pk.last) pk.last.focus(); }
+  function closePick() { $('pk').hidden = true; document.body.style.overflow = ''; pk.tok++; pk.src = []; pk.pdf = null; }
   function showPg(i) {
     const n = pk.pages.length; pk.pg = Math.max(0, Math.min(n - 1, i));
     pk.rect = null; pkSel.hidden = true; $('pkRo').hidden = true; $('pkOk').disabled = true;
@@ -686,6 +686,7 @@
       $('pkRaw').textContent = raw.trim() ? 'النص في المنطقة: ' + raw.replace(/\s+/g, ' ').trim().slice(0, 140) : '';
     } catch (e) { console.error(e); if (tok !== pk.tok) return; $('pkRoS').textContent = 'تعذّرت قراءة المنطقة. اكتب القيمة هنا:'; }
     $('pkOk').disabled = !$('pkVal').value.trim();
+    if (tok === pk.tok) $('pkOk').scrollIntoView({ block: 'nearest' });
   }
   $('pkVal').addEventListener('input', () => { $('pkOk').disabled = !$('pkVal').value.trim() || !pk.rect; });
   $('pkOk').onclick = () => {
@@ -708,10 +709,16 @@
       }
     }
     (x.zsrc = x.zsrc || {})[k] = saved ? 'tpl' : 'pick';
-    save(); closePick(); draw();
+    save(); closePick(); draw(); backTo(x.id, k);
     toast(saved ? `حُفظ مكان «${label(k)}» لفواتير ${x.vendor_name || 'المورد'} القادمة` : `تم تحديث «${label(k)}»`);
   };
-  $('pkCancel').onclick = closePick;
+  $('pkCancel').onclick = $('pkX').onclick = () => { const x = pk.x, k = pk.k; closePick(); if (x) backTo(x.id, k); };
+  function backTo(id, k) { // العودة للخانة نفسها في بطاقة الفاتورة
+    const el = $(`f-${id}-${k}`); if (!el) return;
+    const f = el.closest('.f'); f.classList.remove('flash'); void f.offsetWidth; f.classList.add('flash');
+    el.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' });
+    setTimeout(() => el.focus({ preventScroll: true }), RM ? 0 : 350);
+  }
   $('pkDraw').onclick = () => setMode('draw'); $('pkMove').onclick = () => setMode('move');
   $('pkIn').onclick = () => animZoom(pk.zoom * 1.4); $('pkOut').onclick = () => animZoom(pk.zoom / 1.4); $('pkFit').onclick = () => animZoom(1);
   $('pkPrev').onclick = () => showPg(pk.pg - 1); $('pkNext').onclick = () => showPg(pk.pg + 1);

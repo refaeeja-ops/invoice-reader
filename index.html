@@ -102,10 +102,16 @@ button,.btn{touch-action:manipulation}
 .pkro small{color:var(--mute);font-size:12px;overflow-wrap:anywhere}
 .pkchk{display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer}
 .pkchk input{width:22px;height:22px;flex:none;margin-top:2px}
-.pkbtns{display:flex;gap:8px;flex-wrap:wrap}
+.pkbtns{display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--paper);padding-top:6px;margin-top:auto}
+.pkbtns button{flex:1}
+#pkX{font-size:18px}
+.f.flash input{animation:flash 1.6s ease-out}
+@keyframes flash{0%,40%{box-shadow:0 0 0 4px #ffe600}100%{box-shadow:0 0 0 0 #ffe60000}}
 .pkkeys{font-size:12px!important}
-@media (max-width:760px){.pk{padding:0}.pkin{border-radius:0;height:100%;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:8px;padding:8px}
-  .pkside{gap:6px;max-height:46vh}.pkside>p,.pkkeys{display:none}.pkside h2{font-size:17px}.pkbar button{min-width:40px;min-height:40px;padding:4px 8px}}
+@media (max-width:760px){.pk{padding:0;height:100dvh}.pkin{border-radius:0;height:100%;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+  .pkside{gap:6px;max-height:44dvh}.pkside>p,.pkkeys,#pkRaw{display:none}.pkside>#pkNo:not(:empty){display:block}.pkside h2{font-size:16px}
+  .pkro{padding:6px 8px;gap:4px}.pkro input{min-height:40px}.pkchk{font-size:13px}
+  .pkbar{gap:4px}.pkbar button{min-width:38px;min-height:38px;padding:4px 7px}.pkbar #pkZ{min-width:3em;font-size:14px}}
 /* قوالب الموردين */
 #zList{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:12px}
 .zc{border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:6px}
@@ -159,6 +165,7 @@ button,.btn{touch-action:manipulation}
         <button id="pkOut" aria-label="تصغير">−</button><span id="pkZ" aria-live="polite">100%</span><button id="pkIn" aria-label="تكبير">+</button><button id="pkFit">ملاءمة</button>
         <span class="sp"></span>
         <button id="pkPrev" aria-label="الصفحة السابقة">›</button><span id="pkPg"></span><button id="pkNext" aria-label="الصفحة التالية">‹</button>
+        <button id="pkX" aria-label="إغلاق والعودة للفاتورة" title="إغلاق">✕</button>
       </div>
       <div class="pkvp" id="pkVp" dir="ltr" tabindex="0" aria-label="صفحة الفاتورة. الأسهم للتحريك، و + و − للتكبير"><div class="pkcv"><div class="pkpaper" id="pkPaper"><img id="pkImg" alt="صفحة الفاتورة" draggable="false"><div class="pkold" id="pkOld" hidden><span>المكان المحفوظ</span></div><div class="pksel" id="pkSel" hidden></div><div class="pkpad" id="pkPad"></div></div></div></div>
     </div>
@@ -168,7 +175,7 @@ button,.btn{touch-action:manipulation}
       <div class="pkro" id="pkRo" hidden><span id="pkRoS"></span><input id="pkVal" aria-labelledby="pkRoS"><small id="pkRaw"></small></div>
       <label class="pkchk" id="pkSaveL"><input type="checkbox" id="pkSave" checked><span id="pkSaveT"></span></label>
       <p id="pkNo"></p>
-      <div class="pkbtns"><button class="primary" id="pkOk" disabled>اعتمد القيمة</button><button id="pkCancel">إلغاء</button></div>
+      <div class="pkbtns"><button class="primary" id="pkOk" disabled>اعتمد القيمة</button><button id="pkCancel">إلغاء والعودة</button></div>
       <p class="pkkeys">على الجوال: إصبع واحد للرسم، وإصبعان للتحريك والتكبير. على الحاسب: Ctrl مع العجلة للتكبير، والمسافة مع السحب للتحريك، و PageUp و PageDown للصفحات.</p>
     </div>
   </div>
@@ -177,7 +184,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260307'; window.APP_VERSION = V;
+(function () { var V = '202611260311'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -185,10 +192,10 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611260307"></script>
-<script src="export.js?v=202611260307"></script>
-<script src="digits.js?v=202611260307"></script>
-<script src="simple.js?v=202611260307"></script>
+<script src="parse.js?v=202611260311"></script>
+<script src="export.js?v=202611260311"></script>
+<script src="digits.js?v=202611260311"></script>
+<script src="simple.js?v=202611260311"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
