@@ -194,6 +194,7 @@ function copyApp_(ss) {
   fillAppShort_(app);
   // ورقة التطبيق: عمود لتسجيل InvID بعد النسخ
   const av = values_(app), ah = av[0].map(str_);
+  const shc = ah.indexOf(APP_SHORT_COL); // عمود الرقم الضريبي المختصر: هو المستخدم للمطابقة
   let ac = ah.indexOf(APP_COPY_COL); if (ac < 0) { ac = ah.length; app.getRange(1, ac + 1).setValue(APP_COPY_COL); }
   // الموردون
   const sv = values_(supSh), sh = sv[0].map(str_);
@@ -215,7 +216,7 @@ function copyApp_(ss) {
     if (str_(r[ac])) { already++; return; }
     if (/^محذوفة/.test(str_(r[11]))) { skippedDel++; return; }
     const no = str_(r[1]); if (!no) { skippedNo++; return; }
-    const vat = str_(r[6]).replace(/\D/g, ''), sk = short_(vat), name = str_(r[5]), who = str_(r[12]);
+    const vat = str_(r[6]).replace(/\D/g, ''), sk = short_(shc >= 0 ? r[shc] : vat), name = str_(r[5]), who = str_(r[12]);
     let sup = sk.length === 10 ? supByVat[sk] : undefined;
     if (sup === undefined || sup === '') {
       sup = ++maxSup;
