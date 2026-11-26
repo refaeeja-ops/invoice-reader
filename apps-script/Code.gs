@@ -211,11 +211,12 @@ function copyApp_(ss) {
   iv.slice(1).forEach(r => { const id = Number(r[I('InvID')]); if (id > maxInv) maxInv = id; if (str_(r[I('InvoiceNo')])) existing[str_(r[I('SupID')]) + '|' + invKey_(r[I('InvoiceNo')])] = r[I('InvID')]; });
   const newSup = [], newInv = [], marks = [], now = new Date();
   let copied = 0, dup = 0, skippedDel = 0, skippedNo = 0, already = 0;
+  const supLines = [], invLines = [], skipLines = [];
   av.slice(1).forEach((r, k) => {
     const rowNo = k + 2;
     if (str_(r[ac])) { already++; return; }
-    if (/^محذوفة/.test(str_(r[11]))) { skippedDel++; return; }
-    const no = str_(r[1]); if (!no) { skippedNo++; return; }
+    if (/^محذوفة/.test(str_(r[11]))) { skippedDel++; skipLines.push('صف ' + rowNo + ' (' + str_(r[5]) + ' ' + str_(r[1]) + '): محذوفة في التطبيق'); return; }
+    const no = str_(r[1]); if (!no) { skippedNo++; skipLines.push('صف ' + rowNo + ' (' + str_(r[5]) + '): بلا رقم فاتورة'); return; }
     const vat = str_(r[6]).replace(/\D/g, ''), sk = short_(shc >= 0 ? r[shc] : vat), name = str_(r[5]), who = str_(r[12]);
     let sup = sk.length === 10 ? supByVat[sk] : undefined;
     if (sup === undefined || sup === '') {
@@ -223,25 +224,36 @@ function copyApp_(ss) {
       const row = sh.map(() => '');
       row[S('SupID')] = sup; row[S('SupfName')] = name; row[S('VATID')] = sk; row[S('Active')] = true; row[S('EnteredBy')] = 'by application >> ' + who;
       newSup.push(row); if (sk.length === 10) supByVat[sk] = sup;
+      supLines.push('SupID ' + sup + ': ' + name + ' | الرقم المختصر ' + (sk || '(لا يوجد)') + ' | ' + row[S('EnteredBy')]);
     }
     const key = str_(sup) + '|' + invKey_(no);
-    if (existing[key]) { dup++; marks.push([rowNo, existing[key]]); return; }
+    if (existing[key]) { dup++; marks.push([rowNo, existing[key]]); skipLines.push('صف ' + rowNo + ' (' + name + ' ' + no + '): موجودة مسبقًا في InvoiceT برقم InvID ' + existing[key]); return; }
     const id = ++maxInv, row = ih.map(() => '');
     row[I('InvID')] = id; row[I('InvoiceNo')] = no; row[I('SupID')] = sup; row[I('InvDate')] = r[2]; row[I('Invamount')] = r[3]; row[I('InvVat')] = r[4];
     row[I('Paymethod')] = r[7]; row[I('EnteredBy')] = 'application'; row[I('InvNote')] = [str_(r[10]), str_(r[0])].filter(Boolean).join(' | ');
     row[I('RevDate')] = r[13] || now; row[I('VATID')] = vat;
     const pj = str_(r[8]); row[I('ProjectID')] = /^\d+$/.test(pj) ? Number(pj) : pj;
     newInv.push(row); existing[key] = id; marks.push([rowNo, id]); copied++;
+    invLines.push('InvID ' + id + ': فاتورة ' + no + ' | ' + name + ' | SupID ' + sup);
   });
   if (newSup.length) { const r0 = supSh.getLastRow() + 1; supSh.getRange(r0, S('VATID') + 1, newSup.length, 1).setNumberFormat('@'); supSh.getRange(r0, 1, newSup.length, sh.length).setValues(newSup); }
   if (newInv.length) { const r0 = invSh.getLastRow() + 1; invSh.getRange(r0, I('InvoiceNo') + 1, newInv.length, 1).setNumberFormat('@'); invSh.getRange(r0, I('VATID') + 1, newInv.length, 1).setNumberFormat('@'); invSh.getRange(r0, 1, newInv.length, ih.length).setValues(newInv); }
   marks.forEach(([rn, id]) => app.getRange(rn, ac + 1).setValue(id));
-  return { copied, dup, newSup: newSup.length, msg: 'نُسخت ' + copied + ' فاتورة إلى InvoiceT.' +
-    (newSup.length ? '\nأُضيف ' + newSup.length + ' مورد جديد إلى SuppliersT.' : '') +
-    (dup ? '\nموجودة مسبقًا في InvoiceT (نفس المورد ورقم الفاتورة): ' + dup + '.' : '') +
-    (already ? '\nنُسخت في مرة سابقة: ' + already + '.' : '') +
-    (skippedDel ? '\nمحذوفة في التطبيق فلم تُنسخ: ' + skippedDel + '.' : '') +
-    (skippedNo ? '\nبدون رقم فاتورة فلم تُنسخ: ' + skippedNo + '.' : '') };
+  const lim = (a, n) => a.length > n ? a.slice(0, n).concat(['... و' + (a.length - n) + ' أخرى (التفاصيل كاملة في ورقة «سجل النسخ»)']) : a;
+  const msg = 'نُسخت ' + copied + ' فاتورة إلى InvoiceT' + (copied ? ' (InvID من ' + (maxInv - copied + 1) + ' إلى ' + maxInv + ')' : '') + '.' +
+    '\n\nموردون جدد أُضيفوا إلى SuppliersT: ' + newSup.length + (supLines.length ? '\n' + lim(supLines, 15).join('\n') : ' (كل الموردين موجودون مسبقًا)') +
+    (invLines.length ? '\n\nالفواتير المنسوخة:\n' + lim(invLines, 15).join('\n') : '') +
+    (already ? '\n\nنُسخت في مرة سابقة فلم تُكرر: ' + already : '') +
+    (skipLines.length ? '\n\nلم تُنسخ:\n' + lim(skipLines, 15).join('\n') : '');
+  log_(ss, [supLines.map(l => ['مورد جديد', l]), invLines.map(l => ['فاتورة منسوخة', l]), skipLines.map(l => ['لم تُنسخ', l])].flat(), copied, newSup.length);
+  return { copied, dup, newSup: newSup.length, msg };
+}
+// سجل دائم لكل عملية نسخ في ورقة «سجل النسخ»
+function log_(ss, lines, copied, nSup) {
+  let sh = sheet_(ss, 'سجل النسخ');
+  if (!sh) { sh = ss.insertSheet('سجل النسخ'); sh.getRange(1, 1, 1, 3).setValues([['الوقت', 'النوع', 'التفاصيل']]); if (sh.setRightToLeft) sh.setRightToLeft(true); }
+  const now = new Date(), rows = [[now, 'تشغيل', 'نُسخت ' + copied + ' فاتورة، وأُضيف ' + nSup + ' مورد']].concat(lines.map(l => [now, l[0], l[1]]));
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, 3).setValues(rows);
 }
 function showHelp() {
   SpreadsheetApp.getUi().alert('طريقة الإعداد (مرة واحدة)',
