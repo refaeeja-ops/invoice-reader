@@ -412,17 +412,36 @@
   // ---------- الرفع والقراءة ----------
   const queue = [], live = {}; let busy = false;
   const sig = f => String(f.name || '').trim().toLowerCase(); // منع التكرار باسم الملف فقط
-  function addFiles(files, fromCam) {
+  // ملخص آخر عملية رفع: عدد الملفات، وما أُضيف، والمكرر، وغير المدعوم، ونتيجة القراءة
+  let upSum = null;
+  const isInv = f => /^image\//.test(f.type) || /\.(pdf|jpe?g|png|webp|heic|bmp|gif)$/i.test(f.name || '') || f.type === 'application/pdf';
+  function addFiles(files, fromCam, kind) {
     const seen = new Set(list.map(x => x.sig).filter(Boolean).concat(queue.map(j => sig(j.file))));
-    let skipped = 0;
-    [...(files || [])].filter(f => /^image\//.test(f.type) || /\.(pdf|jpe?g|png|webp|heic|bmp|gif)$/i.test(f.name || '') || f.type === 'application/pdf').forEach((f, i) => {
-      const s = sig(f); if (!fromCam && seen.has(s)) { skipped++; return; } seen.add(s);
+    const all = [...(files || [])].filter(f => !/(^|\/)\.[^/]*$/.test(pathOf(f))); // نتجاهل ملفات النظام المخفية مثل .DS_Store
+    const b = { kind: fromCam ? 'cam' : kind || 'files', total: all.length, added: 0, dups: [], other: [], read: 0, failed: 0 };
+    all.forEach((f, i) => {
+      if (!isInv(f)) { b.other.push(pathOf(f)); return; }
+      const s = sig(f); if (!fromCam && seen.has(s)) { b.dups.push(pathOf(f)); return; } seen.add(s);
       const id = Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).slice(2, 6);
-      queue.push({ id, file: f }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا' };
+      queue.push({ id, file: f, batch: b }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا' }; b.added++;
     });
-    if (skipped) toast(`${skipped} ملف لم يُضف لأن ملفًا بنفس الاسم موجود في القائمة`);
-    draw(); pump();
+    if (!fromCam || b.dups.length || b.other.length) upSum = b;
+    drawSum(); draw(); pump();
   }
+  function drawSum() {
+    const el = $('upSum'), b = upSum; el.hidden = !b; if (!b) return;
+    const where = b.kind === 'dir' ? 'عدد الملفات في المجلد' : b.kind === 'drop' ? 'عدد الملفات المسحوبة' : b.kind === 'cam' ? 'عدد الصور من الكاميرا' : 'عدد الملفات المختارة';
+    const left = b.added - b.read - b.failed;
+    const names = (t, a) => a.length ? `<details><summary>${t} (${a.length})</summary><ul>${a.map(n => `<li>${esc(n)}</li>`).join('')}</ul></details>` : '';
+    el.innerHTML = `<div class="ushead"><b>ملخص آخر رفع</b><button type="button" class="usx" id="upSumX" aria-label="إغلاق الملخص">✕</button></div>
+      <ul class="usn"><li><span>${where}</span><b>${b.total}</b></li>
+        <li class="ok"><span>أُضيفت للقراءة</span><b>${b.added}</b></li>
+        <li class="${b.dups.length ? 'bad' : ''}"><span>لم تُضف لأنها مكررة (نفس اسم ملف في القائمة)</span><b>${b.dups.length}</b></li>
+        ${b.other.length ? `<li><span>ليست صورة أو PDF فتم تجاهلها</span><b>${b.other.length}</b></li>` : ''}
+        ${b.added ? `<li><span>${left > 0 ? 'قُرئت حتى الآن' : 'قُرئت'}</span><b>${b.read}${b.failed ? ` <small>(وتعذّرت قراءة ${b.failed})</small>` : ''}${left > 0 ? ` <small>من ${b.added}</small>` : ''}</b></li>` : ''}</ul>
+      ${names('أسماء الملفات المكررة', b.dups)}${names('الملفات التي تم تجاهلها', b.other)}`;
+  }
+  document.addEventListener('click', e => { if (e.target.closest('#upSumX')) { upSum = null; drawSum(); } });
   async function reread(id) {
     const x = list.find(y => y.id === id); if (!x || live[id]) return;
     const rec = await IMG.get(id);
@@ -464,25 +483,25 @@
           invoice_number: d.invoice_number || '', invoice_date: d.invoice_date || '', total: d.total ?? '', tax_amount: d.tax_amount ?? '',
           vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: payNorm(d.payment_method), note: '' };
         if (zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { await applyZones(x, src); } catch (e) { console.warn(e); } }
-        list.unshift(x); save();
+        list.unshift(x); save(); if (job.batch) { job.batch.read++; if (job.batch === upSum) drawSum(); }
         IMG.put(job.id, { pages, blob: job.file.size < 25e6 ? job.file : null });
       } catch (e) {
         console.error(e);
         const x = { id: job.id, at: new Date().toISOString(), file: live[job.id].file, sig: sig(job.file), invoice_number: '', invoice_date: '', total: '', tax_amount: '', vendor_name: '', vendor_tax_number: '', payment_method: '', note: 'تعذّرت قراءة الملف تلقائيًا: أدخل البيانات يدويًا' };
-        list.unshift(x); save(); IMG.put(job.id, { pages: [], blob: job.file });
+        list.unshift(x); save(); IMG.put(job.id, { pages: [], blob: job.file }); if (job.batch) { job.batch.failed++; if (job.batch === upSum) drawSum(); }
       }
       delete live[job.id]; done++; draw();
     }
     busy = false; progress(null);
     status(done ? (done > 1 ? `انتهت القراءة: ${done} فواتير. راجع الخانات الحمراء وأكملها.` : 'تمت القراءة. راجع الخانات وأكمل الناقص.') : '');
   }
-  $('pick').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
-  $('dir').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+  $('pick').addEventListener('change', e => { addFiles(e.target.files, false, 'files'); e.target.value = ''; });
+  $('dir').addEventListener('change', e => { addFiles(e.target.files, false, 'dir'); e.target.value = ''; });
   $('cam').addEventListener('change', e => { addFiles(e.target.files, true); e.target.value = ''; });
   const drop = $('drop');
   ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+  drop.addEventListener('drop', e => addFiles(e.dataTransfer.files, false, 'drop'));
 
   // ---------- Excel ----------
   const XL = [['invoice_number', 'رقم الفاتورة', 18], ['invoice_date', 'تاريخ الفاتورة', 14], ['total', 'المبلغ الإجمالي', 16], ['tax_amount', 'مبلغ الضريبة', 14],

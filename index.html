@@ -189,6 +189,14 @@ button,.btn{touch-action:manipulation}
 .zsync p{margin:0;font-size:14px}.zsync small{color:var(--mute);font-size:13px}
 .zsform{display:flex;flex-wrap:wrap;gap:8px}.zsform input{flex:1 1 180px;font:inherit;font-size:16px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-height:44px;background:var(--paper);color:var(--ink)}
 .zson{color:var(--ok)}.zserr{color:var(--stamp)!important}
+.upsum{margin-top:12px;border:2px solid var(--blue);border-radius:8px;padding:10px 14px;background:#eef2ff;display:grid;gap:6px}
+.ushead{display:flex;justify-content:space-between;align-items:center}.ushead b{font-size:16px}
+.usx{min-height:34px;width:34px;padding:0}
+.usn{list-style:none;margin:0;padding:0;display:grid;gap:2px;font-size:15px}
+.usn li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--cardline);padding:3px 0}
+.usn li b{font-family:"Readex Pro",sans-serif;white-space:nowrap}.usn li small{font-family:"IBM Plex Sans Arabic",sans-serif;font-weight:400;color:var(--mute)}
+.usn li.ok b{color:var(--ok)}.usn li.bad b{color:var(--stamp)}
+.upsum details{font-size:14px}.upsum summary{cursor:pointer;color:var(--blue)}.upsum details ul{margin:4px 0 0;padding-inline-start:20px;max-height:200px;overflow:auto;overflow-wrap:anywhere}
 @media (max-width:560px){.grid{grid-template-columns:1fr 1fr}.f-vendor_name,.f-vendor_tax_number{grid-column:1/-1}.inv footer button{flex:1}}
 </style>
 </head>
@@ -209,6 +217,7 @@ button,.btn{touch-action:manipulation}
     </div>
     <div class="prog" id="prog"><div class="bar"><i id="barI"></i></div></div>
     <div class="status" id="status" role="status" aria-live="polite"></div>
+    <div class="upsum" id="upSum" hidden aria-live="polite"></div>
   </section>
   <section class="slip" aria-labelledby="lT">
     <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
@@ -266,7 +275,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260829'; window.APP_VERSION = V;
+(function () { var V = '202611260838'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -274,11 +283,11 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611260829"></script>
-<script src="parse.js?v=202611260829"></script>
-<script src="export.js?v=202611260829"></script>
-<script src="digits.js?v=202611260829"></script>
-<script src="simple.js?v=202611260829"></script>
+<script src="config.js?v=202611260838"></script>
+<script src="parse.js?v=202611260838"></script>
+<script src="export.js?v=202611260838"></script>
+<script src="digits.js?v=202611260838"></script>
+<script src="simple.js?v=202611260838"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
