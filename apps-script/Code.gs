@@ -102,6 +102,7 @@ function onOpen() {
     .addItem('عرض المستخدمين المسموح لهم', 'listUsers')
     .addItem('إيقاف مستخدم', 'removeUser')
     .addSeparator()
+    .addItem('نسخ «فواتير التطبيق» إلى InvoiceT', 'copyAppToInvoiceT')
     .addItem('تعبئة الرقم الضريبي (VATID) في InvoiceT', 'fillVatIds')
     .addSeparator()
     .addItem('طريقة الإعداد', 'showHelp')
@@ -163,6 +164,70 @@ function fillVatIds() {
   });
   const rg = invSh.getRange(2, iv + 1, col.length, 1); rg.setNumberFormat('@'); rg.setValues(col);
   ui.alert('تعبئة الرقم الضريبي', 'عُبّئت ' + filled + ' فاتورة.\nبقيت كما هي (فيها رقم مسبقًا): ' + kept + '.\nموردها بلا رقم ضريبي في SuppliersT: ' + missing + '.', ui.ButtonSet.OK);
+}
+// ينسخ فواتير ورقة «فواتير التطبيق» إلى InvoiceT. كل فاتورة تُنسخ مرة واحدة فقط:
+// يُكتب رقمها في InvoiceT في عمود «InvID في InvoiceT» بورقة التطبيق. المورد يُطابق برقمه الضريبي المختصر في SuppliersT،
+// وإن لم يوجد يُضاف مورد جديد برقم Max(SupID)+1.
+const APP_COPY_COL = 'InvID في InvoiceT';
+const hIdx_ = (head, name) => head.findIndex(h => h.toLowerCase().replace(/\s/g, '') === name.toLowerCase().replace(/\s/g, ''));
+function copyAppToInvoiceT() {
+  const ui = SpreadsheetApp.getUi(), lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try { const r = copyApp_(SpreadsheetApp.getActiveSpreadsheet()); ui.alert('نسخ فواتير التطبيق إلى InvoiceT', r.msg, ui.ButtonSet.OK); }
+  catch (e) { ui.alert('تعذّر النسخ: ' + (e && e.message || e)); }
+  finally { lock.releaseLock(); }
+}
+function copyApp_(ss) {
+  const app = sheet_(ss, APP_SHEET), invSh = sheet_(ss, 'InvoiceT'), supSh = sheet_(ss, 'SuppliersT');
+  if (!app) return { msg: 'لا توجد ورقة «' + APP_SHEET + '» بعد. أرسل الفواتير من التطبيق أولًا.' };
+  if (!invSh || !supSh) throw new Error('لم أجد ورقة InvoiceT أو SuppliersT');
+  // ورقة التطبيق: عمود لتسجيل InvID بعد النسخ
+  const av = values_(app), ah = av[0].map(str_);
+  let ac = ah.indexOf(APP_COPY_COL); if (ac < 0) { ac = ah.length; app.getRange(1, ac + 1).setValue(APP_COPY_COL); }
+  // الموردون
+  const sv = values_(supSh), sh = sv[0].map(str_);
+  ['SupID', 'SupfName', 'VATID', 'Active', 'EnteredBy'].forEach(n => { if (hIdx_(sh, n) < 0) ensureCol_(supSh, sh, n); });
+  const S = n => hIdx_(sh, n);
+  const short_ = v => str_(v).replace(/\D/g, '').slice(0, 10); // الرقم الضريبي المختصر = أول 10 أرقام
+  const supByVat = {}; let maxSup = 0;
+  sv.slice(1).forEach(r => { const id = Number(r[S('SupID')]); if (id > maxSup) maxSup = id; const k = short_(r[S('VATID')]); if (k.length === 10 && !supByVat[k]) supByVat[k] = r[S('SupID')]; });
+  // الفواتير
+  const iv = values_(invSh), ih = iv[0].map(str_);
+  ['InvID', 'InvoiceNo', 'SupID', 'InvDate', 'Invamount', 'InvVat', 'Paymethod', 'EnteredBy', 'InvNote', 'RevDate', 'VATID'].forEach(n => { if (hIdx_(ih, n) < 0) ensureCol_(invSh, ih, n); });
+  const I = n => hIdx_(ih, n);
+  let maxInv = 0; const existing = {};
+  iv.slice(1).forEach(r => { const id = Number(r[I('InvID')]); if (id > maxInv) maxInv = id; if (str_(r[I('InvoiceNo')])) existing[str_(r[I('SupID')]) + '|' + invKey_(r[I('InvoiceNo')])] = r[I('InvID')]; });
+  const newSup = [], newInv = [], marks = [], now = new Date();
+  let copied = 0, dup = 0, skippedDel = 0, skippedNo = 0, already = 0;
+  av.slice(1).forEach((r, k) => {
+    const rowNo = k + 2;
+    if (str_(r[ac])) { already++; return; }
+    if (/^محذوفة/.test(str_(r[11]))) { skippedDel++; return; }
+    const no = str_(r[1]); if (!no) { skippedNo++; return; }
+    const vat = str_(r[6]).replace(/\D/g, ''), sk = short_(vat), name = str_(r[5]), who = str_(r[12]);
+    let sup = sk.length === 10 ? supByVat[sk] : undefined;
+    if (sup === undefined || sup === '') {
+      sup = ++maxSup;
+      const row = sh.map(() => '');
+      row[S('SupID')] = sup; row[S('SupfName')] = name; row[S('VATID')] = sk; row[S('Active')] = true; row[S('EnteredBy')] = 'by application >> ' + who;
+      newSup.push(row); if (sk.length === 10) supByVat[sk] = sup;
+    }
+    const key = str_(sup) + '|' + invKey_(no);
+    if (existing[key]) { dup++; marks.push([rowNo, existing[key]]); return; }
+    const id = ++maxInv, row = ih.map(() => '');
+    row[I('InvID')] = id; row[I('InvoiceNo')] = no; row[I('SupID')] = sup; row[I('InvDate')] = r[2]; row[I('Invamount')] = r[3]; row[I('InvVat')] = r[4];
+    row[I('Paymethod')] = r[7]; row[I('EnteredBy')] = 'application'; row[I('InvNote')] = [str_(r[10]), str_(r[0])].filter(Boolean).join(' | ');
+    row[I('RevDate')] = r[13] || now; row[I('VATID')] = vat;
+    newInv.push(row); existing[key] = id; marks.push([rowNo, id]); copied++;
+  });
+  if (newSup.length) { const r0 = supSh.getLastRow() + 1; supSh.getRange(r0, S('VATID') + 1, newSup.length, 1).setNumberFormat('@'); supSh.getRange(r0, 1, newSup.length, sh.length).setValues(newSup); }
+  if (newInv.length) { const r0 = invSh.getLastRow() + 1; invSh.getRange(r0, I('InvoiceNo') + 1, newInv.length, 1).setNumberFormat('@'); invSh.getRange(r0, I('VATID') + 1, newInv.length, 1).setNumberFormat('@'); invSh.getRange(r0, 1, newInv.length, ih.length).setValues(newInv); }
+  marks.forEach(([rn, id]) => app.getRange(rn, ac + 1).setValue(id));
+  return { copied, dup, newSup: newSup.length, msg: 'نُسخت ' + copied + ' فاتورة إلى InvoiceT.' +
+    (newSup.length ? '\nأُضيف ' + newSup.length + ' مورد جديد إلى SuppliersT.' : '') +
+    (dup ? '\nموجودة مسبقًا في InvoiceT (نفس المورد ورقم الفاتورة): ' + dup + '.' : '') +
+    (already ? '\nنُسخت في مرة سابقة: ' + already + '.' : '') +
+    (skippedDel ? '\nمحذوفة في التطبيق فلم تُنسخ: ' + skippedDel + '.' : '') +
+    (skippedNo ? '\nبدون رقم فاتورة فلم تُنسخ: ' + skippedNo + '.' : '') };
 }
 function showHelp() {
   SpreadsheetApp.getUi().alert('طريقة الإعداد (مرة واحدة)',
