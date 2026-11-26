@@ -757,7 +757,7 @@
   }
   function drawZones() {
     const keys = Object.keys(zones).filter(k => Object.keys(zones[k].fields || {}).length);
-    $('zSec').hidden = !keys.length && !GURL; drawSync();
+    $('zSec').hidden = false; $('zCount').textContent = keys.length ? `(${keys.length})` : ''; drawSync();
     if (!keys.length) { $('zList').innerHTML = '<p class="note">لا توجد قوالب بعد. حدّد مكان أي خانة بزر التحديد بجانبها ليُحفظ قالب للمورد.</p>'; return; }
     $('zList').innerHTML = keys.map(k => { const t = zones[k];
       return `<div class="zc"><b>${esc(t.name || (t.vat ? 'مورد بالرقم الضريبي' : 'مورد'))}</b><small>${t.vat ? 'الرقم الضريبي ' + esc(t.vat) : 'بدون رقم ضريبي، يُعرف بالاسم'}</small>
@@ -1246,7 +1246,7 @@
     b.textContent = sending ? 'جارٍ الإرسال إلى Google Sheet…' : n ? `☁️ إرسال إلى Google Sheet (${n})` : '✓ كل الفواتير في Google Sheet';
   }
   $('gsSend').onclick = async () => {
-    if (!gs) { toast('اربط التطبيق بـ Google Sheet أولًا: اكتب بريدك ورمز الدخول'); const f = $('zsEmail'); if (f) { f.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => f.focus({ preventScroll: true }), 300); } return; }
+    if (!gs) { toast('اربط التطبيق بـ Google Sheet أولًا: اكتب بريدك ورمز الدخول'); showTab('z'); const f = $('zsEmail'); if (f) { f.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => f.focus({ preventScroll: true }), 300); } return; }
     const items = toSend(); if (!items.length || sending) return;
     sending = true; sendLabel();
     const sig = new Map(items.map(x => [x.id, sentSig(x)]));
@@ -1282,6 +1282,16 @@
       delete rvPages[id]; draw(); if (ok) toast('أُرفق ملف الفاتورة');
     } catch (er) { console.error(er); toast('تعذّر فتح هذا الملف'); }
   });
+
+  // ---------- التبويبات: الفواتير / قوالب الموردين ----------
+  function showTab(t) {
+    document.body.classList.toggle('tab-z', t === 'z');
+    $('tabInv').setAttribute('aria-selected', t !== 'z'); $('tabZ').setAttribute('aria-selected', t === 'z');
+    if (location.hash !== (t === 'z' ? '#templates' : '')) history.replaceState(null, '', t === 'z' ? '#templates' : location.pathname + location.search);
+  }
+  $('tabInv').onclick = () => { showTab('i'); window.scrollTo(0, 0); };
+  $('tabZ').onclick = () => { showTab('z'); window.scrollTo(0, 0); };
+  if (location.hash === '#templates') showTab('z');
 
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });
