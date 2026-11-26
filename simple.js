@@ -209,9 +209,24 @@
     let p = null;
     const db = () => p || (p = new Promise((ok, no) => { try { const r = indexedDB.open(name, 1); r.onupgradeneeded = () => r.result.createObjectStore(store); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); } catch (e) { no(e); } }));
     const tx = async (mode, fn) => { const d = await db(); return new Promise((ok, no) => { const t = d.transaction(store, mode), r = fn(t.objectStore(store)); t.oncomplete = () => ok(r && r.result); t.onerror = () => no(t.error); }); };
-    return { put: (k, v) => tx('readwrite', s => s.put(v, k)).catch(() => { }), get: k => tx('readonly', s => s.get(k)).catch(() => null), del: k => tx('readwrite', s => s.delete(k)).catch(() => { }), clear: () => tx('readwrite', s => s.clear()).catch(() => { }) };
+    return { put: (k, v) => tx('readwrite', s => s.put(v, k)).catch(() => { }), put2: (k, v) => tx('readwrite', s => s.put(v, k)).then(() => true, e => { console.warn(e); return false; }), get: k => tx('readonly', s => s.get(k)).catch(() => null), del: k => tx('readwrite', s => s.delete(k)).catch(() => { }), clear: () => tx('readwrite', s => s.clear()).catch(() => { }) };
   };
-  const IMG = DB('invoice-simple-files', 'f'), OLD = DB('invoice-reader-img', 'img');
+  const IMG0 = DB('invoice-simple-files', 'f'), OLD = DB('invoice-reader-img', 'img');
+  // سفاري (آيباد/آيفون) قد يرفض حفظ كائن «ملف» في IndexedDB فيضيع السجل كله بصمت،
+  // لذلك نحفظ الملف الأصلي كبيانات خام (ArrayBuffer)، وإن فشل نحفظ صور الصفحات وحدها وننبّه المستخدم
+  let storeWarned = false;
+  const storeWarn = m => { if (storeWarned) return; storeWarned = true; toast(m); };
+  const IMG = {
+    get: async k => { const r = await IMG0.get(k); if (r && r.buf && !r.blob) { try { r.blob = new File([r.buf], r.name || 'invoice', { type: r.type || '' }); } catch { r.blob = new Blob([r.buf], { type: r.type || '' }); } } return r; },
+    put: async (k, rec) => {
+      const v = { pages: (rec && rec.pages) || [] };
+      if (rec && rec.blob) { try { v.buf = await rec.blob.arrayBuffer(); v.type = rec.blob.type || ''; v.name = rec.blob.name || ''; } catch (e) { console.warn(e); } }
+      if (await IMG0.put2(k, v)) return true;
+      if (v.buf) { delete v.buf; if (await IMG0.put2(k, v)) { storeWarn('حُفظت صور الفواتير بدون الملف الأصلي: مساحة المتصفح لا تكفي'); return true; } }
+      storeWarn('تعذّر حفظ صورة الفاتورة في هذا المتصفح. يمكنك إرفاق الملف لاحقًا من «مراجعة الفاتورة»'); return false;
+    },
+    del: k => IMG0.del(k), clear: () => IMG0.clear()
+  };
 
   // أول تشغيل: نأخذ الفواتير الموجودة من النسخة الكاملة حتى لا تضيع
   let firstRun = false; try { firstRun = localStorage.getItem(KEY) === null; } catch { }
@@ -778,7 +793,9 @@
   async function openPick(id, k) {
     const x = list.find(y => y.id === id); if (!x) return;
     const rec = await getRec(id, x);
-    if (!rec || !rec.pages || !rec.pages.length) { toast('لا توجد صورة محفوظة لهذه الفاتورة. أعد رفعها لتحديد الأماكن.'); return; }
+    if (!rec || !rec.pages || !rec.pages.length) { // نفتح «مراجعة الفاتورة» وفيها زر لإرفاق الملف
+      toast('لا توجد صورة محفوظة لهذه الفاتورة على هذا الجهاز. أرفق ملفها من «مراجعة الفاتورة»');
+      rv.open[id] = true; draw(); const h = $('rvh-' + id); if (h) h.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); return; }
     Object.assign(pk, { x, k, rec, pages: rec.pages, src: [], pdf: null, rect: null, mode: 'draw', last: document.activeElement });
     const key = zoneFor(x), z = key && zones[key].fields[k];
     $('pkT').textContent = 'حدد مكان: ' + label(k);
@@ -1022,7 +1039,9 @@
     };
     rvLoadPages(x).then(p => {
       if (rvLive[id] !== me) return; pages = p;
-      if (!pages.length) { vp.innerHTML = '<p class="rvnone">لا توجد صورة محفوظة لهذه الفاتورة.</p>'; host.querySelector('.rvtb').hidden = true; return; }
+      if (!pages.length) { host.querySelector('.rvtb').hidden = true;
+        vp.innerHTML = `<div class="rvnone"><p>لا توجد صورة محفوظة لهذه الفاتورة على هذا الجهاز.</p><p>اختر ملفها (${esc(x.file_name || x.file || 'ملف الفاتورة')}) لإرفاقه، دون تغيير البيانات المقروءة:</p>
+          <label class="btn primary">📎 إرفاق ملف الفاتورة<input type="file" accept="image/*,application/pdf" data-attach="${esc(id)}"></label></div>`; return; }
       const k = rv.cur[id]; box = boxFor(x, k, pages.length);
       if (k) cap.textContent = box ? `المكان المظلل: ${label(k)}` : '';
       showPg(st.pg, true);
@@ -1248,6 +1267,21 @@
     } catch (e) { console.warn(e); toast('تعذّر الإرسال: ' + ((e && e.message) || 'تحقق من الاتصال')); }
     sending = false; draw();
   };
+
+  // إرفاق ملف لفاتورة موجودة ليس لها صورة محفوظة (لا يعيد القراءة ولا يغير البيانات)
+  document.addEventListener('change', async e => {
+    const inp = e.target; if (!inp.dataset || !inp.dataset.attach) return;
+    const id = inp.dataset.attach, f = inp.files && inp.files[0]; inp.value = ''; if (!f) return;
+    const x = list.find(y => y.id === id) || trash.find(y => y.id === id); if (!x) return;
+    toast('جارٍ تجهيز صفحات الفاتورة…');
+    try {
+      let pg;
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')) pg = (await pdfPages(f)).pages.map(p => p.canvas);
+      else { const u = URL.createObjectURL(f); try { pg = [toCanvas(await loadImg(u), 2400)]; } finally { URL.revokeObjectURL(u); } }
+      const ok = await IMG.put(id, { pages: pg.map(toUrl), blob: f.size < 25e6 ? f : null });
+      delete rvPages[id]; draw(); if (ok) toast('أُرفق ملف الفاتورة');
+    } catch (er) { console.error(er); toast('تعذّر فتح هذا الملف'); }
+  });
 
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });
