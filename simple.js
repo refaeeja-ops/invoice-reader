@@ -116,19 +116,20 @@
 
   async function ocrPage(canvas, q, say) {
     const runs = [];
-    const add = (t, tag) => { const r = P.parseInvoice(t, q), s = quality(r, q); runs.push({ t, r, s }); return r; };
+    const add = (t, tag, lines) => { const r = P.parseInvoice(t, q), s = quality(r, q); runs.push({ t, r, s, lines: lines || [] }); return r; };
     const run = async (lang, pass) => {
       const w = await getWorker(lang);
       await w.setParameters({ tessedit_pageseg_mode: pass.psm });
       const img = prep(canvas, pass.size);
       const { data } = await w.recognize(img, {}, { text: true, blocks: true });
-      let r = add(data.text, lang + ' ' + pass.size + '/' + pass.psm);
+      const lines = ocrLines(data, img);
+      let r = add(data.text, lang + ' ' + pass.size + '/' + pass.psm, lines);
       // أرقام هندية: نعيد قراءة الكلمات الرقمية بالمصنّف الخاص بها
       if (eastern(data.text) && window.EasternDigits) {
         try {
           await EasternDigits.load(abs('vendor/digits-model.json'));
           const rb = EasternDigits.rebuild(data, img);
-          if (rb) { const r2 = add(rb.text, 'digits ' + lang + ' ' + pass.size); if (quality(r2, q) >= quality(r, q)) r = r2; }
+          if (rb) { const r2 = add(rb.text, 'digits ' + lang + ' ' + pass.size, lines); if (quality(r2, q) >= quality(r, q)) r = r2; }
         } catch (e) { console.warn(e); }
       }
       return r;
@@ -149,7 +150,80 @@
       }
     }
     runs.sort((a, b) => b.s - a.s);
-    return { best: runs[0].t, extra: runs.slice(1).map(x => x.t) };
+    return { best: runs[0].t, extra: runs.slice(1).map(x => x.t), lines: runs.map(x => x.lines) };
+  }
+
+  // كلمات Tesseract مع أماكنها (نسبة من الصفحة)، سطرًا سطرًا
+  function ocrLines(data, img) {
+    const out = [], W = img.width, H = img.height;
+    try {
+      (data.blocks || []).forEach(b => (b.paragraphs || []).forEach(p => (p.lines || []).forEach(l => {
+        const ws = (l.words || []).filter(w => w.text && w.text.trim() && w.bbox).map(w => ({ s: w.text, x: w.bbox.x0 / W, y: w.bbox.y0 / H, w: (w.bbox.x1 - w.bbox.x0) / W, h: (w.bbox.y1 - w.bbox.y0) / H }));
+        if (ws.length) out.push(ws);
+      })));
+    } catch (e) { }
+    return out;
+  }
+  // نصوص PDF: نجمع العناصر في أسطر بحسب ارتفاعها
+  function pdfLines(items) {
+    const rows = [];
+    (items || []).slice().sort((a, b) => a.y - b.y).forEach(it => {
+      const r = rows.find(r => Math.abs(r.y - it.y) < Math.max(0.004, it.h * 0.5));
+      if (r) r.ws.push(it); else rows.push({ y: it.y, ws: [it] });
+    });
+    return rows.map(r => r.ws.sort((a, b) => a.x - b.x));
+  }
+  // ---------- موضع القيمة المستخرجة على الفاتورة (للمقتطع تحت الخانة) ----------
+  const LOC_KEYS = ['vendor_tax_number', 'invoice_number', 'total', 'invoice_date'];
+  const LOC_KW = { vendor_tax_number: /ضريب|vat|tax|trn|tin/i, invoice_number: /فاتور|invoice|inv|رقم|no\b|#/i, total: /إجمالي|اجمالي|الاجمالي|total|المستحق|المجموع|الصافي|net|grand/i, invoice_date: /تاريخ|date/i };
+  const dgt = s => P.normDigits(String(s ?? '')).replace(/\D/g, '');
+  const aln = s => P.normDigits(String(s ?? '')).toLowerCase().replace(/[^0-9a-z]/g, '');
+  function locTargets(k, v) {
+    if (v === '' || v == null) return [];
+    if (k === 'vendor_tax_number') { const d = dgt(v); return d.length >= 10 ? [d] : []; }
+    if (k === 'invoice_number') { const a = aln(v); return a ? [a] : []; }
+    if (k === 'total') { const n = +n2(v); if (!isFinite(n) || n <= 0) return []; const t = [dgt(n.toFixed(2))]; if (Number.isInteger(n)) t.push(String(n)); if (Math.round(n * 10) === n * 10) t.push(dgt(n.toFixed(1))); return t; }
+    if (k === 'invoice_date') {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); if (!m) return [];
+      const [, y, mo, d] = m, a = [y + mo + d, d + mo + y, mo + d + y, d + mo + y.slice(2), y.slice(2) + mo + d, (+d) + '' + (+mo) + y, y + (+mo) + (+d), (+mo) + '' + (+d) + y];
+      return [...new Set(a)];
+    }
+    return [];
+  }
+  function locHit(k, ts, span) {
+    const d = dgt(span), a = aln(span);
+    if (k === 'vendor_tax_number') return ts.some(t => d.includes(t));
+    if (k === 'invoice_number') return ts.some(t => a === t || d === t || (t.length >= 4 && a.includes(t)));
+    return ts.some(t => d === t); // المبلغ والتاريخ: تطابق تام للأرقام
+  }
+  // pagesLines: [[سطر من كلمات {s,x,y,w,h}] لكل صفحة] (قد تتعدد محاولات القراءة للصفحة الواحدة)
+  function locate(k, v, pagesLines) {
+    const ts = locTargets(k, v); if (!ts.length) return null;
+    let best = null;
+    pagesLines.forEach((sets, pg) => sets.forEach((lines, si) => lines.forEach((ws, li) => {
+      const kw = LOC_KW[k].test(ws.map(w => w.s).join(' '));
+      for (let i = 0; i < ws.length; i++) {
+        let span = '';
+        for (let j = i; j < Math.min(ws.length, i + 6); j++) {
+          span += ' ' + ws[j].s;
+          if (!locHit(k, ts, span)) continue;
+          const sc = (kw ? 10 : 0) - (j - i) - si * 0.5 + (k === 'total' ? pg + li * 0.001 : -(pg + li * 0.001));
+          if (!best || sc > best.sc) {
+            const g = ws.slice(i, j + 1), x0 = Math.min(...g.map(w => w.x)), y0 = Math.min(...g.map(w => w.y));
+            best = { sc, pg, x: x0, y: y0, w: Math.max(...g.map(w => w.x + w.w)) - x0, h: Math.max(...g.map(w => w.y + w.h)) - y0 };
+          }
+          break;
+        }
+      }
+    })));
+    if (!best || !(best.w > 0 && best.h > 0)) return null;
+    const r = n => Math.round(n * 10000) / 10000;
+    return { pg: best.pg, x: r(best.x), y: r(best.y), w: r(best.w), h: r(best.h) };
+  }
+  function locAll(x, pagesLines) {
+    const loc = {};
+    LOC_KEYS.forEach(k => { try { const r = locate(k, x[k], pagesLines); if (r) loc[k] = r; } catch (e) { } });
+    return loc;
   }
 
   // ---------- معالجة فاتورة واحدة ----------
@@ -164,13 +238,13 @@
     say('جارٍ البحث عن رمز QR الضريبي…'); setProg(0.06);
     let q = null, qRaw = null;
     for (const p of list) { const s = scanQR(p.canvas); if (s) { qRaw = s.raw; if (s.zatca) { q = s.zatca; break; } } }
-    const texts = [], extras = [];
+    const texts = [], extras = [], plines = [];
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
-      if ((p.text || '').replace(/\s/g, '').length >= 40) { texts.push(p.text); continue; }
+      if ((p.text || '').replace(/\s/g, '').length >= 40) { texts.push(p.text); plines.push([pdfLines(p.items)]); continue; }
       say(list.length > 1 ? `جارٍ قراءة الصفحة ${i + 1} من ${list.length}…` : 'جارٍ قراءة نص الفاتورة…');
       const o = await ocrPage(p.canvas, q, say);
-      texts.push(o.best); if (list.length === 1) extras.push(...o.extra);
+      texts.push(o.best); plines.push(o.lines || []); if (list.length === 1) extras.push(...o.extra);
     }
     const raw = texts.join('\n\n');
     const d = P.parseInvoice(raw, q);
@@ -186,7 +260,7 @@
     }
     d.qr_raw = qRaw || ''; d._qr = q; d._raw = raw.slice(0, 20000);
     d.file = pathOf(file) || 'صورة من الكاميرا'; d.file_name = file.name || '';
-    return { d, pages: list.map(p => toUrl(p.canvas)), src: list };
+    return { d, pages: list.map(p => toUrl(p.canvas)), src: list, plines };
   }
   function toUrl(c) { // صورة للعرض فقط، بحجم أصغر لتوفير الذاكرة
     const r = Math.min(1, 1600 / Math.max(c.width, c.height));
@@ -284,8 +358,38 @@
     else input = `<input ${attrs} value="${esc(type === 'num' && !blank(v) && isFinite(+v) ? (+v).toFixed(2) : v)}"${type !== 'text' ? ' inputmode="decimal" class="num"' : ''} placeholder="${miss ? 'لم يُقرأ — أدخله' : ''}">`;
     const zs = x.zsrc && x.zsrc[k];
     const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : zs === 'new' ? ' g' : ''}">${zs === 'pick' ? 'محددة يدويًا' : zs === 'new' ? 'حُدّث بالقالب' : 'من قالب المورد'}</em>` : '';
-    return `<div class="f f-${k}${miss ? ' miss' : ''}${k === 'payment_method' && blank(v) ? ' nopay' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}</div>`;
+    return `<div class="f f-${k}${miss ? ' miss' : ''}${k === 'payment_method' && blank(v) ? ' nopay' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}${LOC_KEYS.includes(k) ? cropHtml(x, k, label) : ''}</div>`;
   };
+  // مقتطع من صورة الفاتورة تحت الخانة: من قالب المورد أو التحديد اليدوي أو موضع النص المقروء
+  const hasRect = (x, k) => !!((x.zrect && x.zrect[k]) || (x.loc && x.loc[k]) || (x.zsrc && x.zsrc[k] && x.zsrc[k] !== 'pick' && zoneFor(x) && (zones[zoneFor(x)].fields || {})[k]));
+  function cropHtml(x, k, label) {
+    const id = esc(x.id);
+    if (!hasRect(x, k)) return blank(x[k]) ? '' : `<div class="fcrop none"><span>موضعه في الفاتورة غير معروف</span><button type="button" data-pick="${id}" data-pk="${k}">حدّد المنطقة</button></div>`;
+    return `<div class="fcrop"><button type="button" class="fcimg" data-cz="${id}" data-ck="${k}" aria-label="تكبير ${label} على الفاتورة" title="اضغط للتكبير"><canvas data-crop="${id}" data-ck="${k}" width="1" height="1"></canvas></button><span class="fcside"><button type="button" data-cz="${id}" data-ck="${k}">🔍 تكبير</button><button type="button" data-pick="${id}" data-pk="${k}">تعديل المنطقة</button></span></div>`;
+  }
+  const imgCache = new Map();
+  const loadPageImg = u => { if (!imgCache.has(u)) { if (imgCache.size > 40) imgCache.clear(); imgCache.set(u, loadImg(u).catch(() => null)); } return imgCache.get(u); };
+  async function mountCrops() {
+    if (cropOff) return;
+    const cs = [...document.querySelectorAll('canvas[data-crop]')];
+    for (const cv of cs) {
+      const id = cv.dataset.crop, k = cv.dataset.ck, x = list.find(y => y.id === id) || trash.find(y => y.id === id); if (!x) continue;
+      try {
+        const pages = await rvLoadPages(x);
+        if (!pages.length) { delete rvPages[x.id]; if (!cropRetry[id]) { cropRetry[id] = 1; setTimeout(mountCrops, 1200); } else cv.closest('.fcrop').classList.add('noimg'); continue; }
+        const b = boxFor(x, k, pages.length); if (!b) continue;
+        const im = await loadPageImg(pages[b.pg]); if (!im || !cv.isConnected) continue;
+        const W = im.naturalWidth, H = im.naturalHeight, px = 0.012, py = 0.006;
+        const sx = Math.max(0, b.x - px) * W, sy = Math.max(0, b.y - py) * H, sw = Math.min(W - sx, (b.w + 2 * px) * W), sh = Math.min(H - sy, (b.h + 2 * py) * H);
+        if (sw < 2 || sh < 2) continue;
+        const sc = Math.min(3, 720 / sw); cv.width = Math.round(sw * sc); cv.height = Math.round(sh * sc);
+        const c = cv.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(im, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+        cv.closest('.fcrop').classList.add('ok');
+      } catch (e) { console.warn(e); }
+    }
+  }
+  const cropRetry = {};
+  let cropOff = false; try { cropOff = localStorage.getItem('invoice-simple-crops-off') === '1'; } catch (e) { }
   function card(x, tr) {
     const w = issues(x);
     if (tr) return `<article class="inv trash" id="c-${esc(x.id)}" aria-label="فاتورة محذوفة">
@@ -317,6 +421,8 @@
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
       + (list.map(x => card(x)).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
     drawZones(); drawTrash(); drawWipe(); rvAllLabel(); sendLabel(); mountViewers();
+    document.body.classList.toggle('nocrop', cropOff); const cb = $('cropAll'); if (cb) { cb.hidden = !list.length; cb.textContent = cropOff ? '✂ إظهار المقتطعات' : 'إخفاء المقتطعات'; cb.setAttribute('aria-pressed', !cropOff); }
+    mountCrops();
     if (keepWhy) { const t = $('dr-' + delAsk), ok = document.querySelector(`[data-delok="${CSS.escape(delAsk)}"]`); if (t) t.value = keepWhy; if (ok) ok.disabled = !keepWhy.trim(); }
   }
   function drawTrash() {
@@ -391,6 +497,11 @@
     }
     if (b.dataset.rvtg) { const id = b.dataset.rvtg; rv.open[id] = !isOpen(id); draw(); const t = document.querySelector(`[data-rvtg="${CSS.escape(id)}"]`); if (t) t.focus({ preventScroll: true }); }
     if (b.id === 'rvAll') { rv.hideAll = !rv.hideAll; rv.open = {}; draw(); }
+    if (b.id === 'cropAll') { cropOff = !cropOff; try { localStorage.setItem('invoice-simple-crops-off', cropOff ? '1' : '0'); } catch (e) { } draw(); }
+    if (b.dataset.cz) { // تكبير: نفتح صورة الفاتورة في البطاقة على موضع الخانة
+      const id = b.dataset.cz, k = b.dataset.ck; rv.open[id] = true; rv.cur[id] = k; draw();
+      const h = $('rvh-' + id); if (h) { h.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => { if (rvLive[id]) rvLive[id].focus(k); }, 350); }
+    }
     if (b.dataset.rr) rerunVendor(b.dataset.rr);
     if (b.dataset.rrno) { delete rrS[b.dataset.rrno]; draw(); }
     if (b.dataset.rrundo) undoRerun(b.dataset.rrundo);
@@ -484,21 +595,23 @@
         const x = list.find(y => y.id === job.id);
         deep = true;
         try {
-          const { d, pages, src } = await processFile(job.file, say);
+          const { d, pages, src, plines } = await processFile(job.file, say);
           let changed = 0;
           F.forEach(([k]) => { const nv = k === 'total' || k === 'tax_amount' ? (d[k] ?? '') : k === 'payment_method' ? payNorm(d[k]) : (d[k] || ''); if (x && !(x.edited && x.edited[k]) && !blank(nv) && nv !== x[k]) { x[k] = nv; if (x.zsrc) delete x.zsrc[k]; changed++; } });
           if (x && zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { changed += await applyZones(x, src); } catch (e) { console.warn(e); } }
+          if (x) x.loc = locAll(x, plines);
           if (x) { save(); delete rvPages[job.id]; IMG.get(job.id).then(r0 => IMG.put(job.id, { pages, blob: (r0 && r0.blob) || job.file })); }
           toast(changed ? `أُعيدت القراءة: تحدّثت ${changed} من الخانات` : 'أُعيدت القراءة ولم تتغير البيانات');
         } catch (e) { console.error(e); toast('تعذّرت إعادة القراءة'); }
         deep = false; delete live[job.id]; done++; draw(); continue;
       }
       try {
-        const { d, pages, src } = await processFile(job.file, say);
+        const { d, pages, src, plines } = await processFile(job.file, say);
         const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: sig(job.file),
           invoice_number: d.invoice_number || '', invoice_date: d.invoice_date || '', total: d.total ?? '', tax_amount: d.tax_amount ?? '',
           vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: payNorm(d.payment_method), note: '' };
         if (zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { await applyZones(x, src); } catch (e) { console.warn(e); } }
+        x.loc = locAll(x, plines);
         list.unshift(x); save(); if (job.batch) { job.batch.read++; if (job.batch === upSum) drawSum(); }
         IMG.put(job.id, { pages, blob: job.file.size < 25e6 ? job.file : null });
       } catch (e) {
@@ -975,6 +1088,7 @@
     if (!k) return null;
     let r = x.zrect && x.zrect[k];
     if (!r && x.zsrc && x.zsrc[k] && x.zsrc[k] !== 'pick') { const key = zoneFor(x); r = key && zones[key].fields && zones[key].fields[k]; }
+    if (!r && x.loc) r = x.loc[k];
     if (!r) return null;
     const pg = pgIndex(r.pg, n); if (pg < 0) return null;
     return { x: r.x, y: r.y, w: r.w, h: r.h, pg, tag: label(k) };
