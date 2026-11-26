@@ -5,6 +5,7 @@
  * - يستقبل الفواتير المعتمدة من التطبيق ويضيفها إلى InvoiceT و VatReport (بدون تكرار).
  * - يعطي التطبيق البيانات المرجعية (الموردين والمشاريع والمنتجات) ليقرأها مباشرة من الشيت.
  * - يحفظ «قوالب الموردين» (أماكن الخانات) في ورقة VendorTemplates حتى تظهر على كل الأجهزة.
+ * - يستقبل فواتير الواجهة المبسطة في ورقة «فواتير التطبيق» (صف لكل فاتورة، يُحدَّث إن أُرسلت مرة أخرى).
  * - التحديث مسموح فقط لبريد إلكتروني أضافه المالك من قائمة «قارئ الفواتير» (لكل بريد رمز خاص)، ويُسجَّل البريد في EnteredBy.
  */
 
@@ -55,6 +56,44 @@ function zonesWrite_(ss, put, who) {
   });
   if (rows.length > 1) sh.getRange(2, 1, rows.length - 1, TPL_HEAD.length).clearContent();
   if (keep.length) { sh.getRange(2, 3, keep.length, 1).setNumberFormat('@'); sh.getRange(2, 6, keep.length, 1).setNumberFormat('@'); sh.getRange(2, 1, keep.length, TPL_HEAD.length).setValues(keep); }
+}
+
+// ورقة فواتير الواجهة المبسطة (تُنشأ تلقائيًا ولا تمس InvoiceT أو VatReport)
+const APP_SHEET = 'فواتير التطبيق';
+const APP_HEAD = ['معرّف التطبيق', 'رقم الفاتورة', 'تاريخ الفاتورة', 'المبلغ الإجمالي', 'مبلغ الضريبة', 'اسم المورد', 'الرقم الضريبي', 'طريقة الدفع', 'المشروع', 'ملاحظات', 'الملف', 'الحالة', 'أُرسلت بواسطة', 'آخر تحديث'];
+function appSheet_(ss) {
+  let sh = sheet_(ss, APP_SHEET);
+  if (!sh) { sh = ss.insertSheet(APP_SHEET); sh.getRange(1, 1, 1, APP_HEAD.length).setValues([APP_HEAD]).setFontWeight('bold'); sh.setFrozenRows(1); sh.setRightToLeft(true); }
+  return sh;
+}
+// نص يبدأ بـ = أو + أو - أو @ قد يُفسَّر معادلة: نضيف قبله علامة '
+const safe_ = v => { const t = String(v == null ? '' : v); return /^[=+\-@]/.test(t) && !/^-?\d+(\.\d+)?$/.test(t) ? "'" + t : t; };
+const num_ = v => v === '' || v == null || isNaN(Number(v)) ? safe_(v) : Number(v);
+const vendKey_ = (vat, name) => { const d = str_(vat).replace(/\D/g, ''); return d.length === 15 ? 'v' + d : 'n' + str_(name).toLowerCase().replace(/[^0-9a-z\u0600-\u06ff]/g, ''); };
+function appInvoices_(ss, list, who) {
+  const sh = appSheet_(ss), rows = values_(sh), now = new Date();
+  const byId = {}, byKey = {};
+  rows.slice(1).forEach((r, i) => { const id = str_(r[0]); if (id) byId[id] = i + 2;
+    if (str_(r[1]) && !/^محذوفة/.test(str_(r[11]))) byKey[vendKey_(r[6], r[5]) + '|' + invKey_(r[1])] = id; });
+  const out = [], add = [];
+  (list || []).forEach(d => {
+    const id = str_(d.id); if (!id) return;
+    const key = vendKey_(d.VATID, d.Vendor) + '|' + invKey_(d.InvoiceNo);
+    if (!d.Deleted && str_(d.InvoiceNo) && byKey[key] && byKey[key] !== id) { out.push({ id, skipped: 'نفس رقم الفاتورة ونفس المورد موجودة في الشيت' }); return; }
+    const date = d.Date && /^\d{4}-\d{2}-\d{2}$/.test(d.Date) ? new Date(d.Date + 'T00:00:00') : safe_(d.Date);
+    const row = [id, safe_(d.InvoiceNo), date, num_(d.Total), num_(d.Vat), safe_(d.Vendor), str_(d.VATID).replace(/\D/g, ''), safe_(d.Payment), safe_(d.Project), safe_(d.Note), safe_(d.File),
+      d.Deleted ? 'محذوفة' + (d.DeleteReason ? ': ' + safe_(d.DeleteReason) : '') : 'نشطة', who, now];
+    if (byId[id]) { sh.getRange(byId[id], 2, 1, 1).setNumberFormat('@'); sh.getRange(byId[id], 7, 1, 1).setNumberFormat('@'); sh.getRange(byId[id], 1, 1, row.length).setValues([row]); out.push({ id, row: byId[id], updated: true }); }
+    else { add.push(row); out.push({ id, add: add.length - 1 }); }
+    if (!d.Deleted && str_(d.InvoiceNo)) byKey[key] = id;
+  });
+  if (add.length) {
+    const r0 = Math.max(sh.getLastRow(), 1) + 1;
+    sh.getRange(r0, 2, add.length, 1).setNumberFormat('@'); sh.getRange(r0, 7, add.length, 1).setNumberFormat('@');
+    sh.getRange(r0, 1, add.length, APP_HEAD.length).setValues(add);
+    out.forEach(o => { if (o.add !== undefined) { o.row = r0 + o.add; delete o.add; } });
+  }
+  return out;
 }
 
 function onOpen() {
@@ -163,6 +202,7 @@ function doPost(e) {
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (body.action === 'appInvoices') return json_({ ok: true, results: appInvoices_(ss, body.invoices, who) });
     if (body.action === 'zones') { zonesWrite_(ss, body.put, who); const z = zonesRead_(ss); return json_({ ok: true, zones: z.zones, deleted: z.deleted }); }
     const invSh = sheet_(ss, 'InvoiceT'), vatSh = sheet_(ss, 'VatReport');
     if (!invSh || !vatSh) return json_({ ok: false, error: 'لم أجد ورقة InvoiceT أو VatReport' });

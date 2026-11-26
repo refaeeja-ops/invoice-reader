@@ -201,6 +201,8 @@ button,.btn{touch-action:manipulation}
 .wpbox{border:2px solid var(--stamp);border-radius:8px;padding:12px;display:grid;gap:8px;background:var(--warnbg)}
 .wpbox>b{color:var(--stamp);font-size:17px}.wpbox p{margin:0;font-size:14px}
 .wpbox input{font:inherit;font-size:18px;letter-spacing:.05em;direction:ltr;text-align:center;border:1.5px solid var(--line);border-radius:6px;padding:7px 9px;min-height:44px;max-width:220px;background:var(--paper);color:var(--ink)}
+.sb{display:block;font-size:12px;font-weight:500;margin-top:2px}.sb.ok{color:var(--ok)}.sb.dirty{color:#8a5a00}.sb.err{color:var(--stamp)}
+.lhead .gssend{font-size:14px;min-height:40px;border-color:var(--ok);color:var(--ok);font-weight:700}
 @media (max-width:560px){.grid{grid-template-columns:1fr 1fr}.f-vendor_name,.f-vendor_tax_number{grid-column:1/-1}.inv footer button{flex:1}}
 </style>
 </head>
@@ -224,7 +226,7 @@ button,.btn{touch-action:manipulation}
     <div class="upsum" id="upSum" hidden aria-live="polite"></div>
   </section>
   <section class="slip" aria-labelledby="lT">
-    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
+    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="gssend" id="gsSend" hidden>☁️ إرسال إلى Google Sheet</button><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
     <div id="list"></div>
   </section>
   <section class="slip" id="zSec" hidden aria-labelledby="zT">
@@ -285,7 +287,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260848'; window.APP_VERSION = V;
+(function () { var V = '202611260926'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -293,11 +295,11 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611260848"></script>
-<script src="parse.js?v=202611260848"></script>
-<script src="export.js?v=202611260848"></script>
-<script src="digits.js?v=202611260848"></script>
-<script src="simple.js?v=202611260848"></script>
+<script src="config.js?v=202611260926"></script>
+<script src="parse.js?v=202611260926"></script>
+<script src="export.js?v=202611260926"></script>
+<script src="digits.js?v=202611260926"></script>
+<script src="simple.js?v=202611260926"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

@@ -280,7 +280,7 @@
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
       ${rvHtml(x)}</article>`;
     return `<article class="inv" id="c-${esc(x.id)}">
-      <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small></div><span class="amt">${esc(money(x.total))}</span></header>
+      <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small>${sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
       <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
@@ -301,7 +301,7 @@
     $('sum').textContent = list.length ? (nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة') : '';
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
       + (list.map(x => card(x)).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
-    drawZones(); drawTrash(); drawWipe(); rvAllLabel(); mountViewers();
+    drawZones(); drawTrash(); drawWipe(); rvAllLabel(); sendLabel(); mountViewers();
     if (keepWhy) { const t = $('dr-' + delAsk), ok = document.querySelector(`[data-delok="${CSS.escape(delAsk)}"]`); if (t) t.value = keepWhy; if (ok) ok.disabled = !keepWhy.trim(); }
   }
   function drawTrash() {
@@ -321,6 +321,7 @@
     box.outerHTML = html;
     c.querySelector('header b').textContent = x.vendor_name || 'مورد غير معروف';
     c.querySelector('.amt').textContent = money(x.total);
+    const hd = c.querySelector('header > div'); if (hd) { const ob = hd.querySelector('.sb'); if (ob) ob.remove(); hd.insertAdjacentHTML('beforeend', sentBadge(x)); } sendLabel();
     F.forEach(([k]) => { const el = $(`f-${x.id}-${k}`); if (!el) return; const f = el.closest('.f'), m = blank(x[k]) && k !== 'payment_method';
       f.classList.toggle('miss', m); const pb = f.querySelector('.pkb'); if (pb) pb.classList.toggle('need', m);
       if (!(x.zsrc && x.zsrc[k])) { const zb = f.querySelector('.zb'); if (zb) zb.remove(); } });
@@ -1179,7 +1180,7 @@
     const n = Object.keys(zpend).length;
     if (!gs) {
       if (b.querySelector('form')) return; // لا نمسح ما يكتبه المستخدم
-      b.innerHTML = `<p><b>القوالب محفوظة في هذا المتصفح فقط.</b> اربطها بـ Google Sheet لتُحفظ دائمًا وتظهر على كل أجهزتك.</p>
+      b.innerHTML = `<p><b>القوالب محفوظة في هذا المتصفح فقط.</b> اربط التطبيق بـ Google Sheet لتُحفظ القوالب دائمًا وتظهر على كل أجهزتك، ولتتمكن من إرسال الفواتير إلى الشيت.</p>
         <form id="zsForm" class="zsform"><input id="zsEmail" type="email" autocomplete="email" placeholder="البريد الإلكتروني" required><input id="zsToken" autocomplete="off" placeholder="رمز الدخول" required><button class="primary" id="zsGo">ربط بـ Google Sheet</button></form>
         <small>البريد والرمز من قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له» في الشيت.</small>`;
       return;
@@ -1204,6 +1205,49 @@
       undoBar('أُلغي الربط مع Google Sheet. القوالب باقية في هذا المتصفح', () => { gs = old; try { localStorage.setItem(GKEY, JSON.stringify(old)); } catch { } drawSync(); }, () => { }); }
   });
   if (gs) setTimeout(zSync, 1500);
+
+  // ---------- إرسال الفواتير إلى Google Sheet (ورقة «فواتير التطبيق») ----------
+  const sentSig = x => JSON.stringify([x.invoice_number, x.invoice_date, x.total, x.tax_amount, x.vendor_name, x.vendor_tax_number, x.payment_method, x.project || '', noteOf(x), x.file || '', !!x.deletedAt, x.delReason || '']);
+  const sendState = x => !x.sentAt ? (x.sendErr ? 'err' : 'new') : x.sentSig === sentSig(x) ? 'ok' : 'dirty';
+  function sentBadge(x) {
+    if (!GURL) return '';
+    const st = sendState(x);
+    if (st === 'ok') return `<small class="sb ok">✓ في Google Sheet${x.sentRow ? ' (صف ' + x.sentRow + ')' : ''}</small>`;
+    if (st === 'dirty') return '<small class="sb dirty">⟳ عُدّلت بعد الإرسال، ستُحدَّث في الشيت عند الإرسال</small>';
+    if (st === 'err') return `<small class="sb err">لم تُرسل: ${esc(x.sendErr)}</small>`;
+    return '';
+  }
+  const toSend = () => list.filter(x => sendState(x) !== 'ok').concat(trash.filter(x => x.sentAt && sendState(x) === 'dirty'));
+  let sending = false;
+  function sendLabel() {
+    const b = $('gsSend'); if (!b) return;
+    b.hidden = !GURL || (!list.length && !trash.some(x => x.sentAt));
+    const n = toSend().length;
+    b.disabled = sending || !n;
+    b.textContent = sending ? 'جارٍ الإرسال إلى Google Sheet…' : n ? `☁️ إرسال إلى Google Sheet (${n})` : '✓ كل الفواتير في Google Sheet';
+  }
+  $('gsSend').onclick = async () => {
+    if (!gs) { toast('اربط التطبيق بـ Google Sheet أولًا: اكتب بريدك ورمز الدخول'); const f = $('zsEmail'); if (f) { f.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => f.focus({ preventScroll: true }), 300); } return; }
+    const items = toSend(); if (!items.length || sending) return;
+    sending = true; sendLabel();
+    const sig = new Map(items.map(x => [x.id, sentSig(x)]));
+    try {
+      const n2s = v => { const t = n2(v); return typeof t === 'number' ? t : (t || ''); };
+      const invoices = items.map(x => ({ id: x.id, InvoiceNo: String(x.invoice_number || ''), Date: x.invoice_date || '', Total: n2s(x.total), Vat: n2s(x.tax_amount), Vendor: x.vendor_name || '',
+        VATID: x.vendor_tax_number || '', Payment: x.payment_method || '', Project: x.project || '', Note: noteOf(x), File: x.file || '', Deleted: !!x.deletedAt, DeleteReason: x.delReason || '' }));
+      const r = await fetch(GURL, { method: 'POST', body: JSON.stringify({ email: gs.email, token: gs.token, action: 'appInvoices', invoices }), redirect: 'follow' });
+      let j; try { j = await r.json(); } catch { throw new Error('رد غير متوقع من الشيت'); }
+      if (!j.ok) throw new Error(j.error || 'تعذّر الإرسال');
+      if (!j.results) throw new Error('الشيت لا يستقبل الفواتير بعد: حدّث كود Apps Script وانشر نسخة جديدة');
+      let ok = 0, sk = 0; const now = new Date().toISOString(), all = list.concat(trash);
+      j.results.forEach(o => { const x = all.find(y => y.id === o.id); if (!x) return;
+        if (o.skipped) { x.sendErr = o.skipped; sk++; return; }
+        x.sentAt = now; x.sentRow = o.row; x.sentSig = sig.get(x.id); delete x.sendErr; ok++; });
+      save(); saveTrash();
+      toast(sk ? `أُرسلت ${ok} فاتورة، ولم تُرسل ${sk} لأنها مكررة في الشيت` : `أُرسلت ${ok} فاتورة إلى Google Sheet`);
+    } catch (e) { console.warn(e); toast('تعذّر الإرسال: ' + ((e && e.message) || 'تحقق من الاتصال')); }
+    sending = false; draw();
+  };
 
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });
