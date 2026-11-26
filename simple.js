@@ -257,8 +257,8 @@
     else if (type === 'pay') input = `<input ${attrs} list="pays" value="${esc(v)}" placeholder="مثال: مدى">`;
     else input = `<input ${attrs} value="${esc(type === 'num' && !blank(v) && isFinite(+v) ? (+v).toFixed(2) : v)}"${type !== 'text' ? ' inputmode="decimal" class="num"' : ''} placeholder="${miss ? 'لم يُقرأ — أدخله' : ''}">`;
     const zs = x.zsrc && x.zsrc[k];
-    const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : ''}">${zs === 'pick' ? 'محددة يدويًا' : 'من قالب المورد'}</em>` : '';
-    return `<div class="f f-${k}${miss ? ' miss' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}</div>`;
+    const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : zs === 'new' ? ' g' : ''}">${zs === 'pick' ? 'محددة يدويًا' : zs === 'new' ? 'حُدّث بالقالب' : 'من قالب المورد'}</em>` : '';
+    return `<div class="f f-${k}${miss ? ' miss' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}</div>`;
   };
   function card(x) {
     const w = issues(x);
@@ -267,6 +267,7 @@
       <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
+      ${rrHtml(x)}${rvHtml(x)}
       <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button><button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}">حذف الفاتورة</button></footer>
     </article>`;
   }
@@ -278,7 +279,7 @@
     $('sum').textContent = list.length ? (nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة') : '';
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
       + (list.map(card).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
-    drawZones();
+    drawZones(); rvAllLabel(); mountViewers();
   }
   // تحديث ملاحظات وحالة بطاقة واحدة بدون إعادة رسم (حتى لا يضيع مكان الكتابة)
   function refreshCard(x) {
@@ -320,6 +321,11 @@
       undoBar(`حُذف قالب «${t.name || 'المورد'}»`, () => { zones[k] = t; saveZones(); drawZones(); }, () => { });
     }
     if (b.dataset.reread) reread(b.dataset.reread);
+    if (b.dataset.rvtg) { const id = b.dataset.rvtg; rv.open[id] = !isOpen(id); draw(); const t = document.querySelector(`[data-rvtg="${CSS.escape(id)}"]`); if (t) t.focus({ preventScroll: true }); }
+    if (b.id === 'rvAll') { rv.hideAll = !rv.hideAll; rv.open = {}; draw(); }
+    if (b.dataset.rr) rerunVendor(b.dataset.rr);
+    if (b.dataset.rrno) { delete rrS[b.dataset.rrno]; draw(); }
+    if (b.dataset.rrundo) undoRerun(b.dataset.rrundo);
   });
 
   // ---------- عرض الملف ----------
@@ -395,7 +401,7 @@
           let changed = 0;
           F.forEach(([k]) => { const nv = k === 'total' || k === 'tax_amount' ? (d[k] ?? '') : (d[k] || ''); if (x && !(x.edited && x.edited[k]) && !blank(nv) && nv !== x[k]) { x[k] = nv; if (x.zsrc) delete x.zsrc[k]; changed++; } });
           if (x && zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { changed += await applyZones(x, src); } catch (e) { console.warn(e); } }
-          if (x) { save(); IMG.get(job.id).then(r0 => IMG.put(job.id, { pages, blob: (r0 && r0.blob) || job.file })); }
+          if (x) { save(); delete rvPages[job.id]; IMG.get(job.id).then(r0 => IMG.put(job.id, { pages, blob: (r0 && r0.blob) || job.file })); }
           toast(changed ? `أُعيدت القراءة: تحدّثت ${changed} من الخانات` : 'أُعيدت القراءة ولم تتغير البيانات');
         } catch (e) { console.error(e); toast('تعذّرت إعادة القراءة'); }
         deep = false; delete live[job.id]; done++; draw(); continue;
@@ -612,7 +618,7 @@
       if (x.edited && x.edited[k]) continue;
       const i = pgIndex(r.pg, src.length); if (i < 0) continue;
       const v = extract(k, await readRegion(src[i], r));
-      if (!blank(v)) { if (x[k] !== v) n++; x[k] = v; (x.zsrc = x.zsrc || {})[k] = 'tpl'; }
+      if (!blank(v)) { if (x[k] !== v) n++; x[k] = v; (x.zsrc = x.zsrc || {})[k] = 'tpl'; (x.zrect = x.zrect || {})[k] = { ...r }; }
     }
     return n;
   }
@@ -634,20 +640,21 @@
     if (!rec && x.old) { const u = await OLD.get(id); if (u && u.length) rec = { pages: u.map(v => typeof v === 'string' ? v : URL.createObjectURL(v)) }; }
     return rec;
   }
-  async function pageSrc(i) { // نسخة عالية الدقة من الصفحة للقراءة (تُحمّل عند الحاجة فقط)
-    if (pk.src[i]) return pk.src[i];
-    const b = pk.rec && pk.rec.blob;
+  const pageSrc = i => loadSrc(pk, i);
+  async function loadSrc(c, i) { // نسخة عالية الدقة من الصفحة للقراءة (تُحمّل عند الحاجة فقط). c = {rec, pages, src, pdf}
+    if (c.src[i]) return c.src[i];
+    const b = c.rec && c.rec.blob;
     let s = null;
     try {
       if (b && (b.type === 'application/pdf' || /\.pdf$/i.test(b.name || '')) && window.pdfjsLib) {
-        pk.pdf = pk.pdf || await pdfjsLib.getDocument({ data: await b.arrayBuffer() }).promise;
-        s = await renderPdfPage(pk.pdf, i + 1);
+        c.pdf = c.pdf || await pdfjsLib.getDocument({ data: await b.arrayBuffer() }).promise;
+        s = await renderPdfPage(c.pdf, i + 1);
       } else if (b && i === 0 && /^image\//.test(b.type || 'image/')) {
         const u = URL.createObjectURL(b); try { s = { canvas: toCanvas(await loadImg(u), 2400) }; } finally { URL.revokeObjectURL(u); }
       }
     } catch (e) { console.warn(e); }
-    if (!s) s = { canvas: toCanvas(await loadImg(pk.pages[i]), 2400) };
-    return (pk.src[i] = s);
+    if (!s) s = { canvas: toCanvas(await loadImg(c.pages[i]), 2400) };
+    return (c.src[i] = s);
   }
   async function openPick(id, k) {
     const x = list.find(y => y.id === id); if (!x) return;
@@ -780,9 +787,12 @@
         Object.assign(t, { name: x.vendor_name || t.name || '', vat: vatOf(x) || t.vat || '', nameKey: nameKey(x.vendor_name) || t.nameKey || '', at: new Date().toISOString() });
         t.fields[k] = { pg: r.pg, x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) };
         saveZones(); saved = true;
+        const n = list.filter(y => y !== x && zoneFor(y) === key).length;
+        if (n && !(rrS[x.id] && rrS[x.id].state === 'run')) rrS[x.id] = { state: 'offer', key, ks: [...new Set([...((rrS[x.id] && rrS[x.id].state === 'offer' && rrS[x.id].ks) || []), k])] };
       }
     }
     (x.zsrc = x.zsrc || {})[k] = saved ? 'tpl' : 'pick';
+    (x.zrect = x.zrect || {})[k] = { pg: r.pg, x: r.x, y: r.y, w: r.w, h: r.h }; rv.cur[x.id] = k;
     save(); closePick(); draw(); backTo(x.id, k);
     toast(saved ? `حُفظ مكان «${label(k)}» لفواتير ${x.vendor_name || 'المورد'} القادمة` : `تم تحديث «${label(k)}»`);
   };
@@ -814,6 +824,194 @@
     }
   });
   document.addEventListener('keyup', e => { if (e.code === 'Space' && spaceHeld) { spaceHeld = false; setMode(pk.mode); } });
+
+  // ---------- مراجعة الفاتورة داخل البطاقة ----------
+  // الصور مخفية عند فتح التطبيق، ويمكن إظهارها لكل فاتورة أو للكل
+  const rv = { hideAll: true, open: {}, cur: {}, st: {} }, rvPages = {}, rvLive = {};
+  const isOpen = id => rv.open[id] ?? !rv.hideAll;
+  function rvHtml(x) {
+    const o = isOpen(x.id), id = esc(x.id);
+    return `<section class="rv${o ? '' : ' off'}" aria-label="مراجعة الفاتورة"><h3><span>مراجعة الفاتورة ${o ? '<small>اضغط أي خانة لترى مكانها على الفاتورة</small>' : ''}</span>
+      <button type="button" class="tg" data-rvtg="${id}" aria-expanded="${o}">${o ? 'إخفاء الصورة' : '👁 إظهار صورة الفاتورة'}</button></h3>${o ? `<div class="rvh" id="rvh-${id}"></div>` : ''}</section>`;
+  }
+  function boxFor(x, k, n) {
+    if (!k) return null;
+    let r = x.zrect && x.zrect[k];
+    if (!r && x.zsrc && x.zsrc[k] && x.zsrc[k] !== 'pick') { const key = zoneFor(x); r = key && zones[key].fields && zones[key].fields[k]; }
+    if (!r) return null;
+    const pg = pgIndex(r.pg, n); if (pg < 0) return null;
+    return { x: r.x, y: r.y, w: r.w, h: r.h, pg, tag: label(k) };
+  }
+  async function rvLoadPages(x) {
+    if (rvPages[x.id]) return rvPages[x.id];
+    const rec = await getRec(x.id, x);
+    return (rvPages[x.id] = (rec && rec.pages) || []);
+  }
+  function mountViewers() {
+    for (const id in rvLive) { rvLive[id].ro.disconnect(); delete rvLive[id]; }
+    list.forEach(x => { const h = document.getElementById('rvh-' + x.id); if (h) rvLive[x.id] = makeViewer(h, x); });
+  }
+  function makeViewer(host, x) {
+    const id = x.id, st = rv.st[id] = rv.st[id] || { pg: 0, zoom: 1, l: 0, t: 0 };
+    host.innerHTML = `<div class="rvtb" role="toolbar" aria-label="أدوات عرض الفاتورة">
+      <button type="button" data-z="-" aria-label="تصغير">−</button><span class="zl">100%</span><button type="button" data-z="+" aria-label="تكبير">+</button><button type="button" data-z="0">ملاءمة</button>
+      <span class="sp"></span><button type="button" data-p="-1" aria-label="الصفحة السابقة">›</button><span class="pg"></span><button type="button" data-p="1" aria-label="الصفحة التالية">‹</button>
+      <span class="cap" aria-live="polite"></span></div>
+      <div class="rvvp" dir="ltr" tabindex="0" aria-label="صورة الفاتورة. اسحب للتحريك، والأسهم أيضًا"><div class="rvcv"><div class="rvpaper"><img alt="صفحة الفاتورة"><div class="rvpad"></div></div></div></div>`;
+    const vp = host.querySelector('.rvvp'), paper = host.querySelector('.rvpaper'), img = paper.querySelector('img'), pad = paper.querySelector('.rvpad');
+    const zl = host.querySelector('.zl'), pgl = host.querySelector('.pg'), cap = host.querySelector('.cap'), bPrev = host.querySelector('[data-p="-1"]'), bNext = host.querySelector('[data-p="1"]');
+    let pages = [], box = null;
+    const fitW = () => { const a = (img.naturalWidth || 1) / (img.naturalHeight || 1.3); return Math.max(160, Math.min(vp.clientWidth - 24, (vp.clientHeight - 24) * a)); };
+    function setZoom(z, cx, cy) {
+      z = Math.max(1, Math.min(6, z)); const a = paper.getBoundingClientRect();
+      if (cx == null) { const v = vp.getBoundingClientRect(); cx = v.left + v.width / 2; cy = v.top + v.height / 2; }
+      const fx = a.width ? (cx - a.left) / a.width : .5, fy = a.height ? (cy - a.top) / a.height : .5;
+      st.zoom = z; paper.style.width = fitW() * z + 'px';
+      const b = paper.getBoundingClientRect(); vp.scrollLeft += b.left + fx * b.width - cx; vp.scrollTop += b.top + fy * b.height - cy;
+      zl.textContent = Math.round(z * 100) + '%'; host.querySelector('[data-z="-"]').disabled = z <= 1; host.querySelector('[data-z="+"]').disabled = z >= 6;
+    }
+    let za = 0, gl = 0;
+    const anim = to => { to = Math.max(1, Math.min(6, to)); cancelAnimationFrame(za); if (RM) { setZoom(to); return; } const f = st.zoom, t0 = performance.now();
+      const s = t => { const q = Math.min(1, (t - t0) / 170); setZoom(f + (to - f) * (1 - (1 - q) ** 3)); if (q < 1) za = requestAnimationFrame(s); }; za = requestAnimationFrame(s); };
+    function drawBox() {
+      paper.querySelectorAll('.rvbox').forEach(e => e.remove());
+      if (box && box.pg === st.pg) { const d = document.createElement('div'); d.className = 'rvbox';
+        Object.assign(d.style, { left: (box.x - .006) * 100 + '%', top: (box.y - .004) * 100 + '%', width: (box.w + .012) * 100 + '%', height: (box.h + .008) * 100 + '%' });
+        d.innerHTML = `<span>${esc(box.tag)}</span>`; paper.insertBefore(d, pad); }
+    }
+    function scrollToBox() {
+      if (!box || box.pg !== st.pg) return;
+      const b = paper.getBoundingClientRect(), v = vp.getBoundingClientRect();
+      vp.scrollTop += b.top + b.height * box.y - v.top - v.height / 3; vp.scrollLeft += b.left + b.width * (box.x + box.w / 2) - v.left - v.width / 2;
+    }
+    function showPg(i, keep) {
+      const n = pages.length; st.pg = Math.max(0, Math.min(n - 1, i));
+      pgl.textContent = n > 1 ? `صفحة ${st.pg + 1} من ${n}` : ''; bPrev.hidden = bNext.hidden = n < 2; bPrev.disabled = st.pg === 0; bNext.disabled = st.pg === n - 1;
+      return new Promise(ok => { img.onload = () => { paper.style.width = fitW() * st.zoom + 'px'; zl.textContent = Math.round(st.zoom * 100) + '%';
+        host.querySelector('[data-z="-"]').disabled = st.zoom <= 1; host.querySelector('[data-z="+"]').disabled = st.zoom >= 6;
+        drawBox(); if (keep) { vp.scrollLeft = st.l; vp.scrollTop = st.t; } else { vp.scrollTop = 0; scrollToBox(); } ok(); }; img.onerror = ok;
+        if (img.getAttribute('src') === pages[st.pg]) img.onload(); else img.src = pages[st.pg]; });
+    }
+    const me = {
+      focus(k) {
+        box = boxFor(x, k, pages.length);
+        cap.textContent = !k ? '' : box ? `المكان المظلل: ${label(k)}` : `مكان «${label(k)}» غير معروف بعد. استخدم زر التحديد بجانب الخانة.`;
+        if (!pages.length) return;
+        if (box && box.pg !== st.pg) showPg(box.pg); else { drawBox(); scrollToBox(); }
+      }
+    };
+    rvLoadPages(x).then(p => {
+      if (rvLive[id] !== me) return; pages = p;
+      if (!pages.length) { vp.innerHTML = '<p class="rvnone">لا توجد صورة محفوظة لهذه الفاتورة.</p>'; host.querySelector('.rvtb').hidden = true; return; }
+      const k = rv.cur[id]; box = boxFor(x, k, pages.length);
+      if (k) cap.textContent = box ? `المكان المظلل: ${label(k)}` : '';
+      showPg(st.pg, true);
+    });
+    vp.addEventListener('scroll', () => { st.l = vp.scrollLeft; st.t = vp.scrollTop; }, { passive: true });
+    host.querySelector('.rvtb').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.z) anim(b.dataset.z === '+' ? st.zoom * 1.4 : b.dataset.z === '-' ? st.zoom / 1.4 : 1);
+      if (b.dataset.p) showPg(st.pg + +b.dataset.p); });
+    vp.addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); cancelAnimationFrame(za); setZoom(st.zoom * Math.exp(-e.deltaY * .0025), e.clientX, e.clientY); }, { passive: false });
+    vp.addEventListener('keydown', e => { const m = { ArrowLeft: [-60, 0], ArrowRight: [60, 0], ArrowUp: [0, -60], ArrowDown: [0, 60] }[e.key];
+      if (m) { e.preventDefault(); vp.scrollBy(m[0], m[1]); } else if (e.key === '+' || e.key === '=') { e.preventDefault(); anim(st.zoom * 1.25); }
+      else if (e.key === '-') { e.preventDefault(); anim(st.zoom / 1.25); } else if (e.key === '0') anim(1);
+      else if (e.key === 'PageDown') { e.preventDefault(); showPg(st.pg + 1); } else if (e.key === 'PageUp') { e.preventDefault(); showPg(st.pg - 1); } });
+    me.ro = new ResizeObserver(() => { if (img.naturalWidth) paper.style.width = fitW() * st.zoom + 'px'; }); me.ro.observe(vp);
+    // سحب للتحريك، وإصبعان للتكبير، مع انزلاق خفيف بعد الإفلات
+    const pts = new Map(); let pan = null, pinch = null, hold = false;
+    const two = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+    vp.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      cancelAnimationFrame(gl); cancelAnimationFrame(za); vp.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) { pan = null; const t = two(); pinch = { d: t.d || 1, z: st.zoom, x: t.x, y: t.y }; hold = true; return; }
+      if (pts.size > 2 || hold) return; e.preventDefault();
+      pan = { x: e.clientX, y: e.clientY, l: vp.scrollLeft, t: vp.scrollTop, h: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }] };
+    });
+    vp.addEventListener('pointermove', e => {
+      if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && pts.size === 2) { const t = two(); setZoom(pinch.z * t.d / pinch.d, t.x, t.y); vp.scrollLeft -= t.x - pinch.x; vp.scrollTop -= t.y - pinch.y; pinch.x = t.x; pinch.y = t.y; return; }
+      if (pan) { pan.h.push({ x: e.clientX, y: e.clientY, t: e.timeStamp }); if (pan.h.length > 6) pan.h.shift(); vp.scrollLeft = pan.l - (e.clientX - pan.x); vp.scrollTop = pan.t - (e.clientY - pan.y); }
+    });
+    const end = e => {
+      pts.delete(e.pointerId);
+      if (pinch) { if (pts.size < 2) pinch = null; if (!pts.size) hold = false; return; }
+      if (!pts.size) hold = false;
+      if (!pan) return; const h = pan.h, a = h[0], b = h[h.length - 1], dt = b.t - a.t; pan = null;
+      if (RM || e.type !== 'pointerup' || !(dt > 0) || e.timeStamp - b.t > 80) return;
+      let vx = (b.x - a.x) / dt, vy = (b.y - a.y) / dt, l = performance.now();
+      const s = t => { const d = Math.min(32, t - l); l = t; vp.scrollLeft -= vx * d; vp.scrollTop -= vy * d; const f = Math.pow(.94, d / 16); vx *= f; vy *= f; if (Math.hypot(vx, vy) > .02) gl = requestAnimationFrame(s); };
+      gl = requestAnimationFrame(s);
+    };
+    vp.addEventListener('pointerup', end); vp.addEventListener('pointercancel', end);
+    return me;
+  }
+  // الضغط على خانة يُظهر مكانها على الصورة
+  document.addEventListener('focusin', e => {
+    const el = e.target.closest('.inv [data-k][data-id]'); if (!el) return;
+    const id = el.dataset.id, k = el.dataset.k; if (!F.some(f => f[0] === k)) return;
+    const x = list.find(y => y.id === id); if (!x || !isOpen(id)) return;
+    const c = $('c-' + id); if (c) c.querySelectorAll('.f.cur').forEach(f => f.classList.remove('cur'));
+    el.closest('.f').classList.add('cur'); rv.cur[id] = k;
+    if (rvLive[id]) rvLive[id].focus(k);
+  });
+  $('rvAll').textContent = '👁 إظهار صور كل الفواتير';
+  const rvAllLabel = () => { const b = $('rvAll'); b.textContent = rv.hideAll ? '👁 إظهار صور كل الفواتير' : 'إخفاء صور كل الفواتير'; b.setAttribute('aria-pressed', !rv.hideAll); b.hidden = !list.length; };
+
+  // ---------- إعادة قراءة فواتير المورد نفسه بعد تعديل القالب ----------
+  const rrS = {};
+  const shown = (k, v) => blank(v) ? 'فارغ' : (k === 'total' || k === 'tax_amount') ? money(v) : String(v);
+  function rrHtml(x) {
+    const r = rrS[x.id]; if (!r) return '';
+    const t = zones[r.key], vn = esc((t && t.name) || x.vendor_name || 'المورد'), id = esc(x.id);
+    const others = list.filter(y => y !== x && zoneFor(y) === r.key);
+    if (r.state === 'offer') {
+      if (!others.length) return '';
+      return `<div class="rr" role="status"><b>حُفظ مكان ${r.ks.map(k => '«' + esc(label(k)) + '»').join(' و')} في قالب ${vn}</b>
+        <p>في القائمة ${others.length === 1 ? 'فاتورة أخرى' : others.length + ' فواتير أخرى'} من نفس المورد. يمكن إعادة قراءتها الآن بالأماكن المحفوظة. الخانات التي عدّلتها بيدك لن تتغير.</p>
+        <div class="row"><button type="button" class="primary" data-rr="${id}">أعد قراءة ${others.length === 1 ? 'الفاتورة' : others.length + ' فواتير'} وطبّق التعديل</button><button type="button" data-rrno="${id}">لاحقًا</button></div></div>`;
+    }
+    if (r.state === 'run') return `<div class="rr" role="status"><b>جارٍ إعادة قراءة فواتير ${vn}… ${r.done} من ${r.n}</b><div class="bar2"><i style="width:${r.n ? r.done / r.n * 100 : 0}%"></i></div></div>`;
+    const fn = cid => { const y = list.find(q => q.id === cid); return esc((y && (y.invoice_number || y.file)) || 'محذوفة'); };
+    const nInv = new Set(r.changes.map(c => c.id)).size;
+    return `<div class="rr" role="status"><b>${r.changes.length ? `انتهت إعادة القراءة: تغيّرت ${r.changes.length} خانة في ${nInv} فاتورة` : 'انتهت إعادة القراءة: لم تتغير أي خانة'}</b>
+      ${r.changes.length || r.skipped.length ? `<ul>${r.changes.map(c => `<li><a href="#c-${esc(c.id)}">فاتورة ${fn(c.id)}</a>: ${esc(label(c.k))} <s>${esc(shown(c.k, c.from))}</s> ← <ins>${esc(shown(c.k, c.to))}</ins></li>`).join('')}
+        ${r.skipped.map(c => `<li class="sk">فاتورة ${fn(c.id)}: ${esc(label(c.k))} ${c.why}</li>`).join('')}</ul>` : ''}
+      <div class="row">${r.changes.length ? `<button type="button" data-rrundo="${id}">↩ تراجع عن التطبيق</button>` : ''}<button type="button" data-rrno="${id}">إغلاق</button></div></div>`;
+  }
+  async function rerunVendor(id) {
+    const x = list.find(y => y.id === id), r0 = rrS[id]; if (!x || !r0 || r0.state !== 'offer') return;
+    const key = r0.key, T = zones[key]; if (!T) return;
+    const others = list.filter(y => y !== x && zoneFor(y) === key);
+    const r = rrS[id] = { state: 'run', key, n: others.length, done: 0, changes: [], skipped: [], before: [] }; draw();
+    for (const y of others) {
+      r.before.push({ id: y.id, vals: Object.fromEntries(F.map(([k]) => [k, y[k]])), zsrc: { ...(y.zsrc || {}) }, zrect: JSON.parse(JSON.stringify(y.zrect || {})) });
+      try {
+        const rec = await getRec(y.id, y);
+        if (!rec || !rec.pages || !rec.pages.length) r.skipped.push({ id: y.id, k: Object.keys(T.fields)[0], why: 'لا توجد صورة محفوظة لها' });
+        else {
+          const c = { rec, pages: rec.pages, src: [], pdf: null };
+          for (const [k, z] of Object.entries(T.fields || {})) {
+            if (y.edited && y.edited[k]) { r.skipped.push({ id: y.id, k, why: 'لم يتغير لأنك عدّلته بيدك' }); continue; }
+            const i = pgIndex(z.pg, c.pages.length); if (i < 0) continue;
+            const v = extract(k, await readRegion(await loadSrc(c, i), z));
+            if (blank(v)) { r.skipped.push({ id: y.id, k, why: 'لم تُقرأ قيمة واضحة في المكان المحفوظ، فبقيت كما هي' }); continue; }
+            (y.zrect = y.zrect || {})[k] = { ...z };
+            if (String(v) !== String(y[k] ?? '')) { r.changes.push({ id: y.id, k, from: y[k], to: v }); y[k] = v; (y.zsrc = y.zsrc || {})[k] = 'new'; }
+            else (y.zsrc = y.zsrc || {})[k] = (y.zsrc && y.zsrc[k] === 'new') ? 'new' : 'tpl';
+          }
+          if (c.pdf) try { c.pdf.destroy(); } catch { }
+        }
+      } catch (e) { console.warn(e); r.skipped.push({ id: y.id, k: Object.keys(T.fields)[0], why: 'تعذّرت قراءتها' }); }
+      r.done++; save(); if (rrS[id] === r) draw();
+    }
+    r.state = 'done'; save(); draw();
+    toast(r.changes.length ? `تحدّثت ${r.changes.length} خانة بالقالب` : 'انتهت إعادة القراءة ولم تتغير البيانات');
+  }
+  function undoRerun(id) {
+    const r = rrS[id]; if (!r || r.state !== 'done') return;
+    r.before.forEach(b => { const y = list.find(q => q.id === b.id); if (!y) return; F.forEach(([k]) => { y[k] = b.vals[k]; }); y.zsrc = b.zsrc; y.zrect = b.zrect; });
+    delete rrS[id]; save(); draw(); toast('أُعيدت الفواتير كما كانت قبل التطبيق');
+  }
 
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });

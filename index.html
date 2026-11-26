@@ -136,6 +136,41 @@ button,.btn{touch-action:manipulation}
 #pjList li b{font-size:17px;min-width:2.5em}#pjList li small{flex:1;color:var(--mute)}
 #pjList li.off b{color:var(--mute);text-decoration:line-through}
 .lhead .pjopen{font-size:14px;min-height:40px}
+/* إعادة قراءة فواتير المورد بالقالب */
+.zb.g{background:var(--ok);color:#fff}
+.rr{margin-top:12px;border:2px solid var(--blue);border-radius:8px;padding:12px;background:#eef2ff;display:grid;gap:8px}
+.rr b{font-size:16px}.rr p{margin:0;font-size:14px;color:var(--lbl)}
+.rr .row{display:flex;flex-wrap:wrap;gap:8px}
+.rr ul{margin:0;padding:0;list-style:none;display:grid;gap:4px;font-size:14px;max-height:260px;overflow:auto}
+.rr li{background:var(--paper);border-radius:5px;padding:6px 10px;border:1px solid var(--cardline);overflow-wrap:anywhere}
+.rr li a{color:var(--blue)}
+.rr li s{color:var(--stamp)}.rr li ins{text-decoration:none;color:var(--ok);font-weight:700}
+.rr li.sk{color:var(--mute)}
+.bar2{height:6px;background:#c9d1ea;border-radius:3px;overflow:hidden}.bar2 i{display:block;height:100%;width:0;background:var(--blue);transition:width .3s}
+/* نافذة مراجعة الفاتورة داخل البطاقة */
+.rv{margin-top:12px;border:1px solid var(--cardline);border-radius:8px;overflow:hidden}
+.rv>h3{margin:0;font-size:15px;padding:6px 12px;background:var(--soft);display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center}
+.rv:not(.off)>h3{border-bottom:1px solid var(--cardline)}
+.rv>h3 small{font-weight:400;color:var(--mute);font-size:13px}
+.rv>h3 .tg{min-height:38px;padding:4px 12px;font-size:14px;flex:none}
+.rvtb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px}
+.rvtb button{min-width:44px;padding:4px 10px}
+.rvtb .zl{min-width:3.4em;text-align:center;font-variant-numeric:tabular-nums}
+.rvtb .sp{flex:1}.rvtb .pg{white-space:nowrap}
+.rvtb .cap{font-size:13px;color:var(--mute);flex-basis:100%}
+.rvvp{position:relative;overflow:auto;background:#2a2d38;height:440px;overscroll-behavior:contain}
+.rvvp:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
+.rvcv{width:max-content;margin:auto;padding:12px}
+.rvpaper{position:relative;background:#fff;user-select:none;-webkit-user-select:none}
+.rvpaper img{display:block;width:100%;height:auto;pointer-events:none}
+.rvpad{position:absolute;inset:0}
+.rvcv{touch-action:none;cursor:grab}.rvcv:active{cursor:grabbing}
+.rvbox{position:absolute;pointer-events:none;border-radius:2px;outline:2.5px solid #111;background:#ffe60070}
+.rvbox span{position:absolute;top:-1.8em;inset-inline-start:-2px;font-size:11px;background:#111;color:#ffe600;padding:0 6px;border-radius:2px;white-space:nowrap}
+.rvnone{color:#fff;padding:30px;text-align:center}
+.f.cur input,.f.cur select{box-shadow:0 0 0 3px #ffe600}
+.lhead .rvall{font-size:14px;min-height:40px}
+@media (max-width:560px){.rvvp{height:340px}.rvtb button{min-width:38px;min-height:38px;padding:4px 7px}}
 @media (max-width:560px){.grid{grid-template-columns:1fr 1fr}.f-vendor_name,.f-vendor_tax_number{grid-column:1/-1}.inv footer button{flex:1}}
 </style>
 </head>
@@ -158,7 +193,7 @@ button,.btn{touch-action:manipulation}
     <div class="status" id="status" role="status" aria-live="polite"></div>
   </section>
   <section class="slip" aria-labelledby="lT">
-    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
+    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
     <div id="list"></div>
   </section>
   <section class="slip" id="zSec" hidden aria-labelledby="zT">
@@ -209,7 +244,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260345'; window.APP_VERSION = V;
+(function () { var V = '202611260739'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -217,10 +252,10 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611260345"></script>
-<script src="export.js?v=202611260345"></script>
-<script src="digits.js?v=202611260345"></script>
-<script src="simple.js?v=202611260345"></script>
+<script src="parse.js?v=202611260739"></script>
+<script src="export.js?v=202611260739"></script>
+<script src="digits.js?v=202611260739"></script>
+<script src="simple.js?v=202611260739"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
