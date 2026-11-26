@@ -300,7 +300,7 @@
     const nIss = list.filter(x => issues(x).length).length;
     $('sum').textContent = list.length ? (nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة') : '';
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
-      + (list.map(card).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
+      + (list.map(x => card(x)).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
     drawZones(); drawTrash(); rvAllLabel(); mountViewers();
     if (keepWhy) { const t = $('dr-' + delAsk), ok = document.querySelector(`[data-delok="${CSS.escape(delAsk)}"]`); if (t) t.value = keepWhy; if (ok) ok.disabled = !keepWhy.trim(); }
   }
