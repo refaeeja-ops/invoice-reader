@@ -8,11 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
 <style>
-:root{color-scheme:light dark;
---bg:light-dark(#dfe3ee,#0f1420);--band:light-dark(#1838b8,#16233f);--paper:light-dark(#fff,#1a2132);
---ink:light-dark(#0f1222,#f3f5fb);--mute:light-dark(#4a5068,#a9b2cc);--line:light-dark(#a9b1c8,#4a5878);--cardline:light-dark(#c3c9da,#2e3852);
---lbl:light-dark(#2f3550,#c6cde0);--val:light-dark(#0f1222,#fff);--inbg:light-dark(#f3f5fa,#242d44);--tplbg:light-dark(#fffbd6,#2f2d16);
---blue:light-dark(#1838b8,#8fb4ff);--stamp:light-dark(#b3121f,#ff8a8a);--stampink:light-dark(#8f0d18,#ffb3b3);--ok:light-dark(#0b6a35,#7ee2a8);--soft:light-dark(#f3f5fa,#242d44);--warnbg:light-dark(#ffe9eb,#3a1d24)}
+:root{color-scheme:light dark;--bg:#dfe3ee;--band:#1838b8;--paper:#fff;--ink:#0f1222;--mute:#4a5068;--line:#a9b1c8;--cardline:#c3c9da;--lbl:#2f3550;--val:#0f1222;--inbg:#f3f5fa;--tplbg:#fffbd6;--blue:#1838b8;--stamp:#b3121f;--stampink:#8f0d18;--ok:#0b6a35;--soft:#f3f5fa;--warnbg:#ffe9eb;--ld1:#fff;--ld2:#111;--ld3:#ffe600}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1420;--band:#16233f;--paper:#1a2132;--ink:#f3f5fb;--mute:#a9b2cc;--line:#4a5878;--cardline:#2e3852;--lbl:#c6cde0;--val:#fff;--inbg:#242d44;--tplbg:#2f2d16;--blue:#8fb4ff;--stamp:#ff8a8a;--stampink:#ffb3b3;--ok:#7ee2a8;--soft:#242d44;--warnbg:#3a1d24;--ld1:#0e1222;--ld2:#ffe600;--ld3:#111}}
 *{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif;overflow-x:clip}
 h1,h2{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.2;margin:0}
@@ -27,7 +24,7 @@ main{max-width:1000px;margin:-56px auto 48px;padding:0 max(3vw,12px);display:gri
 .btns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
 button,.btn{font:inherit;font-weight:500;min-height:44px;padding:8px 18px;border-radius:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;position:relative;text-decoration:none}
 button:focus-visible,.btn:focus-within,input:focus-visible,textarea:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
-.primary{background:var(--blue);border-color:var(--blue);color:light-dark(#fff,#0e1222)}
+.primary{background:var(--blue);border-color:var(--blue);color:var(--ld1)}
 button:disabled{opacity:.5;cursor:default}
 .btn input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
 .prog{margin-top:14px;display:none}.prog.on{display:block}
@@ -74,7 +71,7 @@ button:disabled{opacity:.5;cursor:default}
 .pkb{min-height:34px;width:34px;padding:0;border-radius:6px;color:var(--blue);flex:none}
 .pkb:hover{background:var(--soft)}
 .pkb.need{background:#ffe600;border-color:#111;color:#111}
-.zb{font-style:normal;font-size:11px;font-weight:500;padding:0 6px;border-radius:3px;background:light-dark(#111,#ffe600);color:light-dark(#ffe600,#111);white-space:nowrap}
+.zb{font-style:normal;font-size:11px;font-weight:500;padding:0 6px;border-radius:3px;background:var(--ld2);color:var(--ld3);white-space:nowrap}
 .zb.m{background:#ffe600;color:#111}
 /* نافذة التحديد */
 .pk{position:fixed;inset:0;z-index:55;background:#000b;display:flex;align-items:center;justify-content:center;padding:10px}
@@ -213,7 +210,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260335'; window.APP_VERSION = V;
+(function () { var V = '202611260343'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -221,10 +218,10 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611260335"></script>
-<script src="export.js?v=202611260335"></script>
-<script src="digits.js?v=202611260335"></script>
-<script src="simple.js?v=202611260335"></script>
+<script src="parse.js?v=202611260343"></script>
+<script src="export.js?v=202611260343"></script>
+<script src="digits.js?v=202611260343"></script>
+<script src="simple.js?v=202611260343"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
