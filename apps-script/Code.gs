@@ -72,13 +72,15 @@ const num_ = v => v === '' || v == null || isNaN(Number(v)) ? safe_(v) : Number(
 const vendKey_ = (vat, name) => { const d = str_(vat).replace(/\D/g, ''); return d.length === 15 ? 'v' + d : 'n' + str_(name).toLowerCase().replace(/[^0-9a-z\u0600-\u06ff]/g, ''); };
 // عمود «الرقم الضريبي المختصر» = أول 10 خانات من اليسار من الرقم الضريبي. يُضاف في نهاية الترويسة إن لم يوجد، ويُعبّأ لكل الصفوف
 const APP_SHORT_COL = 'الرقم الضريبي المختصر';
+// الرقم المختصر يُكتب رقمًا صحيحًا (integer) لا نصًا
+const shortNum_ = v => { const d = String(v == null ? '' : v).replace(/\.0+$/, '').replace(/\D/g, '').slice(0, 10); return /^[1-9]\d{9}$/.test(d) ? Number(d) : d; };
 function fillAppShort_(sh) {
   const v = values_(sh); if (!v.length) return;
   const h = v[0].map(str_); let c = h.indexOf(APP_SHORT_COL);
   if (c < 0) { c = h.length; sh.getRange(1, c + 1).setValue(APP_SHORT_COL); }
   if (v.length < 2) return;
-  const col = v.slice(1).map(r => [str_(r[6]).replace(/\D/g, '').slice(0, 10)]);
-  const rg = sh.getRange(2, c + 1, col.length, 1); rg.setNumberFormat('@'); rg.setValues(col);
+  const col = v.slice(1).map(r => [shortNum_(r[6])]);
+  const rg = sh.getRange(2, c + 1, col.length, 1); rg.setNumberFormat('0'); rg.setValues(col);
 }
 function appInvoices_(ss, list, who) {
   const sh = appSheet_(ss), rows = values_(sh), now = new Date();
@@ -222,7 +224,7 @@ function copyApp_(ss) {
     if (sup === undefined || sup === '') {
       sup = ++maxSup;
       const row = sh.map(() => '');
-      row[S('SupID')] = sup; row[S('SupfName')] = name; row[S('VATID')] = sk; row[S('Active')] = true; row[S('EnteredBy')] = 'by application >> ' + who;
+      row[S('SupID')] = sup; row[S('SupfName')] = name; row[S('VATID')] = shortNum_(sk); row[S('Active')] = true; row[S('EnteredBy')] = 'by application >> ' + who;
       newSup.push(row); if (sk.length === 10) supByVat[sk] = sup;
       supLines.push('SupID ' + sup + ': ' + name + ' | الرقم المختصر ' + (sk || '(لا يوجد)') + ' | ' + row[S('EnteredBy')]);
     }
@@ -236,7 +238,7 @@ function copyApp_(ss) {
     newInv.push(row); existing[key] = id; marks.push([rowNo, id]); copied++;
     invLines.push('InvID ' + id + ': فاتورة ' + no + ' | ' + name + ' | SupID ' + sup);
   });
-  if (newSup.length) { const r0 = supSh.getLastRow() + 1; supSh.getRange(r0, S('VATID') + 1, newSup.length, 1).setNumberFormat('@'); supSh.getRange(r0, 1, newSup.length, sh.length).setValues(newSup); }
+  if (newSup.length) { const r0 = supSh.getLastRow() + 1; supSh.getRange(r0, S('VATID') + 1, newSup.length, 1).setNumberFormat('0'); supSh.getRange(r0, 1, newSup.length, sh.length).setValues(newSup); }
   if (newInv.length) { const r0 = invSh.getLastRow() + 1; invSh.getRange(r0, I('InvoiceNo') + 1, newInv.length, 1).setNumberFormat('@'); invSh.getRange(r0, I('VATID') + 1, newInv.length, 1).setNumberFormat('@'); invSh.getRange(r0, 1, newInv.length, ih.length).setValues(newInv); }
   marks.forEach(([rn, id]) => app.getRange(rn, ac + 1).setValue(id));
   const lim = (a, n) => a.length > n ? a.slice(0, n).concat(['... و' + (a.length - n) + ' أخرى (التفاصيل كاملة في ورقة «سجل النسخ»)']) : a;
