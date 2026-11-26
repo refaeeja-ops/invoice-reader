@@ -222,7 +222,7 @@ body:not(.tab-z) #zSec{display:none!important}
 .f.nosup input,.f.nosup label{color:#8f0d18!important}.f.nosup input{border-color:#8f0d18;background:#ffe9eb;font-weight:700}
 .nosupline{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:#ffe9eb;border-inline-start:4px solid #6e0a12;color:#6e0a12;font-weight:700;font-size:14px}
 .nosupbox:empty{display:none}
-body.nocrop .fcrop{display:none}
+.inv.nocropc .fcrop{display:none}
 </style>
 </head>
 <body>
@@ -308,7 +308,7 @@ body.nocrop .fcrop{display:none}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611261454'; window.APP_VERSION = V;
+(function () { var V = '202611261510'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -316,11 +316,11 @@ body.nocrop .fcrop{display:none}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611261454"></script>
-<script src="parse.js?v=202611261454"></script>
-<script src="export.js?v=202611261454"></script>
-<script src="digits.js?v=202611261454"></script>
-<script src="simple.js?v=202611261454"></script>
+<script src="config.js?v=202611261510"></script>
+<script src="parse.js?v=202611261510"></script>
+<script src="export.js?v=202611261510"></script>
+<script src="digits.js?v=202611261510"></script>
+<script src="simple.js?v=202611261510"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
