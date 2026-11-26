@@ -358,14 +358,31 @@
     else input = `<input ${attrs} value="${esc(type === 'num' && !blank(v) && isFinite(+v) ? (+v).toFixed(2) : v)}"${type !== 'text' ? ' inputmode="decimal" class="num"' : ''} placeholder="${miss ? 'لم يُقرأ — أدخله' : ''}">`;
     const zs = x.zsrc && x.zsrc[k];
     const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : zs === 'new' ? ' g' : ''}">${zs === 'pick' ? 'محددة يدويًا' : zs === 'new' ? 'حُدّث بالقالب' : 'من قالب المورد'}</em>` : '';
-    return `<div class="f f-${k}${miss ? ' miss' : ''}${k === 'payment_method' && blank(v) ? ' nopay' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}${LOC_KEYS.includes(k) ? cropHtml(x, k, label) : ''}</div>`;
+    return `<div class="f f-${k}${miss ? ' miss' : ''}${(k === 'vendor_tax_number' || k === 'vendor_name') && noSup(x) ? ' nosup' : ''}${k === 'payment_method' && blank(v) ? ' nopay' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}${LOC_KEYS.includes(k) ? cropHtml(x, k, label) : ''}</div>`;
   };
+  // الموردون المسجلون في SuppliersT (أرقامهم المختصرة) من Google Sheet، لتنبيه المورد غير المسجل
+  const SUPK = 'invoice-simple-sup-v1';
+  let supVats = null; try { const o = JSON.parse(localStorage.getItem(SUPK) || 'null'); if (o && Array.isArray(o.v)) supVats = new Set(o.v); } catch (e) { }
+  const vatShort = v => { const d = P.normDigits(String(v ?? '')).replace(/\.0+$/, '').replace(/\D/g, '').slice(0, 10); return /^3\d{9}$/.test(d) ? d : ''; };
+  const noSup = x => !!(supVats && vatShort(x.vendor_tax_number) && !supVats.has(vatShort(x.vendor_tax_number)));
+  const noSupHtml = x => noSup(x) ? `<p class="nosupline" role="note">⚠ الرقم الضريبي ${esc(vatShort(x.vendor_tax_number))} غير مسجل في SuppliersT: مورد جديد، سيُضاف عند النقل إلى InvoiceT.</p>` : '';
+  async function supSync() {
+    if (!gs || !GURL) return;
+    try {
+      const r = await fetch(GURL + (GURL.includes('?') ? '&' : '?') + 'email=' + encodeURIComponent(gs.email) + '&token=' + encodeURIComponent(gs.token), { redirect: 'follow' });
+      const j = await r.json(); if (!j.ok || !j.sheets || !j.sheets.SuppliersT) return;
+      const t = j.sheets.SuppliersT, h = (t[0] || []).map(v => String(v).trim().toLowerCase()), c = h.indexOf('vatid'); if (c < 0) return;
+      const v = [...new Set(t.slice(1).map(r => vatShort(r[c])).filter(Boolean))];
+      supVats = new Set(v); try { localStorage.setItem(SUPK, JSON.stringify({ at: Date.now(), v })); } catch (e) { }
+      draw();
+    } catch (e) { console.warn(e); }
+  }
   // مقتطع من صورة الفاتورة تحت الخانة: من قالب المورد أو التحديد اليدوي أو موضع النص المقروء
   const hasRect = (x, k) => !!((x.zrect && x.zrect[k]) || (x.loc && x.loc[k]) || (x.zsrc && x.zsrc[k] && x.zsrc[k] !== 'pick' && zoneFor(x) && (zones[zoneFor(x)].fields || {})[k]));
   function cropHtml(x, k, label) {
     const id = esc(x.id);
-    if (!hasRect(x, k)) return blank(x[k]) ? '' : `<div class="fcrop none"><span>موضعه في الفاتورة غير معروف</span><button type="button" data-pick="${id}" data-pk="${k}">حدّد المنطقة</button></div>`;
-    return `<div class="fcrop"><button type="button" class="fcimg" data-cz="${id}" data-ck="${k}" aria-label="تكبير ${label} على الفاتورة" title="اضغط للتكبير"><canvas data-crop="${id}" data-ck="${k}" width="1" height="1"></canvas></button><span class="fcside"><button type="button" data-cz="${id}" data-ck="${k}">🔍 تكبير</button><button type="button" data-pick="${id}" data-pk="${k}">تعديل المنطقة</button></span></div>`;
+    if (!hasRect(x, k)) return '';
+    return `<div class="fcrop"><button type="button" class="fcimg" data-pick="${id}" data-pk="${k}" aria-label="${label} كما في الفاتورة، اضغط لتعديل المنطقة" title="اضغط لتعديل المنطقة على الفاتورة"><canvas data-crop="${id}" data-ck="${k}" width="1" height="1"></canvas></button></div>`;
   }
   const imgCache = new Map();
   const loadPageImg = u => { if (!imgCache.has(u)) { if (imgCache.size > 40) imgCache.clear(); imgCache.set(u, loadImg(u).catch(() => null)); } return imgCache.get(u); };
@@ -402,7 +419,7 @@
       <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small>${sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
       <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
-      ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
+      <div class="nosupbox">${noSupHtml(x)}</div>${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
       ${rrHtml(x)}${rvHtml(x)}
       <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button><button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}"${delAsk === x.id ? ' hidden' : ''}>حذف الفاتورة</button></footer>
       ${delAsk === x.id ? `<div class="delask" role="alert"><label for="dr-${esc(x.id)}"><b>سبب حذف هذه الفاتورة (إلزامي)</b></label>
@@ -443,7 +460,9 @@
     c.querySelector('header b').textContent = x.vendor_name || 'مورد غير معروف';
     c.querySelector('.amt').textContent = money(x.total);
     const hd = c.querySelector('header > div'); if (hd) { const ob = hd.querySelector('.sb'); if (ob) ob.remove(); hd.insertAdjacentHTML('beforeend', sentBadge(x)); } sendLabel();
+    const ns = noSup(x), nb = c.querySelector('.nosupbox'); if (nb) nb.innerHTML = noSupHtml(x);
     F.forEach(([k]) => { const el = $(`f-${x.id}-${k}`); if (!el) return; const f = el.closest('.f'), m = blank(x[k]) && k !== 'payment_method';
+      if (k === 'vendor_tax_number' || k === 'vendor_name') f.classList.toggle('nosup', ns);
       f.classList.toggle('miss', m); if (k === 'payment_method') f.classList.toggle('nopay', blank(x[k])); const pb = f.querySelector('.pkb'); if (pb) pb.classList.toggle('need', m);
       if (!(x.zsrc && x.zsrc[k])) { const zb = f.querySelector('.zb'); if (zb) zb.remove(); } });
     const nIss = list.filter(y => issues(y).length).length;
@@ -927,7 +946,7 @@
   function showPg(i) {
     const n = pk.pages.length; pk.pg = Math.max(0, Math.min(n - 1, i));
     pk.rect = null; pkSel.hidden = true; $('pkRo').hidden = true; $('pkOk').disabled = true;
-    $('pkPg').textContent = n > 1 ? `صفحة ${pk.pg + 1} من ${n}` : ''; $('pkPrev').hidden = $('pkNext').hidden = n < 2;
+    $('pkPg').textContent = `صفحة ${pk.pg + 1} من ${n}`; $('pkPrev').hidden = $('pkNext').hidden = false;
     $('pkPrev').disabled = pk.pg === 0; $('pkNext').disabled = pk.pg === n - 1;
     const key = zoneFor(pk.x), z = key && zones[key].fields[pk.k], old = $('pkOld');
     old.hidden = !(z && pgIndex(z.pg, n) === pk.pg);
@@ -1338,6 +1357,7 @@
       undoBar('أُلغي الربط مع Google Sheet. القوالب باقية في هذا المتصفح', () => { gs = old; try { localStorage.setItem(GKEY, JSON.stringify(old)); } catch { } drawSync(); }, () => { }); }
   });
   if (gs) setTimeout(zSync, 1500);
+  if (gs) setTimeout(supSync, 2500);
 
   // ---------- إرسال الفواتير إلى Google Sheet (ورقة «فواتير التطبيق») ----------
   const sentSig = x => JSON.stringify([x.invoice_number, x.invoice_date, x.total, x.tax_amount, x.vendor_name, x.vendor_tax_number, x.payment_method, x.project || '', noteOf(x), x.file || '', !!x.deletedAt, x.delReason || '']);

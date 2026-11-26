@@ -104,7 +104,7 @@ button,.btn{touch-action:manipulation}
 .pkchk input{width:22px;height:22px;flex:none;margin-top:2px}
 .pkbtns{display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--paper);padding-top:6px;margin-top:auto}
 .pkbtns button{flex:1}
-#pkX{font-size:18px}
+#pkX{font-size:16px;font-weight:700;border-color:var(--stamp);color:var(--stamp)}
 .f.flash input{animation:flash 1.6s ease-out}
 @keyframes flash{0%,40%{box-shadow:0 0 0 4px #ffe600}100%{box-shadow:0 0 0 0 #ffe60000}}
 .pkkeys{font-size:12px!important}
@@ -214,14 +214,14 @@ body:not(.tab-z) #zSec{display:none!important}
 .gsrep.bad{border-color:var(--stamp)}
 .gsrep-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
 .gsrep-b{white-space:pre-line;line-height:1.7;max-height:50vh;overflow:auto;font-size:.95em}
-.fcrop{display:flex;gap:6px;align-items:stretch;margin-top:6px}
-.fcrop .fcimg{flex:1;min-width:0;padding:0;border:1.5px dashed var(--line);border-radius:8px;background:#fff;cursor:zoom-in;overflow:hidden;min-height:40px;display:flex;align-items:center;justify-content:center}
+.fcrop{margin-top:6px}
+.fcrop .fcimg{display:flex;width:100%;padding:0;border:1.5px dashed var(--line);border-radius:8px;background:#fff;cursor:pointer;overflow:hidden;min-height:40px;align-items:center;justify-content:center}
 .fcrop .fcimg canvas{display:block;width:100%;height:auto;max-height:90px;object-fit:contain}
 .fcrop:not(.ok) .fcimg::after{content:'جارٍ تجهيز المقتطع…';font-size:12px;color:var(--mute)}.fcrop:not(.ok) .fcimg canvas{display:none}
-.fcrop.noimg .fcimg::after{content:'لا توجد صورة محفوظة لهذه الفاتورة'}
-.fcrop .fcside{display:flex;flex-direction:column;gap:4px}
-.fcrop .fcside button,.fcrop.none button{font-size:12px;min-height:32px;padding:2px 8px;white-space:nowrap}
-.fcrop.none{align-items:center;justify-content:space-between;font-size:12px;color:var(--mute);font-weight:500;border:1.5px dashed var(--line);border-radius:8px;padding:4px 8px}
+.fcrop.noimg{display:none}
+.f.nosup input,.f.nosup label{color:#8f0d18!important}.f.nosup input{border-color:#8f0d18;background:#ffe9eb;font-weight:700}
+.nosupline{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:#ffe9eb;border-inline-start:4px solid #6e0a12;color:#6e0a12;font-weight:700;font-size:14px}
+.nosupbox:empty{display:none}
 body.nocrop .fcrop{display:none}
 </style>
 </head>
@@ -280,7 +280,7 @@ body.nocrop .fcrop{display:none}
         <button id="pkOut" aria-label="تصغير">−</button><span id="pkZ" aria-live="polite">100%</span><button id="pkIn" aria-label="تكبير">+</button><button id="pkFit">ملاءمة</button>
         <span class="sp"></span>
         <button id="pkPrev" aria-label="الصفحة السابقة">›</button><span id="pkPg"></span><button id="pkNext" aria-label="الصفحة التالية">‹</button>
-        <button id="pkX" aria-label="إغلاق والعودة للفاتورة" title="إغلاق">✕</button>
+        <button id="pkX" aria-label="خروج والعودة للفاتورة" title="خروج">✕ خروج</button>
       </div>
       <div class="pkvp" id="pkVp" dir="ltr" tabindex="0" aria-label="صفحة الفاتورة. الأسهم للتحريك، و + و − للتكبير"><div class="pkcv"><div class="pkpaper" id="pkPaper"><img id="pkImg" alt="صفحة الفاتورة" draggable="false"><div class="pkold" id="pkOld" hidden><span>المكان المحفوظ</span></div><div class="pksel" id="pkSel" hidden></div><div class="pkpad" id="pkPad"></div></div></div></div>
     </div>
@@ -308,7 +308,7 @@ body.nocrop .fcrop{display:none}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611261443'; window.APP_VERSION = V;
+(function () { var V = '202611261454'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -316,11 +316,11 @@ body.nocrop .fcrop{display:none}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611261443"></script>
-<script src="parse.js?v=202611261443"></script>
-<script src="export.js?v=202611261443"></script>
-<script src="digits.js?v=202611261443"></script>
-<script src="simple.js?v=202611261443"></script>
+<script src="config.js?v=202611261454"></script>
+<script src="parse.js?v=202611261454"></script>
+<script src="export.js?v=202611261454"></script>
+<script src="digits.js?v=202611261454"></script>
+<script src="simple.js?v=202611261454"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
