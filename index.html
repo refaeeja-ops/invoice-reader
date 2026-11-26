@@ -243,7 +243,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260753'; window.APP_VERSION = V;
+(function () { var V = '202611260756'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -251,10 +251,10 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611260753"></script>
-<script src="export.js?v=202611260753"></script>
-<script src="digits.js?v=202611260753"></script>
-<script src="simple.js?v=202611260753"></script>
+<script src="parse.js?v=202611260756"></script>
+<script src="export.js?v=202611260756"></script>
+<script src="digits.js?v=202611260756"></script>
+<script src="simple.js?v=202611260756"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

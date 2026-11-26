@@ -210,7 +210,8 @@
   const IMG = DB('invoice-simple-files', 'f'), OLD = DB('invoice-reader-img', 'img');
 
   // أول تشغيل: نأخذ الفواتير الموجودة من النسخة الكاملة حتى لا تضيع
-  if (localStorage.getItem(KEY) === null) {
+  let firstRun = false; try { firstRun = localStorage.getItem(KEY) === null; } catch { }
+  if (firstRun) {
     try {
       const old = JSON.parse(localStorage.getItem('invoice-reader-history-v1')) || [];
       list = old.map(x => ({ id: x._id, at: x._at || '', file: x.file || '', invoice_number: x.invoice_number || '', invoice_date: x.invoice_date || '', total: x.total ?? '', tax_amount: x.tax_amount ?? '', vendor_name: x.vendor_name || '', vendor_tax_number: x.vendor_tax_number || '', payment_method: x.payment_method || '', note: x.note || '', old: true }));
@@ -219,8 +220,8 @@
   }
 
   // ---------- طريقة الدفع: قائمة ثابتة، وأي قيمة مقروءة تُحوَّل لأقرب خيار ----------
-  const PAYS = ['نقدي', 'بطاقة- مدى', 'Apple Pay', 'تحويل بنكي', 'آجل', 'حساب مدين', 'حساب دائن'];
-  const PAYMAP = [[/حساب\s*مدين|مدين|debit\s*account/i, 'حساب مدين'], [/حساب\s*دائن|دائن/i, 'حساب دائن'], [/آجل|اجل|on\s*account|credit(?!\s*card)/i, 'آجل'], [/apple/i, 'Apple Pay'],
+  const PAYS = ['نقدي', 'بطاقة- مدى', 'Apple Pay', 'تحويل بنكي', 'آجل', 'حساب دائن'];
+  const PAYMAP = [[/حساب\s*دائن|دائن/i, 'حساب دائن'], [/آجل|اجل|on\s*account|credit(?!\s*card)/i, 'آجل'], [/apple/i, 'Apple Pay'],
     [/تحويل|transfer|bank|بنكي|حوالة/i, 'تحويل بنكي'], [/مدى|mada|بطاق|card|visa|master|ائتمان|فيزا|شبكة/i, 'بطاقة- مدى'], [/نقد|cash|كاش|كاشير/i, 'نقدي']];
   const payNorm = v => { const t = String(v ?? '').trim(); if (!t || PAYS.includes(t)) return t; const m = PAYMAP.find(([re]) => re.test(t)); return m ? m[1] : t; };
   list.forEach(x => { if (x && x.payment_method) x.payment_method = payNorm(x.payment_method); });
