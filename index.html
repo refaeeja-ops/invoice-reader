@@ -3,13 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#1838b8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#16233f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#1838b8">
 <title>قارئ الفواتير</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
 <style>
-:root{color-scheme:light dark;--bg:#dfe3ee;--band:#1838b8;--paper:#fff;--ink:#0f1222;--mute:#4a5068;--line:#a9b1c8;--cardline:#c3c9da;--lbl:#2f3550;--val:#0f1222;--inbg:#f3f5fa;--tplbg:#fffbd6;--blue:#1838b8;--stamp:#b3121f;--stampink:#8f0d18;--ok:#0b6a35;--soft:#f3f5fa;--warnbg:#ffe9eb;--ld1:#fff;--ld2:#111;--ld3:#ffe600}
-@media (prefers-color-scheme: dark){:root{--bg:#0f1420;--band:#16233f;--paper:#1a2132;--ink:#f3f5fb;--mute:#a9b2cc;--line:#4a5878;--cardline:#2e3852;--lbl:#c6cde0;--val:#fff;--inbg:#242d44;--tplbg:#2f2d16;--blue:#8fb4ff;--stamp:#ff8a8a;--stampink:#ffb3b3;--ok:#7ee2a8;--soft:#242d44;--warnbg:#3a1d24;--ld1:#0e1222;--ld2:#ffe600;--ld3:#111}}
+:root{color-scheme:light;--bg:#dfe3ee;--band:#1838b8;--paper:#fff;--ink:#0f1222;--mute:#4a5068;--line:#a9b1c8;--cardline:#c3c9da;--lbl:#2f3550;--val:#0f1222;--inbg:#f3f5fa;--tplbg:#fffbd6;--blue:#1838b8;--stamp:#b3121f;--stampink:#8f0d18;--ok:#0b6a35;--soft:#f3f5fa;--warnbg:#ffe9eb;--ld1:#fff;--ld2:#111;--ld3:#ffe600}
 *{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif;overflow-x:clip}
 h1,h2{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.2;margin:0}
@@ -210,7 +209,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260343'; window.APP_VERSION = V;
+(function () { var V = '202611260345'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -218,10 +217,10 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611260343"></script>
-<script src="export.js?v=202611260343"></script>
-<script src="digits.js?v=202611260343"></script>
-<script src="simple.js?v=202611260343"></script>
+<script src="parse.js?v=202611260345"></script>
+<script src="export.js?v=202611260345"></script>
+<script src="digits.js?v=202611260345"></script>
+<script src="simple.js?v=202611260345"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
