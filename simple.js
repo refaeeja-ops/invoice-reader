@@ -356,8 +356,8 @@
     if (b.dataset.zno !== undefined) { const k = zConfirm; zConfirm = null; drawZones(); const d = document.querySelector(`[data-zdel="${CSS.escape(k || '')}"]`); if (d) d.focus(); }
     if (b.dataset.zok) {
       const k = b.dataset.zok, t = zones[k]; if (!t) return;
-      delete zones[k]; zConfirm = null; saveZones(); drawZones();
-      undoBar(`حُذف قالب «${t.name || 'المورد'}»`, () => { zones[k] = t; saveZones(); drawZones(); }, () => { });
+      delete zones[k]; zConfirm = null; saveZones(); zMark(k); drawZones();
+      undoBar(`حُذف قالب «${t.name || 'المورد'}»`, () => { zones[k] = t; saveZones(); zMark(k); drawZones(); }, () => { });
     }
     if (b.dataset.reread) reread(b.dataset.reread);
     if (b.dataset.trview) { const id = b.dataset.trview; trOpen[id] = !trOpen[id]; if (trOpen[id]) rv.open[id] = true; draw(); }
@@ -675,7 +675,8 @@
   }
   function drawZones() {
     const keys = Object.keys(zones).filter(k => Object.keys(zones[k].fields || {}).length);
-    $('zSec').hidden = !keys.length;
+    $('zSec').hidden = !keys.length && !GURL; drawSync();
+    if (!keys.length) { $('zList').innerHTML = '<p class="note">لا توجد قوالب بعد. حدّد مكان أي خانة بزر التحديد بجانبها ليُحفظ قالب للمورد.</p>'; return; }
     $('zList').innerHTML = keys.map(k => { const t = zones[k];
       return `<div class="zc"><b>${esc(t.name || (t.vat ? 'مورد بالرقم الضريبي' : 'مورد'))}</b><small>${t.vat ? 'الرقم الضريبي ' + esc(t.vat) : 'بدون رقم ضريبي، يُعرف بالاسم'}</small>
         <div>${Object.entries(t.fields).map(([f, r]) => `<span class="zchip">${esc(label(f))} · ${pgName(r.pg)}</span>`).join('')}</div>
@@ -834,11 +835,11 @@
     if (!$('pkSaveL').hidden && $('pkSave').checked) {
       const key = vendorKey(x) || oldKey;
       if (key) {
-        if (oldKey && oldKey !== key && zones[oldKey]) { zones[key] = { ...zones[oldKey], fields: { ...zones[oldKey].fields, ...((zones[key] || {}).fields || {}) } }; delete zones[oldKey]; }
+        if (oldKey && oldKey !== key && zones[oldKey]) { zones[key] = { ...zones[oldKey], fields: { ...zones[oldKey].fields, ...((zones[key] || {}).fields || {}) } }; delete zones[oldKey]; zMark(oldKey); }
         const t = zones[key] = zones[key] || { fields: {} };
         Object.assign(t, { name: x.vendor_name || t.name || '', vat: vatOf(x) || t.vat || '', nameKey: nameKey(x.vendor_name) || t.nameKey || '', at: new Date().toISOString() });
         t.fields[k] = { pg: r.pg, x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) };
-        saveZones(); saved = true;
+        saveZones(); zMark(key); saved = true;
         const n = list.filter(y => y !== x && zoneFor(y) === key).length;
         if (n && !(rrS[x.id] && rrS[x.id].state === 'run')) rrS[x.id] = { state: 'offer', key, ks: [...new Set([...((rrS[x.id] && rrS[x.id].state === 'offer' && rrS[x.id].ks) || []), k])] };
       }
@@ -1064,6 +1065,79 @@
     r.before.forEach(b => { const y = list.find(q => q.id === b.id); if (!y) return; F.forEach(([k]) => { y[k] = b.vals[k]; }); y.zsrc = b.zsrc; y.zrect = b.zrect; });
     delete rrS[id]; save(); draw(); toast('أُعيدت الفواتير كما كانت قبل التطبيق');
   }
+
+  // ---------- مزامنة قوالب الموردين مع Google Sheet (ورقة VendorTemplates) ----------
+  // رابط الشيت من config.js، والبريد والرمز يُدخلهما المستخدم مرة واحدة (نفس الربط في النسخة الكاملة)
+  const GKEY = 'invoice-reader-gsheet-v1', ZPK = 'invoice-simple-zones-pending-v1';
+  const GURL = String((window.APP_CONFIG || {}).gsheetUrl || '').trim();
+  let gs = null; try { gs = JSON.parse(localStorage.getItem(GKEY)); } catch { }
+  if (!gs || !gs.email || !gs.token || !GURL) gs = null;
+  let zpend = {}; try { zpend = JSON.parse(localStorage.getItem(ZPK)) || {}; } catch { }
+  const zst = { busy: false, err: '', at: '' };
+  let zTimer = 0;
+  function zMark(k) { if (!k) return; zpend[k] = 1; try { localStorage.setItem(ZPK, JSON.stringify(zpend)); } catch { } clearTimeout(zTimer); if (gs) zTimer = setTimeout(zSync, 8000); drawSync(); }
+  async function gsCall(cfg, body) {
+    const r = body ? await fetch(GURL, { method: 'POST', body: JSON.stringify({ email: cfg.email, token: cfg.token, ...body }), redirect: 'follow' })
+      : await fetch(GURL + (GURL.includes('?') ? '&' : '?') + 'action=zones&email=' + encodeURIComponent(cfg.email) + '&token=' + encodeURIComponent(cfg.token), { redirect: 'follow' });
+    let j; try { j = await r.json(); } catch { throw new Error('رد غير متوقع من الشيت. تأكد أن Apps Script حُدّث بالنسخة الجديدة'); }
+    if (!j.ok) throw new Error(j.error || 'تعذّر الاتصال بالشيت');
+    if (!j.zones) throw new Error('الشيت لا يدعم القوالب بعد: حدّث كود Apps Script وانشر نسخة جديدة');
+    return j;
+  }
+  function zMerge(j) { // يدمج القوالب: الأحدث يفوز، والتعديلات المحلية غير المرسلة لها الأولوية
+    const put = {}, R = j.zones || {}, Dl = j.deleted || {};
+    for (const k in Dl) if (zones[k] && !zpend[k] && (zones[k].at || '') <= (Dl[k] || '')) delete zones[k];
+    for (const k in R) { if (zpend[k]) continue; if (!zones[k] || (R[k].at || '') > (zones[k].at || '')) zones[k] = R[k]; }
+    for (const k in zones) if (!R[k] || zpend[k]) put[k] = zones[k];
+    for (const k in zpend) if (!(k in put)) put[k] = zones[k] || null;
+    return put;
+  }
+  async function zSync() {
+    if (!gs || zst.busy) return; clearTimeout(zTimer);
+    zst.busy = true; zst.err = ''; drawSync();
+    try {
+      const sent = { ...zpend };
+      let j = await gsCall(gs);
+      const put = zMerge(j);
+      if (Object.keys(put).length) j = await gsCall(gs, { action: 'zones', put });
+      for (const k in sent) delete zpend[k];
+      try { localStorage.setItem(ZPK, JSON.stringify(zpend)); } catch { }
+      saveZones(); zst.at = new Date().toLocaleTimeString('ar-SA-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
+    } catch (e) { console.warn(e); zst.err = (e && e.message) || 'تعذّر الاتصال بالشيت'; }
+    zst.busy = false; draw();
+    if (Object.keys(zpend).length && !zst.err) { clearTimeout(zTimer); zTimer = setTimeout(zSync, 3000); }
+  }
+  function drawSync() {
+    const b = $('zSync'); if (!b) return;
+    if (!GURL) { b.innerHTML = ''; return; }
+    const n = Object.keys(zpend).length;
+    if (!gs) {
+      if (b.querySelector('form')) return; // لا نمسح ما يكتبه المستخدم
+      b.innerHTML = `<p><b>القوالب محفوظة في هذا المتصفح فقط.</b> اربطها بـ Google Sheet لتُحفظ دائمًا وتظهر على كل أجهزتك.</p>
+        <form id="zsForm" class="zsform"><input id="zsEmail" type="email" autocomplete="email" placeholder="البريد الإلكتروني" required><input id="zsToken" autocomplete="off" placeholder="رمز الدخول" required><button class="primary" id="zsGo">ربط بـ Google Sheet</button></form>
+        <small>البريد والرمز من قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له» في الشيت.</small>`;
+      return;
+    }
+    b.innerHTML = `<p class="zson">☁️ <b>القوالب محفوظة في Google Sheet</b> باسم ${esc(gs.email)}${zst.busy ? ' · جارٍ المزامنة…' : zst.err ? '' : zst.at ? ' · آخر مزامنة ' + esc(zst.at) : ''}${n && !zst.busy ? ` · ${n} تعديل بانتظار الإرسال` : ''}</p>
+      ${zst.err ? `<p class="zserr" role="alert">تعذّرت المزامنة: ${esc(zst.err)}. القوالب باقية في هذا المتصفح وستُرسل لاحقًا.</p>` : ''}
+      <div class="zbtns"><button type="button" id="zsNow"${zst.busy ? ' disabled' : ''}>🔄 مزامنة الآن</button><button type="button" id="zsOff">إلغاء الربط</button></div>`;
+  }
+  document.addEventListener('submit', async e => {
+    if (e.target.id !== 'zsForm') return; e.preventDefault();
+    const email = $('zsEmail').value.trim().toLowerCase(), token = $('zsToken').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !token) { toast('اكتب البريد ورمز الدخول'); return; }
+    $('zsGo').disabled = true; $('zsGo').textContent = 'جارٍ الربط…';
+    try { await gsCall({ email, token }); gs = { url: GURL, email, token }; try { localStorage.setItem(GKEY, JSON.stringify(gs)); } catch { }
+      $('zSync').innerHTML = ''; await zSync(); toast('تم الربط: القوالب محفوظة في Google Sheet'); }
+    catch (er) { toast((er && er.message) || 'تعذّر الربط'); const g = $('zsGo'); if (g) { g.disabled = false; g.textContent = 'ربط بـ Google Sheet'; } }
+  });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'zsNow') zSync();
+    if (b.id === 'zsOff') { const old = gs; gs = null; try { localStorage.setItem(GKEY, JSON.stringify({ url: GURL })); } catch { } drawSync();
+      undoBar('أُلغي الربط مع Google Sheet. القوالب باقية في هذا المتصفح', () => { gs = old; try { localStorage.setItem(GKEY, JSON.stringify(old)); } catch { } drawSync(); }, () => { }); }
+  });
+  if (gs) setTimeout(zSync, 1500);
 
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });

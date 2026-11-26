@@ -185,6 +185,10 @@ button,.btn{touch-action:manipulation}
 .delask b{color:var(--stamp)}.delask small{color:var(--mute);font-size:13px}
 .delask textarea{font:inherit;font-size:16px;border:1.5px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;background:var(--paper);color:var(--ink)}
 .trrow .trwhy{display:block;font-size:14px;color:var(--stampink)}
+.zsync{margin-bottom:12px;display:grid;gap:6px}.zsync:empty{display:none}
+.zsync p{margin:0;font-size:14px}.zsync small{color:var(--mute);font-size:13px}
+.zsform{display:flex;flex-wrap:wrap;gap:8px}.zsform input{flex:1 1 180px;font:inherit;font-size:16px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-height:44px;background:var(--paper);color:var(--ink)}
+.zson{color:var(--ok)}.zserr{color:var(--stamp)!important}
 @media (max-width:560px){.grid{grid-template-columns:1fr 1fr}.f-vendor_name,.f-vendor_tax_number{grid-column:1/-1}.inv footer button{flex:1}}
 </style>
 </head>
@@ -212,6 +216,7 @@ button,.btn{touch-action:manipulation}
   </section>
   <section class="slip" id="zSec" hidden aria-labelledby="zT">
     <div class="lhead"><h2 id="zT">قوالب الموردين</h2><span class="note">أماكن الخانات التي حددتها لكل مورد. تُطبّق تلقائيًا على فواتيره الجديدة، والخانات المأخوذة منها عليها شارة «من قالب المورد».</span></div>
+    <div class="zsync" id="zSync"></div>
     <div id="zList"></div>
   </section>
   <section class="slip" id="trSec" hidden aria-labelledby="trT">
@@ -261,7 +266,7 @@ button,.btn{touch-action:manipulation}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611260814'; window.APP_VERSION = V;
+(function () { var V = '202611260825'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -269,10 +274,11 @@ button,.btn{touch-action:manipulation}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="parse.js?v=202611260814"></script>
-<script src="export.js?v=202611260814"></script>
-<script src="digits.js?v=202611260814"></script>
-<script src="simple.js?v=202611260814"></script>
+<script src="config.js?v=202611260825"></script>
+<script src="parse.js?v=202611260825"></script>
+<script src="export.js?v=202611260825"></script>
+<script src="digits.js?v=202611260825"></script>
+<script src="simple.js?v=202611260825"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

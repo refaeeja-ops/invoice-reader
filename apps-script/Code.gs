@@ -4,6 +4,7 @@
  * يُلصق هذا الملف في الشيت: Extensions (الإضافات) ← Apps Script.
  * - يستقبل الفواتير المعتمدة من التطبيق ويضيفها إلى InvoiceT و VatReport (بدون تكرار).
  * - يعطي التطبيق البيانات المرجعية (الموردين والمشاريع والمنتجات) ليقرأها مباشرة من الشيت.
+ * - يحفظ «قوالب الموردين» (أماكن الخانات) في ورقة VendorTemplates حتى تظهر على كل الأجهزة.
  * - التحديث مسموح فقط لبريد إلكتروني أضافه المالك من قائمة «قارئ الفواتير» (لكل بريد رمز خاص)، ويُسجَّل البريد في EnteredBy.
  */
 
@@ -17,6 +18,43 @@ function hashSheet_(ss) {
 }
 function hashes_(ss) { // {hash: InvID}
   const out = {}; values_(sheet_(ss, HASH_SHEET)).slice(1).forEach(r => { const h = str_(r[0]).toLowerCase(); if (h) out[h] = r[1]; }); return out;
+}
+
+// ورقة قوالب الموردين (تُنشأ تلقائيًا ولا تمس أي ورقة أخرى): صف لكل خانة في قالب كل مورد
+const TPL_SHEET = 'VendorTemplates', TPL_HEAD = ['Key', 'VendorName', 'VATID', 'NameKey', 'Field', 'Page', 'X', 'Y', 'W', 'H', 'UpdatedAt', 'UpdatedBy', 'Deleted'];
+function tplSheet_(ss) {
+  let sh = sheet_(ss, TPL_SHEET);
+  if (!sh) { sh = ss.insertSheet(TPL_SHEET); sh.getRange(1, 1, 1, TPL_HEAD.length).setValues([TPL_HEAD]); sh.setFrozenRows(1); }
+  return sh;
+}
+const iso_ = v => v instanceof Date ? v.toISOString() : str_(v);
+function zonesRead_(ss) { // {zones: {key: {name, vat, nameKey, at, fields}}, deleted: {key: at}}
+  const zones = {}, deleted = {};
+  values_(sheet_(ss, TPL_SHEET)).slice(1).forEach(r => {
+    const key = str_(r[0]); if (!key) return;
+    if (r[12] === true || str_(r[12]).toUpperCase() === 'TRUE') { deleted[key] = iso_(r[10]); return; }
+    const t = zones[key] = zones[key] || { name: str_(r[1]), vat: str_(r[2]).replace(/\D/g, ''), nameKey: str_(r[3]), at: iso_(r[10]), fields: {} };
+    const f = str_(r[4]); if (!f) return;
+    const pg = str_(r[5]);
+    t.fields[f] = { pg: pg === 'last' ? 'last' : Number(pg) || 0, x: Number(r[6]), y: Number(r[7]), w: Number(r[8]), h: Number(r[9]) };
+  });
+  return { zones, deleted };
+}
+// put: {key: قالب أو null للحذف}. يستبدل صفوف المورد فقط
+function zonesWrite_(ss, put, who) {
+  const sh = tplSheet_(ss), rows = values_(sh), keys = Object.keys(put || {});
+  if (!keys.length) return;
+  const keep = rows.slice(1).filter(r => keys.indexOf(str_(r[0])) < 0);
+  const now = new Date();
+  keys.forEach(k => {
+    const t = put[k];
+    if (!t) { keep.push([k, '', '', '', '', '', '', '', '', '', now, who, true]); return; }
+    const at = t.at ? new Date(t.at) : now;
+    Object.keys(t.fields || {}).forEach(f => { const z = t.fields[f];
+      keep.push([k, t.name || '', str_(t.vat).replace(/\D/g, ''), t.nameKey || '', f, String(z.pg), z.x, z.y, z.w, z.h, at, who, false]); });
+  });
+  if (rows.length > 1) sh.getRange(2, 1, rows.length - 1, TPL_HEAD.length).clearContent();
+  if (keep.length) { sh.getRange(2, 3, keep.length, 1).setNumberFormat('@'); sh.getRange(2, 6, keep.length, 1).setNumberFormat('@'); sh.getRange(2, 1, keep.length, TPL_HEAD.length).setValues(keep); }
 }
 
 function onOpen() {
@@ -97,6 +135,7 @@ function doGet(e) {
   if (!auth_(p.email, p.token)) return json_({ ok: false, error: 'هذا البريد غير مسموح له أو الرمز غير صحيح' });
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   if (p.action === 'hashes') return json_({ ok: true, hashes: hashes_(ss) });
+  if (p.action === 'zones') { const z = zonesRead_(ss); return json_({ ok: true, title: ss.getName(), zones: z.zones, deleted: z.deleted }); }
   const out = { ok: true, title: ss.getName(), sheets: {}, hashes: hashes_(ss) };
   REF_SHEETS.forEach(n => { out.sheets[n] = values_(sheet_(ss, n)).map(r => r.map(v => v instanceof Date ? Utilities.formatDate(v, 'GMT', 'yyyy-MM-dd') : v)); });
   const inv = values_(sheet_(ss, 'InvoiceT'));
@@ -124,6 +163,7 @@ function doPost(e) {
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (body.action === 'zones') { zonesWrite_(ss, body.put, who); const z = zonesRead_(ss); return json_({ ok: true, zones: z.zones, deleted: z.deleted }); }
     const invSh = sheet_(ss, 'InvoiceT'), vatSh = sheet_(ss, 'VatReport');
     if (!invSh || !vatSh) return json_({ ok: false, error: 'لم أجد ورقة InvoiceT أو VatReport' });
     const inv = values_(invSh), ih = inv[0].map(str_);
