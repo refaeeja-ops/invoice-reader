@@ -26,7 +26,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .lbar .chk input{width:20px;height:20px}
 select,.f input{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);max-width:100%}
 .tot{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 12px;border-radius:6px;background:var(--ink);color:#fff;margin-bottom:12px;font-size:15px}
-.tot b{font-family:"Readex Pro",sans-serif}
+.tot b{font-family:"Readex Pro",sans-serif;direction:ltr;unicode-bidi:isolate}
 .dupbox{margin:0 0 12px;padding:10px 12px;border:2px solid var(--stamp);border-radius:6px;background:var(--warnbg);color:var(--stampink);font-size:14px}
 .grp{margin:16px 0 0}
 .gh{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;width:100%;text-align:start;padding:10px 12px;background:var(--blue);color:#fff;border:0;border-radius:6px 6px 0 0;min-height:52px}
@@ -69,7 +69,6 @@ select,.f input{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;bor
         <li>غيّر «تجميع حسب» إلى المورد، ثم المشروع، ثم طريقة الدفع، ثم الشهر، ثم حالة التصدير. البيان المشترك يظهر مرة واحدة في رأس المجموعة مع إجمالي فواتيرها، ويختفي من كل فاتورة.</li>
         <li>اضغط على رأس أي مجموعة لطيّها أو فتحها.</li>
         <li>غيّر المورد أو المبلغ في أي فاتورة: تنتقل إلى مجموعتها ويتحدّث الإجمالي.</li>
-        <li>شغّل أو أطفئ «لون تبادلي بين الفواتير» للمقارنة.</li>
       </ul>
     </div>
   </section>
@@ -78,13 +77,11 @@ select,.f input{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;bor
     <div id="dup" class="dupbox" hidden></div>
     <div class="lbar">
       <label><span>تجميع حسب</span><select id="gBy">
-        <option value="vendor">المورد</option><option value="project">المشروع</option><option value="pay">طريقة الدفع</option><option value="month">شهر الفاتورة</option><option value="sent">التصدير إلى الإقرار</option><option value="">بدون تجميع</option></select></label>
+        <option value="vendor">المورد</option><option value="project">المشروع</option><option value="pay">طريقة الدفع</option><option value="month">شهر الفاتورة</option><option value="sent">التصدير إلى الإقرار</option><option value="">الكل</option></select></label>
       <label><span>الترتيب داخل المجموعة</span><select id="sBy">
         <option value="date">التاريخ (الأحدث)</option><option value="amount">المبلغ (الأكبر)</option><option value="no">رقم الفاتورة</option></select></label>
       <label><span>عرض</span><select id="show">
         <option value="">كل الفواتير</option><option value="dup">المكررة فقط</option><option value="sent">المصدرة إلى الإقرار</option><option value="unsent">غير المصدرة إلى الإقرار</option></select></label>
-      <label class="chk"><input type="checkbox" id="alt" checked> لون تبادلي بين الفواتير</label>
-      <button type="button" id="openAll">فتح كل المجموعات</button><button type="button" id="closeAll">طيّ كل المجموعات</button>
     </div>
     <div class="tot" id="tot"></div>
     <div id="list"></div>
@@ -136,7 +133,7 @@ select,.f input{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;bor
   const sentB = x => x.sent ? `<small class="sb ok">✓ صُدّرت إلى الإقرار · <bdi dir="ltr">${esc(x.sent)}</bdi></small>` : '';
   function card(x, g, i) {
     const hide = g ? G[g].hide : [];
-    const title = hide.includes('vn') ? `<b>فاتورة رقم <bdi>${esc(x.no)}</bdi></b>` : `<b>${esc(x.vn)}</b><span class="num">فاتورة رقم <bdi>${esc(x.no)}</bdi></span>`;
+    const title = hide.includes('vn') ? '' : `<b>${esc(x.vn)}</b>`;
     return `<article class="inv${i % 2 ? ' odd' : ''}${isDup(x) ? ' isdup' : ''}"><header><div>${title}<small class="fp">📄 ${esc(x.file)}</small>${isDup(x) ? '<small class="db">⚠ مكررة: نفس المورد ونفس رقم الفاتورة</small>' : ''}${hide.includes('sent') ? '' : sentB(x)}</div><span class="amt">${money(x.total)}</span></header>
       <div class="grid">${FL.filter(f => !hide.includes(f[0])).map(f => field(x, f)).join('')}</div></article>`;
   }
@@ -147,12 +144,13 @@ select,.f input{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;bor
     let a = L.filter(x => sh === 'dup' ? isDup(x) : sh === 'sent' ? x.sent : sh === 'unsent' ? !x.sent : true);
     a.sort(sb === 'amount' ? (p, q) => q.total - p.total : sb === 'no' ? (p, q) => String(p.no).localeCompare(String(q.no), 'ar', { numeric: true }) : (p, q) => q.d.localeCompare(p.d));
     $('cnt').textContent = `(${a.length})`;
-    $('tot').innerHTML = `<span>المعروض:</span>` + stats(sum(a));
+    const ds = a.map(x => x.d).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+    $('tot').innerHTML = `<span>المعروض:</span>` + stats(sum(a)) + (ds.length ? `<span>تاريخ أول فاتورة <b>${ds[0]}</b></span><span>تاريخ آخر فاتورة <b>${ds[ds.length - 1]}</b></span>` : '');
     const dg = [...new Set(L.filter(isDup).map(dupKey))];
     $('dup').hidden = !dg.length; $('dup').innerHTML = dg.length ? `<b>⚠ تنبيه: ${dg.length === 1 ? 'توجد فاتورتان أو أكثر' : dg.length + ' مجموعات فواتير'} لها نفس المورد ونفس رقم الفاتورة.</b> اختر «المكررة فقط» من «عرض» لمراجعتها.` : '';
-    $('list').className = $('alt').checked ? 'alt' : '';
+    $('list').className = 'alt';
     if (!a.length) { $('list').innerHTML = '<p class="empty">لا توجد فواتير تطابق الاختيار.</p>'; return; }
-    if (!g) { $('list').innerHTML = `<div class="flat">${a.map((x, i) => card(x, '', i)).join('')}</div>`; $('list').classList.toggle('alt', $('alt').checked); return; }
+    if (!g) { $('list').innerHTML = `<div class="flat">${a.map((x, i) => card(x, '', i)).join('')}</div>`; $('list').classList.add('alt'); return; }
     const m = new Map(); a.forEach(x => { const k = G[g].k(x); (m.get(k) || m.set(k, []).get(k)).push(x); });
     let groups = [...m.entries()];
     groups.sort(g === 'month' ? (p, q) => q[0].localeCompare(p[0]) : g === 'sent' ? (p, q) => p[0].localeCompare(q[0]) : (p, q) => G[g].name(p[1][0]).localeCompare(G[g].name(q[1][0]), 'ar', { numeric: true }));
@@ -160,10 +158,8 @@ select,.f input{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;bor
       return `<section class="grp${c ? ' closed' : ''}"><button type="button" class="gh" data-g="${esc(id)}" aria-expanded="${!c}"><span class="ar" aria-hidden="true">${c ? '◀' : '▼'}</span><span class="gn">${esc(G[g].name(xs[0]))}</span>${meta ? `<span class="gm">${esc(meta)}</span>` : ''}<span class="gs">${stats(sum(xs))}</span></button>
         <div class="gb">${xs.map((x, i) => card(x, g, i)).join('')}</div></section>`; }).join('');
   }
-  ['gBy', 'sBy', 'show', 'alt'].forEach(id => $(id).addEventListener('change', draw));
+  ['gBy', 'sBy', 'show'].forEach(id => $(id).addEventListener('change', draw));
   $('list').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (!b) return; const id = b.dataset.g; closed.has(id) ? closed.delete(id) : closed.add(id); draw(); const n = document.querySelector(`[data-g="${CSS.escape(id)}"]`); if (n) n.focus(); });
-  $('openAll').onclick = () => { closed.clear(); draw(); };
-  $('closeAll').onclick = () => { document.querySelectorAll('[data-g]').forEach(b => closed.add(b.dataset.g)); draw(); };
   $('list').addEventListener('change', e => { const el = e.target, x = L.find(y => y.id === el.dataset.id); if (!x) return; const k = el.dataset.k;
     if (k === 'vn') { x.vn = el.value; x.vat = V[el.value]; }
     else if (k === 'total') { const v = +String(el.value).replace(/[,\s]/g, ''); if (isFinite(v)) { x.total = v; x.tax = Math.round(v / 1.15 * 0.15 * 100) / 100; } }
