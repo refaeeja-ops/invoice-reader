@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1838b8">
+<title>نموذج: تجميع الفواتير والتصدير إلى الإقرار</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;--bg:#dfe3ee;--band:#1838b8;--paper:#fff;--ink:#0f1222;--mute:#4a5068;--line:#a9b1c8;--cardline:#c3c9da;--lbl:#2f3550;--blue:#1838b8;--stamp:#b3121f;--stampink:#8f0d18;--ok:#0b6a35;--soft:#f3f5fa;--warnbg:#ffe9eb;--alt:#eaf0ff}
+*{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif}
+h1,h2,h3{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.25;margin:0}
+.top{background:var(--band);color:#fff;padding:24px max(5vw,16px) 76px}
+.top h1{font-size:clamp(24px,5vw,34px)}.top p{margin:6px 0 0;opacity:.95}
+main{max-width:1000px;margin:-56px auto 48px;padding:0 max(3vw,12px);display:grid;gap:18px}
+.slip{background:var(--paper);border-radius:6px;padding:clamp(14px,3vw,24px);box-shadow:0 1px 0 var(--cardline),0 18px 40px -24px #0b1550aa}
+.demo{background:#fffbd6;border:1px solid #c9b400;border-radius:6px;padding:10px 12px;font-size:14px}
+.demo ul{margin:6px 0 0;padding-inline-start:20px}
+button{font:inherit;font-weight:500;min-height:44px;padding:6px 14px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.lbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:0 0 12px;padding:10px;border:1px solid var(--cardline);border-radius:6px;background:var(--soft)}
+.lbar label{display:grid;gap:2px;font-size:13px;font-weight:700;color:var(--lbl)}
+.lbar .chk{display:flex;gap:6px;align-items:center;min-height:44px;font-size:14px}
+.lbar .chk input{width:20px;height:20px}
+select,.f input{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);max-width:100%}
+.tot{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 12px;border-radius:6px;background:var(--ink);color:#fff;margin-bottom:12px;font-size:15px}
+.tot b{font-family:"Readex Pro",sans-serif}
+.dupbox{margin:0 0 12px;padding:10px 12px;border:2px solid var(--stamp);border-radius:6px;background:var(--warnbg);color:var(--stampink);font-size:14px}
+.grp{margin:16px 0 0}
+.gh{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;width:100%;text-align:start;padding:10px 12px;background:var(--blue);color:#fff;border:0;border-radius:6px 6px 0 0;min-height:52px}
+.grp.closed .gh{border-radius:6px}
+.gh .gn{font-family:"Readex Pro",sans-serif;font-size:18px;font-weight:700}
+.gh .gm{font-size:13px;opacity:.95}
+.gh .gs{margin-inline-start:auto;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px}
+.gh .gs b{font-family:"Readex Pro",sans-serif;direction:ltr;unicode-bidi:isolate}
+.gh .ar{font-size:14px}
+.gb{border:1px solid var(--blue);border-top:0;border-radius:0 0 6px 6px;overflow:hidden}
+.grp.closed .gb{display:none}
+.flat .inv{border:1px solid var(--cardline);border-radius:6px;margin-bottom:10px}
+.inv{padding:12px 14px;background:#fff;border-bottom:1px solid var(--cardline)}
+.gb .inv:last-child{border-bottom:0}
+.alt .inv.odd{background:var(--alt)}
+.inv header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px}
+.inv header b{font-size:16px;display:block}
+.num{font-family:"Readex Pro",sans-serif;font-weight:700;color:var(--mute);font-size:13px}
+.fp{color:var(--mute);font-size:12px;word-break:break-all;display:block}
+.amt{font-family:"Readex Pro",sans-serif;font-weight:700;color:var(--blue);font-size:19px;white-space:nowrap;direction:ltr}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 12px}
+.f{display:grid;gap:2px;font-size:13px;color:var(--lbl);font-weight:500}
+.f input,.f select{width:100%;background:#fff}
+.sb{display:inline-block;font-size:13px;font-weight:700;margin:4px 0 0 6px;padding:1px 8px;border-radius:4px;border:1px solid currentColor}
+.sb.ok{color:var(--ok);background:#e3f4ea}.sb.no{color:var(--mute);background:#fff}
+.db{display:inline-block;font-size:13px;font-weight:700;margin:4px 0 0 6px;padding:1px 8px;border-radius:4px;color:#fff;background:var(--stamp)}
+.inv.isdup{box-shadow:inset 4px 0 0 var(--stamp)}
+.empty{color:var(--mute);text-align:center;padding:20px}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>نموذج: تجميع الفواتير</h1>
+  <p>نموذج تفاعلي ببيانات تجريبية. لا يغيّر شيئًا في التطبيق أو في فواتيرك.</p>
+</header>
+<main>
+  <section class="slip">
+    <div class="demo"><b>جرّب:</b>
+      <ul>
+        <li>غيّر «تجميع حسب» إلى المورد، ثم المشروع، ثم طريقة الدفع، ثم الشهر، ثم حالة التصدير. البيان المشترك يظهر مرة واحدة في رأس المجموعة مع إجمالي فواتيرها، ويختفي من كل فاتورة.</li>
+        <li>اضغط على رأس أي مجموعة لطيّها أو فتحها.</li>
+        <li>غيّر المورد أو المبلغ في أي فاتورة: تنتقل إلى مجموعتها ويتحدّث الإجمالي.</li>
+        <li>شغّل أو أطفئ «لون تبادلي بين الفواتير» للمقارنة.</li>
+      </ul>
+    </div>
+  </section>
+  <section class="slip">
+    <h2 style="font-size:22px;margin-bottom:12px">الفواتير <span id="cnt"></span></h2>
+    <div id="dup" class="dupbox" hidden></div>
+    <div class="lbar">
+      <label><span>تجميع حسب</span><select id="gBy">
+        <option value="vendor">المورد</option><option value="project">المشروع</option><option value="pay">طريقة الدفع</option><option value="month">شهر الفاتورة</option><option value="sent">التصدير إلى الإقرار</option><option value="">بدون تجميع</option></select></label>
+      <label><span>الترتيب داخل المجموعة</span><select id="sBy">
+        <option value="date">التاريخ (الأحدث)</option><option value="amount">المبلغ (الأكبر)</option><option value="no">رقم الفاتورة</option></select></label>
+      <label><span>عرض</span><select id="show">
+        <option value="">كل الفواتير</option><option value="dup">المكررة فقط</option><option value="sent">المصدرة إلى الإقرار</option><option value="unsent">غير المصدرة إلى الإقرار</option></select></label>
+      <label class="chk"><input type="checkbox" id="alt" checked> لون تبادلي بين الفواتير</label>
+      <button type="button" id="openAll">فتح كل المجموعات</button><button type="button" id="closeAll">طيّ كل المجموعات</button>
+    </div>
+    <div class="tot" id="tot"></div>
+    <div id="list"></div>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = v => (+v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const PAYS = ['نقدي', 'بطاقة- مدى', 'Apple Pay', 'تحويل بنكي', 'آجل', 'حساب دائن'];
+  const PROJ = ['3', '5', '6', '7'];
+  const V = { 'شركة الراجحي للمواد': '310456789200003', 'مؤسسة البناء الحديث': '300987654300003', 'محطة وقود النخيل': '311122233300003', 'مكتبة جرير': '300011122200003' };
+  const T = (vn, no, d, total, pay, pj, sent) => ({ vn, vat: V[vn], no, d, total, tax: Math.round(total / 1.15 * 0.15 * 100) / 100, pay, pj, sent });
+  let L = [
+    T('شركة الراجحي للمواد', 'INV-1045', '2026-11-20', 4600, 'تحويل بنكي', '5', '2026-11-22'),
+    T('شركة الراجحي للمواد', 'INV-1032', '2026-11-08', 1150, 'آجل', '5', '2026-11-10'),
+    T('شركة الراجحي للمواد', 'INV-0998', '2026-10-15', 2875, 'تحويل بنكي', '3', '2026-10-20'),
+    T('مؤسسة البناء الحديث', '7731', '2026-11-18', 9200, 'آجل', '6', ''),
+    T('مؤسسة البناء الحديث', '7731', '2026-11-18', 9200, 'آجل', '6', ''),
+    T('مؤسسة البناء الحديث', '7702', '2026-10-28', 3450, 'بطاقة- مدى', '7', '2026-11-01'),
+    T('محطة وقود النخيل', '55120', '2026-11-25', 172.5, 'نقدي', '3', ''),
+    T('محطة وقود النخيل', '55087', '2026-11-12', 230, 'Apple Pay', '5', '2026-11-15'),
+    T('محطة وقود النخيل', '54990', '2026-10-30', 115, 'نقدي', '7', '2026-11-01'),
+    T('مكتبة جرير', 'J-88412', '2026-11-03', 345, 'بطاقة- مدى', '3', ''),
+    T('مكتبة جرير', 'J-87990', '2026-10-09', 690, 'Apple Pay', '6', '2026-10-12'),
+  ].map((x, i) => ({ ...x, id: 'i' + i, file: `فواتير/${x.d.slice(0, 7)}/${x.no}.pdf` }));
+  const M = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const monthName = d => /^\d{4}-\d{2}/.test(d) ? M[+d.slice(5, 7) - 1] + ' ' + d.slice(0, 4) : 'بدون تاريخ';
+  const dupKey = x => x.vat.slice(0, 10) + '|' + String(x.no).replace(/^0+/, '').toUpperCase();
+  const isDup = x => L.some(y => y !== x && dupKey(y) === dupKey(x));
+  const G = {
+    vendor: { k: x => x.vat.slice(0, 10), name: x => x.vn, meta: x => 'الرقم الضريبي ' + x.vat, hide: ['vn', 'vat'] },
+    project: { k: x => x.pj || '-', name: x => x.pj ? 'المشروع ' + x.pj : 'بدون مشروع', meta: () => '', hide: ['pj'] },
+    pay: { k: x => x.pay || '-', name: x => x.pay || 'بدون طريقة دفع', meta: () => '', hide: ['pay'] },
+    month: { k: x => x.d.slice(0, 7), name: x => monthName(x.d), meta: () => '', hide: [] },
+    sent: { k: x => x.sent ? '1' : '0', name: x => x.sent ? '✓ المصدرة إلى الإقرار' : 'لم تُصدّر إلى الإقرار بعد', meta: () => '', hide: ['sent'] },
+  };
+  const closed = new Set();
+  const FL = [['no', 'رقم الفاتورة'], ['d', 'تاريخ الفاتورة', 'date'], ['total', 'المبلغ الإجمالي', 'num'], ['tax', 'مبلغ الضريبة', 'num'], ['vn', 'اسم المورد', 'vendor'], ['vat', 'الرقم الضريبي للمورد'], ['pay', 'طريقة الدفع', 'pay'], ['pj', 'المشروع', 'pj']];
+  function field(x, [k, label, t]) {
+    const a = `data-id="${x.id}" data-k="${k}"`; let inp;
+    if (t === 'vendor') inp = `<select ${a}>${Object.keys(V).map(v => `<option${v === x.vn ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
+    else if (t === 'pay') inp = `<select ${a}>${PAYS.map(v => `<option${v === x.pay ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
+    else if (t === 'pj') inp = `<select ${a}>${PROJ.map(v => `<option${v === x.pj ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
+    else inp = `<input ${a} type="${t === 'date' ? 'date' : 'text'}" value="${esc(t === 'num' ? money(x[k]) : x[k])}"${t === 'num' ? ' inputmode="decimal"' : ''}${k === 'vat' ? ' readonly' : ''}>`;
+    return `<label class="f"><span>${label}</span>${inp}</label>`;
+  }
+  const sentB = x => x.sent ? `<small class="sb ok">✓ صُدّرت إلى الإقرار · <bdi dir="ltr">${esc(x.sent)}</bdi></small>` : '';
+  function card(x, g, i) {
+    const hide = g ? G[g].hide : [];
+    const title = hide.includes('vn') ? `<b>فاتورة رقم <bdi>${esc(x.no)}</bdi></b>` : `<b>${esc(x.vn)}</b><span class="num">فاتورة رقم <bdi>${esc(x.no)}</bdi></span>`;
+    return `<article class="inv${i % 2 ? ' odd' : ''}${isDup(x) ? ' isdup' : ''}"><header><div>${title}<small class="fp">📄 ${esc(x.file)}</small>${isDup(x) ? '<small class="db">⚠ مكررة: نفس المورد ونفس رقم الفاتورة</small>' : ''}${hide.includes('sent') ? '' : sentB(x)}</div><span class="amt">${money(x.total)}</span></header>
+      <div class="grid">${FL.filter(f => !hide.includes(f[0])).map(f => field(x, f)).join('')}</div></article>`;
+  }
+  const sum = a => ({ n: a.length, t: a.reduce((s, x) => s + (+x.total || 0), 0), v: a.reduce((s, x) => s + (+x.tax || 0), 0) });
+  const stats = s => `<span>${s.n} فاتورة</span><span>الإجمالي <b>${money(s.t)}</b></span><span>الضريبة <b>${money(s.v)}</b></span>`;
+  function draw() {
+    const g = $('gBy').value, sb = $('sBy').value, sh = $('show').value;
+    let a = L.filter(x => sh === 'dup' ? isDup(x) : sh === 'sent' ? x.sent : sh === 'unsent' ? !x.sent : true);
+    a.sort(sb === 'amount' ? (p, q) => q.total - p.total : sb === 'no' ? (p, q) => String(p.no).localeCompare(String(q.no), 'ar', { numeric: true }) : (p, q) => q.d.localeCompare(p.d));
+    $('cnt').textContent = `(${a.length})`;
+    $('tot').innerHTML = `<span>المعروض:</span>` + stats(sum(a));
+    const dg = [...new Set(L.filter(isDup).map(dupKey))];
+    $('dup').hidden = !dg.length; $('dup').innerHTML = dg.length ? `<b>⚠ تنبيه: ${dg.length === 1 ? 'توجد فاتورتان أو أكثر' : dg.length + ' مجموعات فواتير'} لها نفس المورد ونفس رقم الفاتورة.</b> اختر «المكررة فقط» من «عرض» لمراجعتها.` : '';
+    $('list').className = $('alt').checked ? 'alt' : '';
+    if (!a.length) { $('list').innerHTML = '<p class="empty">لا توجد فواتير تطابق الاختيار.</p>'; return; }
+    if (!g) { $('list').innerHTML = `<div class="flat">${a.map((x, i) => card(x, '', i)).join('')}</div>`; $('list').classList.toggle('alt', $('alt').checked); return; }
+    const m = new Map(); a.forEach(x => { const k = G[g].k(x); (m.get(k) || m.set(k, []).get(k)).push(x); });
+    let groups = [...m.entries()];
+    groups.sort(g === 'month' ? (p, q) => q[0].localeCompare(p[0]) : g === 'sent' ? (p, q) => p[0].localeCompare(q[0]) : (p, q) => G[g].name(p[1][0]).localeCompare(G[g].name(q[1][0]), 'ar', { numeric: true }));
+    $('list').innerHTML = groups.map(([k, xs]) => { const id = g + ':' + k, c = closed.has(id), meta = G[g].meta(xs[0]);
+      return `<section class="grp${c ? ' closed' : ''}"><button type="button" class="gh" data-g="${esc(id)}" aria-expanded="${!c}"><span class="ar" aria-hidden="true">${c ? '◀' : '▼'}</span><span class="gn">${esc(G[g].name(xs[0]))}</span>${meta ? `<span class="gm">${esc(meta)}</span>` : ''}<span class="gs">${stats(sum(xs))}</span></button>
+        <div class="gb">${xs.map((x, i) => card(x, g, i)).join('')}</div></section>`; }).join('');
+  }
+  ['gBy', 'sBy', 'show', 'alt'].forEach(id => $(id).addEventListener('change', draw));
+  $('list').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (!b) return; const id = b.dataset.g; closed.has(id) ? closed.delete(id) : closed.add(id); draw(); const n = document.querySelector(`[data-g="${CSS.escape(id)}"]`); if (n) n.focus(); });
+  $('openAll').onclick = () => { closed.clear(); draw(); };
+  $('closeAll').onclick = () => { document.querySelectorAll('[data-g]').forEach(b => closed.add(b.dataset.g)); draw(); };
+  $('list').addEventListener('change', e => { const el = e.target, x = L.find(y => y.id === el.dataset.id); if (!x) return; const k = el.dataset.k;
+    if (k === 'vn') { x.vn = el.value; x.vat = V[el.value]; }
+    else if (k === 'total') { const v = +String(el.value).replace(/[,\s]/g, ''); if (isFinite(v)) { x.total = v; x.tax = Math.round(v / 1.15 * 0.15 * 100) / 100; } }
+    else if (k === 'tax') { const v = +String(el.value).replace(/[,\s]/g, ''); if (isFinite(v)) x.tax = v; }
+    else x[k] = el.value;
+    draw(); });
+  draw();
+})();
+</script>
+</body>
+</html>
