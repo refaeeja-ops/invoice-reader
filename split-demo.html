@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1838b8">
+<title>تجربة: تقسيم ملف به عدة فواتير</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;--bg:#dfe3ee;--band:#1838b8;--paper:#fff;--ink:#0f1222;--mute:#4a5068;--line:#a9b1c8;--cardline:#c3c9da;--blue:#1838b8;--stamp:#b3121f;--ok:#0b6a35;--soft:#f3f5fa;--warnbg:#ffe9eb;
+  --g0:#1838b8;--g1:#a34400;--g2:#0b6a35;--g3:#6a1b9a;--g4:#8f0d18;--g5:#00606b}
+*{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.25;margin:0}
+.top{background:var(--band);color:#fff;padding:clamp(20px,4vw,34px) max(5vw,16px) 78px}
+.top h1{font-size:clamp(24px,4.4vw,36px)}
+.top p{margin:6px 0 0;opacity:.95}
+.tag{display:inline-block;background:#ffe600;color:#111;font-size:13px;font-weight:700;padding:1px 10px;border-radius:3px;margin-bottom:8px}
+main{max-width:1100px;margin:-56px auto 48px;padding:0 max(3vw,12px);display:grid;gap:18px}
+.slip{background:var(--paper);border-radius:6px;padding:clamp(14px,3vw,24px);box-shadow:0 1px 0 var(--cardline),0 18px 40px -24px #0b1550aa}
+.drop{border:2px dashed var(--line);border-radius:6px;padding:22px 14px;text-align:center}
+.drop.over{border-color:var(--blue);background:var(--soft)}
+.drop p{margin:0;color:var(--mute)}
+.btns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
+button,.btn{font:inherit;font-weight:500;min-height:44px;padding:8px 16px;border-radius:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;position:relative;text-decoration:none}
+button:focus-visible,.btn:focus-within{outline:3px solid var(--blue);outline-offset:2px}
+.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+.btn input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.status{margin-top:10px;color:var(--mute);text-align:center;min-height:1.6em}.status.err{color:var(--stamp)}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;width:0;background:var(--blue);transition:width .2s}
+.how{margin:0;padding-inline-start:20px;color:var(--mute);font-size:15px}
+.how b{color:var(--ink)}
+.shead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.shead h2{font-size:21px}
+.fname{color:var(--mute);font-size:13px;word-break:break-all;flex-basis:100%}
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+.tools button{min-height:40px;font-size:15px}
+/* الصفحات */
+.pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.pg{border:3px solid var(--gc);border-radius:8px;background:var(--paper);display:grid;grid-template-rows:auto auto 1fr auto;overflow:hidden;position:relative}
+.pg.skip{border-style:dashed;border-color:var(--line)}
+.pg .gh{background:var(--gc);color:#fff;font-weight:700;font-size:14px;padding:3px 8px;display:flex;justify-content:space-between;gap:6px}
+.pg.skip .gh{background:var(--line);color:var(--ink)}
+.pg .gh.cont{background:var(--paper);color:var(--gc);border-bottom:1px solid var(--cardline)}
+.pg .meta{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:13px;color:var(--mute)}
+.qr{font-size:11px;font-weight:700;padding:0 6px;border-radius:3px;background:#111;color:#ffe600}
+.thumb{display:block;width:100%;padding:6px;border:0;border-radius:0;background:var(--soft);min-height:120px;cursor:zoom-in}
+.thumb img,.thumb canvas{display:block;width:100%;height:auto;box-shadow:0 0 0 1px var(--cardline);background:#fff}
+.pg.skip .thumb img,.pg.skip .thumb canvas{opacity:.35}
+.pg .acts{display:grid;gap:6px;padding:8px}
+.pg .acts button{min-height:40px;font-size:14px;padding:6px 8px;width:100%}
+.start[aria-pressed=true]{background:var(--gc);border-color:var(--gc);color:#fff;font-weight:700}
+.start:disabled{opacity:1;background:var(--soft);color:var(--mute);border-style:dashed}
+.skipb[aria-pressed=true]{background:#ffe600;border-color:#111;color:#111;font-weight:700}
+/* الملخص */
+.sum{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.sum li{border-inline-start:6px solid var(--gc);background:var(--soft);border-radius:4px;padding:8px 12px;display:grid;gap:2px}
+.sum li b{font-size:16px}
+.sum small{color:var(--mute);font-size:14px}
+.sum .w{color:var(--stamp);font-weight:500}
+.go{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.result{margin-top:12px;padding:12px;border:2px solid var(--ok);border-radius:6px;color:var(--ok);font-weight:500}
+/* العرض المكبّر */
+.lb{position:fixed;inset:0;background:#000d;z-index:50;display:flex;flex-direction:column}
+.lbbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;background:var(--paper)}
+.lbbar .t{flex:1 1 160px;font-weight:700}
+.lbstage{flex:1;overflow:auto;padding:10px;text-align:center}
+.lbstage img,.lbstage canvas{max-width:100%;height:auto;background:#fff}
+.lbstage.big img,.lbstage.big canvas{max-width:none;width:min(1600px,200%)}
+.back{color:#fff;opacity:.9;font-size:14px}
+@media (max-width:520px){.pages{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pg .acts button{font-size:13px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="tag">نسخة تجريبية للمراجعة</span>
+  <h1>تقسيم ملف به عدة فواتير</h1>
+  <p>ارفع ملف PDF فيه أكثر من فاتورة، وحدّد الصفحة التي تبدأ بها كل فاتورة. هذه الصفحة للتجربة فقط ولا تضيف شيئًا إلى قائمة فواتيرك.</p>
+  <p><a class="back" href="./">← العودة إلى التطبيق</a></p>
+</header>
+<main>
+  <section class="slip" id="up">
+    <div class="drop" id="drop">
+      <p>اسحب ملف PDF هنا، أو اختر ملفًا</p>
+      <div class="btns">
+        <label class="btn primary">اختيار ملف PDF<input type="file" id="pick" accept="application/pdf,.pdf"></label>
+        <button type="button" id="demo">جرّب بملف نموذجي (6 صفحات)</button>
+      </div>
+      <div class="bar" id="bar" hidden><i id="barI"></i></div>
+      <div class="status" id="status" role="status"></div>
+    </div>
+  </section>
+
+  <section class="slip" id="how">
+    <h2 style="font-size:19px;margin-bottom:6px">طريقة الاستخدام</h2>
+    <ol class="how">
+      <li>بعد رفع الملف تظهر صفحاته مصغّرة، والصفحة 1 دائمًا بداية الفاتورة الأولى.</li>
+      <li>اضغط <b>«بداية فاتورة جديدة»</b> على الصفحة التي تبدأ بها فاتورة أخرى. كل فاتورة تأخذ لونًا مختلفًا.</li>
+      <li>يقترح البرنامج التقسيم تلقائيًا: الصفحة التي بعد رمز QR الضريبي تُعدّ بداية فاتورة جديدة. يمكنك تعديل الاقتراح.</li>
+      <li>صفحة غلاف أو صفحة فارغة؟ اضغط <b>«تجاهل الصفحة»</b> فلا تُقرأ.</li>
+      <li>اضغط على أي صفحة مصغّرة لتكبيرها والتأكد من محتواها.</li>
+    </ol>
+  </section>
+
+  <section class="slip" id="work" hidden>
+    <div class="shead">
+      <h2 id="wT">صفحات الملف</h2>
+      <div class="tools">
+        <button type="button" id="tAuto">الاقتراح التلقائي</button>
+        <button type="button" id="tEach">كل صفحة فاتورة</button>
+        <button type="button" id="tOne">الملف كله فاتورة واحدة</button>
+      </div>
+      <div class="fname" id="fname"></div>
+    </div>
+    <div class="pages" id="pages"></div>
+  </section>
+
+  <section class="slip" id="sumBox" hidden>
+    <h2 id="sumT" style="font-size:21px;margin-bottom:10px">الفواتير التي ستُقرأ</h2>
+    <ul class="sum" id="sum"></ul>
+    <div class="go">
+      <button type="button" class="primary" id="goBtn">قراءة الفواتير</button>
+      <span class="status" style="margin:0;text-align:start" id="goNote"></span>
+    </div>
+    <div class="result" id="result" hidden></div>
+  </section>
+</main>
+
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-labelledby="lbT">
+  <div class="lbbar">
+    <span class="t" id="lbT"></span>
+    <button type="button" id="lbPrev">→ السابقة</button>
+    <button type="button" id="lbNext">التالية ←</button>
+    <button type="button" id="lbZoom" aria-pressed="false">تكبير</button>
+    <button type="button" id="lbX">إغلاق</button>
+  </div>
+  <div class="lbstage" id="lbS"></div>
+</div>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/jsQR.js"></script>
+<script src="parse.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const P = window.InvoiceParse;
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdf.worker.min.js', location.href).href;
+  const MAXP = 60, PER = 5; // أقصى عدد صفحات للملف، وأقصى صفحات تُقرأ لكل فاتورة (كما في التطبيق الحالي)
+
+  // الحالة: لكل صفحة: صورة مصغّرة، هل تبدأ فاتورة جديدة، هل متجاهلة، ورمز QR إن وُجد
+  let S = { name: '', pages: [] }, tok = 0;
+  const status = (m, err) => { $('status').textContent = m || ''; $('status').classList.toggle('err', !!err); };
+  const prog = p => { $('bar').hidden = p == null; $('barI').style.width = Math.round((p || 0) * 100) + '%'; };
+
+  // ---------- رمز QR الضريبي (للاقتراح التلقائي فقط) ----------
+  function scanQR(canvas) {
+    if (!window.jsQR) return null;
+    const W = canvas.width, H = canvas.height;
+    const regs = [[0, 0, W, H, 1000], [0, H / 2, W, H / 2, 1300], [0, 0, W, H / 2, 1300], [0, 0, W, H, 1600]];
+    let any = null;
+    for (const [sx, sy, sw, sh, t] of regs) {
+      const r = Math.min(1.5, t / Math.max(sw, sh));
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(sw * r)); c.height = Math.max(1, Math.round(sh * r));
+      const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(canvas, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      const res = jsQR(x.getImageData(0, 0, c.width, c.height).data, c.width, c.height, { inversionAttempts: 'attemptBoth' });
+      if (res && res.data) { const z = P && P.parseZatcaQR(res.data); if (z) return z; any = any || {}; }
+    }
+    return any;
+  }
+
+  // ---------- تحميل الملف ----------
+  async function loadPdf(file) {
+    const my = ++tok;
+    if (!window.pdfjsLib) { status('تعذّر تحميل قارئ PDF.', true); return; }
+    status('جارٍ فتح الملف…'); prog(0.02); $('result').hidden = true;
+    let doc;
+    try { doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise; }
+    catch (e) { console.error(e); status('تعذّر فتح الملف. تأكد أنه PDF سليم.', true); prog(null); return; }
+    const n = Math.min(doc.numPages, MAXP);
+    S = { name: file.name || 'ملف PDF', total: doc.numPages, pages: [] };
+    for (let p = 1; p <= n; p++) {
+      if (my !== tok) return;
+      status(`جارٍ تجهيز الصفحة ${p} من ${n}…`); prog(p / n);
+      const pg = await doc.getPage(p), v0 = pg.getViewport({ scale: 1 });
+      const v = pg.getViewport({ scale: Math.min(2.5, 1500 / Math.max(v0.width, v0.height)) });
+      const c = document.createElement('canvas'); c.width = Math.round(v.width); c.height = Math.round(v.height);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+      await pg.render({ canvasContext: x, viewport: v }).promise;
+      let qr = null; try { qr = scanQR(c); } catch (e) { }
+      S.pages.push({ img: c.toDataURL('image/jpeg', 0.8), start: p === 1, skip: false, qr });
+      if (p === 1 || p % 4 === 0) { autoSplit(); draw(); }
+    }
+    prog(null);
+    autoSplit(); draw();
+    const k = groups().length;
+    status(`جاهز: ${n} ${n >= 3 && n <= 10 ? 'صفحات' : 'صفحة'}${doc.numPages > MAXP ? ` (من أصل ${doc.numPages}، تُعرض أول ${MAXP} فقط)` : ''}. الاقتراح: ${k} ${k === 1 ? 'فاتورة' : 'فواتير'}.`);
+    $('work').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ملف نموذجي: 6 صفحات = 4 فواتير (الثانية صفحتان، وصفحة غلاف في الآخر)
+  function demo() {
+    ++tok; $('result').hidden = true;
+    const spec = [
+      { v: 'مؤسسة النخبة للمقاولات', no: 'INV-1041', t: '4,830.00', qr: true, page: '1 / 1' },
+      { v: 'شركة الرواد لمواد البناء', no: 'RW-77812', t: '', qr: false, page: '1 / 2' },
+      { v: 'شركة الرواد لمواد البناء', no: 'RW-77812', t: '12,650.00', qr: true, page: '2 / 2' },
+      { v: 'محطة الوقود الحديثة', no: '558201', t: '230.00', qr: true, page: '1 / 1' },
+      { v: 'مكتبة جرير', no: 'JR-90311', t: '415.25', qr: true, page: '1 / 1' },
+      { v: '', no: '', t: '', qr: false, page: '', blank: true }];
+    S = { name: 'ملف-نموذجي.pdf (للتجربة)', total: spec.length, pages: spec.map((s, i) => {
+      const c = document.createElement('canvas'); c.width = 620; c.height = 877;
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+      x.direction = 'rtl'; x.textAlign = 'right'; x.fillStyle = '#111';
+      if (s.blank) { x.textAlign = 'center'; x.font = '700 34px sans-serif'; x.fillText('صفحة غلاف', 310, 420); x.font = '20px sans-serif'; x.fillStyle = '#666'; x.fillText('(لا تحتوي فاتورة)', 310, 460); }
+      else {
+        x.fillStyle = '#1838b8'; x.fillRect(0, 0, 620, 90); x.fillStyle = '#fff'; x.font = '700 28px sans-serif'; x.fillText(s.v, 590, 56);
+        x.fillStyle = '#111'; x.font = '700 30px sans-serif'; x.fillText('فاتورة ضريبية', 590, 150);
+        x.font = '20px sans-serif'; x.fillText('رقم الفاتورة: ' + s.no, 590, 195); x.fillText('الصفحة ' + s.page, 590, 225);
+        x.strokeStyle = '#999'; for (let r = 0; r < 9; r++) { x.strokeRect(30, 260 + r * 40, 560, 40); x.fillStyle = '#bbb'; x.fillRect(330, 274 + r * 40, 240, 12); x.fillRect(50, 274 + r * 40, 80, 12); }
+        x.fillStyle = '#111';
+        if (s.t) { x.font = '700 24px sans-serif'; x.fillText('الإجمالي شامل الضريبة: ' + s.t, 590, 680); }
+        else { x.font = '20px sans-serif'; x.fillStyle = '#666'; x.fillText('يتبع في الصفحة التالية…', 590, 680); }
+        if (s.qr) { x.fillStyle = '#111'; x.fillRect(40, 700, 130, 130); x.fillStyle = '#fff'; for (let a = 0; a < 10; a++) for (let b = 0; b < 10; b++) if ((a * 7 + b * 3 + i) % 3) x.fillRect(48 + a * 12, 708 + b * 12, 9, 9); }
+      }
+      return { img: c.toDataURL('image/jpeg', 0.85), start: i === 0, skip: false, qr: s.qr ? { seller: s.v, total: +s.t.replace(/,/g, '') } : null, blank: !!s.blank };
+    }) };
+    autoSplit(); S.pages[5].skip = true; draw(); prog(null);
+    status('تم تحميل الملف النموذجي: جرّب تغيير بداية الفواتير أو تجاهل الصفحات.');
+    $('work').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ---------- التقسيم ----------
+  function autoSplit() { // الصفحة التي بعد رمز QR تبدأ فاتورة جديدة؛ وبدون أي رمز تكون كل صفحة فاتورة
+    const ps = S.pages, anyQr = ps.some(p => p.qr);
+    ps.forEach((p, i) => { p.start = i === 0 || (anyQr ? !!(ps[i - 1].qr) : true); });
+  }
+  function groups() { // الصفحات المتجاهلة لا تدخل في أي فاتورة
+    const out = []; let cur = null;
+    S.pages.forEach((p, i) => {
+      if (p.start || !cur) { cur = { pages: [], qr: null }; out.push(cur); }
+      if (!p.skip) { cur.pages.push(i); if (p.qr && p.qr.seller && !cur.qr) cur.qr = p.qr; }
+    });
+    return out.filter(g => g.pages.length);
+  }
+  const rng = a => { // [1,2,3,5] → «1–3، 5»
+    const r = []; let s = a[0], e = a[0];
+    for (let i = 1; i <= a.length; i++) { if (a[i] === e + 1) { e = a[i]; continue; } r.push(s === e ? `${s + 1}` : `${s + 1}–${e + 1}`); s = e = a[i]; }
+    return r.join('، ');
+  };
+
+  // ---------- الرسم ----------
+  function draw() {
+    const has = S.pages.length > 0;
+    $('work').hidden = !has; $('sumBox').hidden = !has;
+    if (!has) return;
+    $('fname').textContent = S.name;
+    $('wT').textContent = `صفحات الملف (${S.pages.length})`;
+    let g = -1;
+    $('pages').innerHTML = S.pages.map((p, i) => {
+      if (p.start) g++;
+      const first = i === 0, gc = `var(--g${g % 6})`;
+      return `<article class="pg${p.skip ? ' skip' : ''}" style="--gc:${gc}">
+        <div class="gh${p.start ? '' : ' cont'}">${p.skip ? '<span>متجاهلة</span>' : p.start ? `<span>فاتورة ${g + 1}</span><span>بداية</span>` : `<span>فاتورة ${g + 1}</span><span>تكملة</span>`}</div>
+        <div class="meta"><span>صفحة ${i + 1}</span>${p.qr ? '<span class="qr" title="وُجد رمز QR في هذه الصفحة">QR</span>' : ''}</div>
+        <button type="button" class="thumb" data-view="${i}" aria-label="تكبير الصفحة ${i + 1}"><img src="${p.img}" alt="" loading="lazy"></button>
+        <div class="acts">
+          <button type="button" class="start" data-start="${i}" aria-pressed="${p.start}"${first ? ' disabled' : ''}>${first ? 'بداية الفاتورة الأولى' : p.start ? '✓ بداية فاتورة جديدة' : 'بداية فاتورة جديدة'}</button>
+          <button type="button" class="skipb" data-skip="${i}" aria-pressed="${p.skip}">${p.skip ? 'متجاهلة: إلغاء' : 'تجاهل الصفحة'}</button>
+        </div></article>`;
+    }).join('');
+    drawSum();
+  }
+  function drawSum() {
+    const gs = groups(), skipped = S.pages.filter(p => p.skip).length;
+    $('sumT').textContent = `الفواتير التي ستُقرأ (${gs.length})`;
+    let gi = -1; const colorOf = {}; S.pages.forEach((p, i) => { if (p.start) gi++; colorOf[i] = gi; });
+    $('sum').innerHTML = gs.map((g, k) => {
+      const w = [];
+      if (g.pages.length > PER) w.push(`فيها ${g.pages.length} صفحات: ستُقرأ أول ${PER} فقط`);
+      if (S.pages.some(p => p.qr) && !g.pages.some(i => S.pages[i].qr)) w.push('لا يوجد فيها رمز QR: تأكد أنها فاتورة كاملة');
+      const q = g.qr ? `من رمز QR: ${esc(g.qr.seller)}${g.qr.total ? ` · الإجمالي ${(+g.qr.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}` : '';
+      return `<li style="--gc:var(--g${colorOf[g.pages[0]] % 6})"><b>فاتورة ${k + 1}: ${g.pages.length === 1 ? 'الصفحة' : 'الصفحات'} ${rng(g.pages)}</b>
+        ${q ? `<small>${q}</small>` : ''}${w.map(t => `<small class="w">⚠ ${t}</small>`).join('')}</li>`;
+    }).join('') || '<li><b>كل الصفحات متجاهلة</b></li>';
+    $('goBtn').disabled = !gs.length;
+    $('goBtn').textContent = gs.length > 1 ? `قراءة ${gs.length} فواتير` : 'قراءة الفاتورة';
+    $('goNote').textContent = skipped ? `${skipped} ${skipped === 1 ? 'صفحة متجاهلة' : 'صفحات متجاهلة'}` : '';
+  }
+
+  // ---------- التفاعل ----------
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.start != null) { const p = S.pages[+b.dataset.start]; p.start = !p.start; draw(); }
+    else if (b.dataset.skip != null) { const p = S.pages[+b.dataset.skip]; p.skip = !p.skip; draw(); }
+    else if (b.dataset.view != null) openLb(+b.dataset.view);
+  });
+  $('tAuto').onclick = () => { autoSplit(); draw(); };
+  $('tEach').onclick = () => { S.pages.forEach(p => p.start = true); draw(); };
+  $('tOne').onclick = () => { S.pages.forEach((p, i) => p.start = i === 0); draw(); };
+  $('goBtn').onclick = () => {
+    const gs = groups();
+    $('result').hidden = false;
+    $('result').innerHTML = `في التطبيق الفعلي ستُضاف <b>${gs.length}</b> ${gs.length === 1 ? 'فاتورة' : 'فواتير'} إلى القائمة، وتُقرأ كل واحدة لوحدها: `
+      + gs.map((g, k) => `فاتورة ${k + 1} (${g.pages.length === 1 ? 'ص' : 'ص'} ${rng(g.pages)})`).join('، ')
+      + '. وتعمل معها كل الخصائص الحالية: تحديد مكان الخانة، وقوالب الموردين، وإعادة القراءة.';
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  $('pick').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadPdf(f); });
+  $('demo').onclick = demo;
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { const f = [...e.dataTransfer.files].find(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)); if (f) loadPdf(f); else status('اختر ملف PDF.', true); });
+
+  // العرض المكبّر مع التنقل بين الصفحات
+  let lbI = 0, lbLast = null;
+  function openLb(i) {
+    lbLast = document.activeElement; lbI = i; $('lb').hidden = false; document.body.style.overflow = 'hidden'; showLb(); $('lbX').focus();
+  }
+  function showLb() {
+    const p = S.pages[lbI]; let g = -1; S.pages.slice(0, lbI + 1).forEach(q => { if (q.start) g++; });
+    $('lbT').textContent = `صفحة ${lbI + 1} من ${S.pages.length} · ${p.skip ? 'متجاهلة' : `فاتورة ${g + 1}`}`;
+    $('lbS').innerHTML = `<img src="${p.img}" alt="الصفحة ${lbI + 1}">`;
+    $('lbPrev').disabled = lbI === 0; $('lbNext').disabled = lbI === S.pages.length - 1;
+  }
+  function closeLb() { $('lb').hidden = true; document.body.style.overflow = ''; if (lbLast) lbLast.focus(); }
+  $('lbX').onclick = closeLb;
+  $('lbPrev').onclick = () => { if (lbI > 0) { lbI--; showLb(); } };
+  $('lbNext').onclick = () => { if (lbI < S.pages.length - 1) { lbI++; showLb(); } };
+  $('lbZoom').onclick = () => { const on = $('lbS').classList.toggle('big'); $('lbZoom').setAttribute('aria-pressed', on); $('lbZoom').textContent = on ? 'تصغير' : 'تكبير'; };
+  document.addEventListener('keydown', e => {
+    if ($('lb').hidden) return;
+    if (e.key === 'Escape') closeLb();
+    else if (e.key === 'ArrowLeft') $('lbNext').click();
+    else if (e.key === 'ArrowRight') $('lbPrev').click();
+  });
+})();
+</script>
+</body>
+</html>
