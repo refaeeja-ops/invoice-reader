@@ -751,7 +751,7 @@
           const { d, pages, src, plines } = await processFile(job.file, say);
           let changed = 0;
           F.forEach(([k]) => { const nv = k === 'total' || k === 'tax_amount' ? (d[k] ?? '') : k === 'payment_method' ? payNorm(d[k]) : (d[k] || ''); if (x && !(x.edited && x.edited[k]) && !blank(nv) && nv !== x[k]) { x[k] = nv; if (x.zsrc) delete x.zsrc[k]; changed++; } });
-          if (x && zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { changed += await applyZones(x, src); } catch (e) { console.warn(e); } }
+          if (x && zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { changed += await applyZones(x, src, plines); } catch (e) { console.warn(e); } }
           if (x) x.loc = locAll(x, plines);
           if (x) { save(); delete rvPages[job.id]; IMG.get(job.id).then(r0 => IMG.put(job.id, { pages, blob: (r0 && r0.blob) || job.file })); }
           toast(changed ? `أُعيدت القراءة: تحدّثت ${changed} من الخانات` : 'أُعيدت القراءة ولم تتغير البيانات');
@@ -779,7 +779,7 @@
         const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: job.sig0 || sig(job.file), fkey: job.fkey0 || fkeyOf(job.file),
           invoice_number: d.invoice_number || '', invoice_date: d.invoice_date || '', total: d.total ?? '', tax_amount: d.tax_amount ?? '',
           vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: payNorm(d.payment_method), note: '' };
-        if (zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { await applyZones(x, src); } catch (e) { console.warn(e); } }
+        if (zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { await applyZones(x, src, plines); } catch (e) { console.warn(e); } }
         x.loc = locAll(x, plines);
         list.unshift(x); save(); if (job.batch) { job.batch.read++; if (job.batch === upSum) drawSum(); }
         IMG.put(job.id, { pages, blob: job.file.size < 25e6 ? job.file : null });
@@ -1040,15 +1040,114 @@
     if (k === 'payment_method') { const p = PAYMAP.find(([re]) => re.test(t)); if (p) return p[1]; }
     return unspace(t.replace(/\n+/g, ' ')).replace(/\n+/g, ' ').replace(/^(اسم\s*)?(المورد|البائع|التاجر|الشركة|طريقة\s*الدفع|الدفع)\s*[:：-]?\s*/, '').replace(/^(vendor|seller|supplier|payment(\s*method)?)(\s*name)?\s*[:：-]?\s*/i, '').trim();
   }
+  // ---------- القالب الذكي: النص المجاور للخانة (النص المرجعي) ----------
+  // كلمات منطقة من الصفحة بأماكنها (نسبة من الصفحة): من طبقة نص PDF أو بقراءة الصورة
+  function regionWords(src, r) {
+    const R = { x: Math.max(0, r.x), y: Math.max(0, r.y) }; R.w = Math.min(1, r.x + r.w) - R.x; R.h = Math.min(1, r.y + r.h) - R.y;
+    const inR = w => { const cx = w.x + w.w / 2, cy = w.y + w.h / 2; return cx >= R.x && cx <= R.x + R.w && cy >= R.y && cy <= R.y + R.h; };
+    if (src.items && src.items.length) return Promise.resolve(src.items.filter(it => it.s && it.s.trim() && inR(it)).map(it => ({ s: it.s.trim(), x: it.x, y: it.y, w: it.w, h: it.h })));
+    if (src.words && R.x <= 0.001 && R.w >= 0.998 && R.y <= 0.001 && R.h >= 0.998) return Promise.resolve(src.words);
+    return serial(async () => {
+      const C = src.canvas, W = C.width, H = C.height, sx = R.x * W, sy = R.y * H, sw = R.w * W, sh = R.h * H;
+      if (sw < 8 || sh < 8) return [];
+      const k = Math.min(2, 2400 / sw, 3000 / sh), m = 16;
+      const c = document.createElement('canvas'); c.width = Math.round(sw * k) + 2 * m; c.height = Math.round(sh * k) + 2 * m;
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high'; g.drawImage(C, sx, sy, sw, sh, m, m, c.width - 2 * m, c.height - 2 * m);
+      const w = await zoneWorker(); await w.setParameters({ tessedit_pageseg_mode: '11' });
+      const { data } = await w.recognize(c, {}, { text: true, blocks: true });
+      const out = [];
+      (data.blocks || []).forEach(b => (b.paragraphs || []).forEach(p => (p.lines || []).forEach(l => (l.words || []).forEach(o => {
+        if (!o.text || !o.text.trim() || !o.bbox) return;
+        const X = sx + (o.bbox.x0 - m) / k, Y = sy + (o.bbox.y0 - m) / k;
+        out.push({ s: o.text.trim(), x: X / W, y: Y / H, w: (o.bbox.x1 - o.bbox.x0) / k / W, h: (o.bbox.y1 - o.bbox.y0) / k / H });
+      }))));
+      if (R.x <= 0.001 && R.w >= 0.998 && R.y <= 0.001 && R.h >= 0.998) src.words = out;
+      return out;
+    });
+  }
+  const aNorm = s => P.normDigits(String(s)).replace(/[إأآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase();
+  const isLabW = w => /\p{L}/u.test(w.s) && !/\d{4,}/.test(P.normDigits(w.s));
+  // الكلمات سطرًا سطرًا
+  function wLines(ws) {
+    const rows = [];
+    ws.slice().sort((a, b) => a.y - b.y).forEach(w => { const r = rows.find(q => Math.abs((q.y + q.h / 2) - (w.y + w.h / 2)) < Math.max(q.h, w.h) * 0.6); if (r) r.ws.push(w); else rows.push({ y: w.y, h: w.h, ws: [w] }); });
+    return rows.map(r => r.ws.sort((a, b) => b.x - a.x)); // من اليمين لليسار
+  }
+  const spanBox = g => { const x0 = Math.min(...g.map(w => w.x)), y0 = Math.min(...g.map(w => w.y)); return { t: g.map(w => w.s).join(' '), x: x0, y: y0, w: Math.max(...g.map(w => w.x + w.w)) - x0, h: Math.max(...g.map(w => w.y + w.h)) - y0 }; };
+  // عبارات التسميات المتجاورة على السطر (كلمات متتالية فيها حروف)
+  function labPhrases(ws) {
+    const out = [];
+    wLines(ws).forEach(line => { let cur = [];
+      const flush = () => { if (cur.length) out.push(spanBox(cur)); cur = []; };
+      line.forEach(w => { if (!isLabW(w)) return flush(); const p = cur[cur.length - 1]; if (p && Math.min(Math.abs(p.x - (w.x + w.w)), Math.abs(w.x - (p.x + p.w))) > Math.max(p.h, w.h) * 2.2) flush(); cur.push(w); });
+      flush(); });
+    return out;
+  }
+  // يختار النص المرجعي لمستطيل الخانة: أقرب تسمية على نفس السطر، وإلا فوقه. ar = نسبة الطول للعرض للصفحة
+  function pickAnchor(ws, r, ar) {
+    const cyr = r.y + r.h / 2, inR = p => p.x + p.w / 2 > r.x && p.x + p.w / 2 < r.x + r.w && p.y + p.h / 2 > r.y && p.y + p.h / 2 < r.y + r.h;
+    const ps = labPhrases(ws).filter(p => !inR(p) && aNorm(p.t).length >= 2);
+    const same = ps.filter(p => Math.abs(p.y + p.h / 2 - cyr) < Math.max(r.h, p.h) * 0.6);
+    const above = ps.filter(p => p.y + p.h / 2 < r.y && p.y + p.h / 2 > r.y - Math.max(4 * r.h, 0.06) && p.x < r.x + r.w && p.x + p.w > r.x);
+    const d = p => Math.hypot((p.x + p.w / 2 - (r.x + r.w / 2)), (p.y + p.h / 2 - cyr) * ar);
+    const a = (same.length ? same : above).sort((p, q) => d(p) - d(q))[0];
+    if (!a || !(a.h > 0)) return null;
+    const u = a.h * ar; // ارتفاع النص المرجعي بوحدة عرض الصفحة
+    const n = v => +v.toFixed(3);
+    return { t: a.t.slice(0, 80), y0: n(a.y), off: { x: n((r.x - a.x) / u), y: n((r.y - a.y) / a.h), w: n(r.w / u), h: n(r.h / a.h) } };
+  }
+  function anchorSim(a, b) {
+    const toks = s => String(s).split(/\s+/).map(w => aNorm(w).replace(/^ال/, '')).filter(Boolean);
+    const chr = (x, y) => { x = aNorm(x); y = aNorm(y); if (!x || !y) return 0; if (x === y) return 1; const m = Array.from({ length: x.length + 1 }, (_, i) => [i]); for (let j = 1; j <= y.length; j++) m[0][j] = j;
+      for (let i = 1; i <= x.length; i++) for (let j = 1; j <= y.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1)); return 1 - m[x.length][y.length] / Math.max(x.length, y.length); };
+    const ta = toks(a), tb = toks(b), rec = ta.length ? ta.filter(x => tb.some(y => chr(x, y) >= 0.8)).length / ta.length : 0;
+    return Math.max(chr(a, b), rec * 0.95);
+  }
+  // يحدد مكان الخانة في صفحة جديدة بالبحث عن النص المرجعي. يعيد {r, line} أو null
+  async function anchorRect(src, z) {
+    if (!z || !z.a || !src || !src.canvas) return null;
+    const ws = await regionWords(src, { x: 0, y: 0, w: 1, h: 1 }); if (!ws.length) return null;
+    const ar = src.canvas.height / src.canvas.width;
+    // كل العبارات المتتالية (حتى 7 كلمات) على كل سطر
+    const cands = [];
+    wLines(ws).forEach(line => { for (let i = 0; i < line.length; i++) for (let j = i; j < Math.min(line.length, i + 7); j++) { const g = line.slice(i, j + 1); if (!g.every(isLabW) && j > i) break; if (!isLabW(line[i])) break; cands.push({ ...spanBox(g), line }); } });
+    let best = null;
+    cands.forEach(c => { const s = anchorSim(z.a.t, c.t); if (s < 0.75) return; const sc = s - Math.abs(c.y - (z.a.y0 ?? c.y)) * 0.3; if (!best || sc > best.sc) best = { ...c, s, sc }; });
+    if (!best) return null;
+    const u = best.h * ar, o = z.a.off;
+    const r = { pg: z.pg, x: best.x + o.x * u, y: best.y + o.y * best.h, w: o.w * u, h: o.h * best.h };
+    r.x = Math.max(0, Math.min(0.99, r.x)); r.y = Math.max(0, Math.min(0.99, r.y)); r.w = Math.min(1 - r.x, r.w); r.h = Math.min(1 - r.y, r.h);
+    return { r, line: best.line, anchor: best };
+  }
+  // قراءة خانة بالقالب: بالنص المرجعي أولًا، ثم القيمة على نفس السطر، ثم المكان الثابت
+  async function readZone(src, k, z) {
+    try {
+      const A = await anchorRect(src, z);
+      if (A) {
+        let v = extract(k, await readRegion(src, A.r));
+        if (!blank(v) && !(k === 'vendor_tax_number' && P.blockedVat(v))) return { v, r: A.r, how: 'anchor' };
+        const cx = A.r.x + A.r.w / 2, near = A.line.filter(w => !A.anchor.t.includes(w.s)).sort((p, q) => Math.abs(p.x + p.w / 2 - cx) - Math.abs(q.x + q.w / 2 - cx));
+        for (const w of near) { v = extract(k, w.s); if (!blank(v) && !(k === 'vendor_tax_number' && P.blockedVat(v))) return { v, r: { pg: z.pg, x: w.x, y: w.y, w: w.w, h: w.h }, how: 'line' }; }
+      }
+    } catch (e) { console.warn(e); }
+    return { v: extract(k, await readRegion(src, z)), r: { ...z }, how: 'fixed' };
+  }
   // تطبيق القالب على فاتورة مقروءة. يعيد عدد الخانات التي أُخذت من القالب.
-  async function applyZones(x, src) {
+  async function applyZones(x, src, plines) {
     const key = zoneFor(x); if (!key || !src || !src.length) return 0;
+    // كلمات الصفحة المقروءة مسبقًا (حتى لا نعيد قراءة الصورة كاملة للبحث عن النص المرجعي)
+    if (plines) src.forEach((s, i) => { if (!s.words && !(s.items && s.items.length) && plines[i] && plines[i][0]) s.words = plines[i][0].flat(); });
     let n = 0;
     for (const [k, r] of Object.entries(zones[key].fields || {})) {
       if (x.edited && x.edited[k]) continue;
       const i = pgIndex(r.pg, src.length); if (i < 0) continue;
-      const v = extract(k, await readRegion(src[i], r));
-      if (!blank(v) && !(k === 'vendor_tax_number' && P.blockedVat(v))) { if (x[k] !== v) n++; x[k] = v; (x.zsrc = x.zsrc || {})[k] = 'tpl'; (x.zrect = x.zrect || {})[k] = { ...r }; }
+      const o = await readZone(src[i], k, r), v = o.v;
+      // قالب قديم بلا نص مرجعي: نضيفه تلقائيًا من هذه الفاتورة متى قُرئت القيمة من مكانها
+      if (!r.a && o.how === 'fixed' && !blank(v) && src[i].canvas) try {
+        const up = Math.max(4 * r.h, 0.06), a = pickAnchor(await regionWords(src[i], { x: 0, y: r.y - up, w: 1, h: r.h + up + r.h * 0.5 }), r, src[i].canvas.height / src[i].canvas.width);
+        if (a) { r.a = a; saveZones(); zMark(key); }
+      } catch (e) { console.warn(e); }
+      if (!blank(v) && !(k === 'vendor_tax_number' && P.blockedVat(v))) { if (x[k] !== v) n++; x[k] = v; (x.zsrc = x.zsrc || {})[k] = 'tpl'; (x.zrect = x.zrect || {})[k] = { pg: r.pg, x: o.r.x, y: o.r.y, w: o.r.w, h: o.r.h }; }
     }
     return n;
   }
@@ -1191,7 +1290,15 @@
   }
   async function readPicked() {
     const tok = ++pk.tok, r = pk.rect, k = pk.k;
-    $('pkRo').hidden = false; $('pkRoS').textContent = 'جارٍ قراءة المنطقة…'; $('pkVal').value = ''; $('pkOk').disabled = true; $('pkRaw').textContent = '';
+    $('pkRo').hidden = false; $('pkRoS').textContent = 'جارٍ قراءة المنطقة…'; $('pkVal').value = ''; $('pkOk').disabled = true; $('pkRaw').textContent = ''; $('pkAnc').textContent = '';
+    // النص المجاور للخانة: يُحفظ مع القالب ليجد البرنامج الخانة نسبةً له في الفواتير القادمة
+    pk.anchor = { rect: r, a: null };
+    pk.anchorP = (async () => { try {
+      const src = await pageSrc(pk.pg), ar = src.canvas.height / src.canvas.width, up = Math.max(4 * r.h, 0.06);
+      const ws = await regionWords(src, { x: 0, y: r.y - up, w: 1, h: r.h + up + r.h * 0.5 });
+      const a = pickAnchor(ws, r, ar); if (pk.anchor && pk.anchor.rect === r) pk.anchor.a = a;
+      if (tok === pk.tok) $('pkAnc').textContent = a ? `النص المجاور الذي سيُبحث عنه في الفواتير القادمة: «${a.t}»` : 'لم يُوجد نص مجاور، فسيُستخدم المكان كما هو.';
+    } catch (e) { console.warn(e); } })();
     try {
       const raw = await readRegion(await pageSrc(pk.pg), r); if (tok !== pk.tok) return;
       const v = extract(k, raw);
@@ -1203,8 +1310,9 @@
     if (tok === pk.tok) $('pkOk').scrollIntoView({ block: 'nearest' });
   }
   $('pkVal').addEventListener('input', () => { $('pkOk').disabled = !$('pkVal').value.trim() || !pk.rect; });
-  $('pkOk').onclick = () => {
+  $('pkOk').onclick = async () => {
     const x = pk.x, k = pk.k, r = pk.rect; if (!x || !r) return;
+    if (pk.anchorP && !(pk.anchor && pk.anchor.a)) { $('pkOk').disabled = true; await Promise.race([pk.anchorP, new Promise(res => setTimeout(res, 8000))]); $('pkOk').disabled = false; if (pk.x !== x || pk.rect !== r) return; }
     let v = $('pkVal').value.trim();
     if (k === 'total' || k === 'tax_amount') v = n2(v);
     if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\D/g, '');
@@ -1220,7 +1328,8 @@
         if (oldKey && oldKey !== key && zones[oldKey]) { zones[key] = { ...zones[oldKey], fields: { ...zones[oldKey].fields, ...((zones[key] || {}).fields || {}) } }; delete zones[oldKey]; zMark(oldKey); }
         const t = zones[key] = zones[key] || { fields: {} };
         Object.assign(t, { name: x.vendor_name || t.name || '', vat: vatOf(x) || t.vat || '', nameKey: nameKey(x.vendor_name) || t.nameKey || '', at: new Date().toISOString() });
-        t.fields[k] = { pg: r.pg, x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) };
+        const fld = t.fields[k] = { pg: r.pg, x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) };
+        if (pk.anchor && pk.anchor.rect === r && pk.anchor.a) fld.a = pk.anchor.a;
         saveZones(); zMark(key); saved = true;
         const n = list.filter(y => y !== x && zoneFor(y) === key).length;
         if (n && !(rrS[x.id] && (rrS[x.id].state === 'run' || rrS[x.id].state === 'pick'))) rrS[x.id] = { state: 'offer', key, ks: [...new Set([...((rrS[x.id] && rrS[x.id].state === 'offer' && rrS[x.id].ks) || []), k])] };
@@ -1449,11 +1558,11 @@
           for (const [k, z] of Object.entries(T.fields || {})) {
             if (y.edited && y.edited[k]) { r.skipped.push({ id: y.id, k, why: 'لم يتغير لأنك عدّلته بيدك' }); continue; }
             const i = pgIndex(z.pg, c.pages.length); if (i < 0) continue;
-            const v = extract(k, await readRegion(await loadSrc(c, i), z));
+            const o = await readZone(await loadSrc(c, i), k, z), v = o.v;
             if (blank(v)) { r.skipped.push({ id: y.id, k, why: 'لم تُقرأ قيمة واضحة في المكان المحفوظ، فبقيت كما هي' }); continue; }
             // اقتراح فقط: لا يتغير شيء حتى يختار المستخدم التعديلات ويضغط «طبّق المحدد»
-            if (String(v) !== String(y[k] ?? '')) r.changes.push({ cid: y.id + ':' + k, id: y.id, k, from: y[k], to: v, z: { ...z }, pg: i, on: true });
-            else r.same.push({ id: y.id, k, z: { ...z } });
+            if (String(v) !== String(y[k] ?? '')) r.changes.push({ cid: y.id + ':' + k, id: y.id, k, from: y[k], to: v, z: { pg: z.pg, x: o.r.x, y: o.r.y, w: o.r.w, h: o.r.h }, pg: i, on: true });
+            else r.same.push({ id: y.id, k, z: { pg: z.pg, x: o.r.x, y: o.r.y, w: o.r.w, h: o.r.h } });
           }
           if (c.pdf) try { c.pdf.destroy(); } catch { }
         }
@@ -1550,7 +1659,9 @@
   function zMerge(j) { // يدمج القوالب: الأحدث يفوز، والتعديلات المحلية غير المرسلة لها الأولوية
     const put = {}, R = j.zones || {}, Dl = j.deleted || {};
     for (const k in Dl) if (zones[k] && !zpend[k] && (zones[k].at || '') <= (Dl[k] || '')) delete zones[k];
-    for (const k in R) { if (zpend[k]) continue; if (!zones[k] || (R[k].at || '') > (zones[k].at || '')) zones[k] = R[k]; }
+    for (const k in R) { if (zpend[k]) continue; if (!zones[k] || (R[k].at || '') > (zones[k].at || '')) {
+      const old = zones[k]; zones[k] = R[k];
+      if (old) for (const f in R[k].fields || {}) { const a = old.fields && old.fields[f], b = R[k].fields[f]; if (a && a.a && !b.a && Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3) b.a = a.a; } } }
     for (const k in zones) if (!R[k] || zpend[k]) put[k] = zones[k];
     for (const k in zpend) if (!(k in put)) put[k] = zones[k] || null;
     return put;
@@ -1688,5 +1799,5 @@
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });
   draw();
-  window.__invoiceApp = { addFiles, zones: () => zones, rr: rrS, redraw: () => draw(), extract, get busy() { return busy || queue.length > 0; }, get list() { return list; } };
+  window.__invoiceApp = { addFiles, zones: () => zones, rr: rrS, tpl: { pickAnchor, readZone, regionWords }, redraw: () => draw(), extract, get busy() { return busy || queue.length > 0; }, get list() { return list; } };
 })();

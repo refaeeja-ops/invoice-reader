@@ -165,6 +165,7 @@ button,.btn{touch-action:manipulation}
 .rrch canvas{grid-column:2;max-width:100%;height:auto;border:2px solid var(--blue);border-radius:4px;background:#fff;justify-self:start}
 .rrapply{position:sticky;bottom:0;background:#eef2ff;padding-top:6px}
 .cpask{border:2px solid var(--stamp);background:#fff;border-radius:6px;padding:10px;margin:0 0 8px;font-size:14px;color:var(--stampink)}.cpask b{display:block}
+.pkanc{display:block;color:#7a5a00;font-weight:700}
 .dupno{min-height:36px;padding:4px 10px;font-size:13px}
 .rwd{position:fixed;inset:0;background:#0f1222cc;display:flex;align-items:center;justify-content:center;padding:10px;z-index:60}
 .rwbox{background:#fff;border-radius:8px;width:min(760px,100%);max-height:96vh;overflow:auto;padding:14px;display:grid;gap:10px}
@@ -363,7 +364,7 @@ body:not(.tab-z) #zSec{display:none!important}
     <div class="pkside">
       <h2 id="pkT"></h2>
       <p id="pkP"></p>
-      <div class="pkro" id="pkRo" hidden><span id="pkRoS"></span><input id="pkVal" aria-labelledby="pkRoS"><small id="pkRaw"></small></div>
+      <div class="pkro" id="pkRo" hidden><span id="pkRoS"></span><input id="pkVal" aria-labelledby="pkRoS"><small id="pkRaw"></small><small id="pkAnc" class="pkanc"></small></div>
       <label class="pkchk" id="pkSaveL"><input type="checkbox" id="pkSave" checked><span id="pkSaveT"></span></label>
       <p id="pkNo"></p>
       <div class="pkbtns"><button class="primary" id="pkOk" disabled>اعتمد القيمة</button><button id="pkCancel">إلغاء والعودة</button></div>
@@ -384,7 +385,7 @@ body:not(.tab-z) #zSec{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611271945'; window.APP_VERSION = V;
+(function () { var V = '202611272032'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -392,12 +393,12 @@ body:not(.tab-z) #zSec{display:none!important}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611271945"></script>
-<script src="parse.js?v=202611271945"></script>
-<script src="export.js?v=202611271945"></script>
-<script src="digits.js?v=202611271945"></script>
-<script src="split.js?v=202611271945"></script>
-<script src="simple.js?v=202611271945"></script>
+<script src="config.js?v=202611272032"></script>
+<script src="parse.js?v=202611272032"></script>
+<script src="export.js?v=202611272032"></script>
+<script src="digits.js?v=202611272032"></script>
+<script src="split.js?v=202611272032"></script>
+<script src="simple.js?v=202611272032"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

@@ -22,10 +22,11 @@ function hashes_(ss) { // {hash: InvID}
 }
 
 // ورقة قوالب الموردين (تُنشأ تلقائيًا ولا تمس أي ورقة أخرى): صف لكل خانة في قالب كل مورد
-const TPL_SHEET = 'VendorTemplates', TPL_HEAD = ['Key', 'VendorName', 'VATID', 'NameKey', 'Field', 'Page', 'X', 'Y', 'W', 'H', 'UpdatedAt', 'UpdatedBy', 'Deleted'];
+const TPL_SHEET = 'VendorTemplates', TPL_HEAD = ['Key', 'VendorName', 'VATID', 'NameKey', 'Field', 'Page', 'X', 'Y', 'W', 'H', 'UpdatedAt', 'UpdatedBy', 'Deleted', 'Anchor'];
 function tplSheet_(ss) {
   let sh = sheet_(ss, TPL_SHEET);
   if (!sh) { sh = ss.insertSheet(TPL_SHEET); sh.getRange(1, 1, 1, TPL_HEAD.length).setValues([TPL_HEAD]); sh.setFrozenRows(1); }
+  else if (str_(sh.getRange(1, TPL_HEAD.length).getValue()) !== TPL_HEAD[TPL_HEAD.length - 1]) sh.getRange(1, 1, 1, TPL_HEAD.length).setValues([TPL_HEAD]);
   return sh;
 }
 const iso_ = v => v instanceof Date ? v.toISOString() : str_(v);
@@ -38,6 +39,7 @@ function zonesRead_(ss) { // {zones: {key: {name, vat, nameKey, at, fields}}, de
     const f = str_(r[4]); if (!f) return;
     const pg = str_(r[5]);
     t.fields[f] = { pg: pg === 'last' ? 'last' : Number(pg) || 0, x: Number(r[6]), y: Number(r[7]), w: Number(r[8]), h: Number(r[9]) };
+    if (r[13]) try { const a = JSON.parse(str_(r[13])); if (a && a.t && a.off) t.fields[f].a = a; } catch (e) { }
   });
   return { zones, deleted };
 }
@@ -45,14 +47,14 @@ function zonesRead_(ss) { // {zones: {key: {name, vat, nameKey, at, fields}}, de
 function zonesWrite_(ss, put, who) {
   const sh = tplSheet_(ss), rows = values_(sh), keys = Object.keys(put || {});
   if (!keys.length) return;
-  const keep = rows.slice(1).filter(r => keys.indexOf(str_(r[0])) < 0);
+  const keep = rows.slice(1).filter(r => keys.indexOf(str_(r[0])) < 0).map(r => { r = r.slice(0, TPL_HEAD.length); while (r.length < TPL_HEAD.length) r.push(''); return r; });
   const now = new Date();
   keys.forEach(k => {
     const t = put[k];
-    if (!t) { keep.push([k, '', '', '', '', '', '', '', '', '', now, who, true]); return; }
+    if (!t) { keep.push([k, '', '', '', '', '', '', '', '', '', now, who, true, '']); return; }
     const at = t.at ? new Date(t.at) : now;
     Object.keys(t.fields || {}).forEach(f => { const z = t.fields[f];
-      keep.push([k, t.name || '', str_(t.vat).replace(/\D/g, ''), t.nameKey || '', f, String(z.pg), z.x, z.y, z.w, z.h, at, who, false]); });
+      keep.push([k, t.name || '', str_(t.vat).replace(/\D/g, ''), t.nameKey || '', f, String(z.pg), z.x, z.y, z.w, z.h, at, who, false, z.a ? JSON.stringify(z.a) : '']); });
   });
   if (rows.length > 1) sh.getRange(2, 1, rows.length - 1, TPL_HEAD.length).clearContent();
   if (keep.length) { sh.getRange(2, 3, keep.length, 1).setNumberFormat('@'); sh.getRange(2, 6, keep.length, 1).setNumberFormat('@'); sh.getRange(2, 1, keep.length, TPL_HEAD.length).setValues(keep); }
