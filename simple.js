@@ -1608,7 +1608,7 @@
     const when = x.sentAt ? ' · ' + sentWhen(x.sentAt) : '', row = x.sentRow ? ' · صف ' + x.sentRow : '';
     if (st === 'ok') return `<small class="sb ok">✓ صُدّرت إلى الإقرار${esc(when + row)}</small>`;
     if (st === 'dirty') return `<small class="sb dirty">⟳ صُدّرت إلى الإقرار${esc(when)} ثم عُدّلت: ستُحدَّث عند الإرسال</small>`;
-    if (st === 'err') return `<small class="sb err">لم تُرسل: ${esc(x.sendErr)}</small>`;
+    if (st === 'err') return `<small class="sb err">لم تُرسل: ${esc(String(x.sendErr).replace(/الشيت|Google Sheet/g, 'الإقرار'))}</small>`;
     return '';
   }
   function sentWhen(t) { try { return new Date(t).toLocaleString('ar-SA-u-nu-latn-ca-gregory', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return ''; } }
@@ -1636,10 +1636,10 @@
       if (!j.results) throw new Error('الشيت لا يستقبل الفواتير بعد: حدّث كود Apps Script وانشر نسخة جديدة');
       let ok = 0, sk = 0; const now = new Date().toISOString(), all = list.concat(trash);
       j.results.forEach(o => { const x = all.find(y => y.id === o.id); if (!x) return;
-        if (o.skipped) { x.sendErr = o.skipped; sk++; return; }
+        if (o.skipped) { x.sendErr = String(o.skipped).replace(/الشيت/g, 'الإقرار'); sk++; return; }
         x.sentAt = now; x.sentRow = o.row; x.sentSig = sig.get(x.id); delete x.sendErr; ok++; });
       save(); saveTrash();
-      const head = items.length ? (sk ? `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق»، ولم تُرسل ${sk} لأنها مكررة في الشيت.` : `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق».`) : '';
+      const head = items.length ? (sk ? `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق»، ولم تُرسل ${sk} لأنها مكررة في الإقرار.` : `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق».`) : '';
       if (!j.copy) showRep(head + '\n\nلم يتم النقل إلى InvoiceT: حدّث كود Apps Script في الشيت وانشر نسخة جديدة (New version).', true);
       else if (j.copy.error) showRep(head + '\n\nتعذّر النقل إلى InvoiceT: ' + j.copy.error, true);
       else showRep((head ? head + '\n\n' : '') + j.copy.msg, false);

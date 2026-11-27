@@ -96,7 +96,7 @@ function appInvoices_(ss, list, who) {
   (list || []).forEach(d => {
     const id = str_(d.id); if (!id) return;
     const key = vendKey_(d.VATID, d.Vendor) + '|' + invKey_(d.InvoiceNo);
-    if (!d.Deleted && str_(d.InvoiceNo) && byKey[key] && byKey[key] !== id) { out.push({ id, skipped: 'نفس رقم الفاتورة ونفس المورد موجودة في الشيت' }); return; }
+    if (!d.Deleted && str_(d.InvoiceNo) && byKey[key] && byKey[key] !== id) { out.push({ id, skipped: 'نفس رقم الفاتورة ونفس المورد موجودة في الإقرار' }); return; }
     const date = d.Date && /^\d{4}-\d{2}-\d{2}$/.test(d.Date) ? new Date(d.Date + 'T00:00:00') : safe_(d.Date);
     const row = [id, safe_(d.InvoiceNo), date, num_(d.Total), num_(d.Vat), safe_(d.Vendor), str_(d.VATID).replace(/\D/g, ''), safe_(d.Payment), safe_(d.Project), safe_(d.Note), safe_(d.File),
       d.Deleted ? 'محذوفة' + (d.DeleteReason ? ': ' + safe_(d.DeleteReason) : '') : 'نشطة', who, now];
