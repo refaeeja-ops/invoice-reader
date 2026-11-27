@@ -202,7 +202,21 @@ button,.btn{touch-action:manipulation}
 .wpbox{border:2px solid var(--stamp);border-radius:8px;padding:12px;display:grid;gap:8px;background:var(--warnbg)}
 .wpbox>b{color:var(--stamp);font-size:17px}.wpbox p{margin:0;font-size:14px}
 .wpbox input{font:inherit;font-size:18px;letter-spacing:.05em;direction:ltr;text-align:center;border:1.5px solid var(--line);border-radius:6px;padding:7px 9px;min-height:44px;max-width:220px;background:var(--paper);color:var(--ink)}
-.sb{display:block;font-size:12px;font-weight:500;margin-top:2px}.sb.ok{color:var(--ok)}.sb.dirty{color:#8a5a00}.sb.err{color:var(--stamp)}
+.sb{display:inline-block;font-size:13px;font-weight:700;margin-top:4px;padding:2px 8px;border-radius:4px;border:1px solid currentColor}.sb.ok{color:var(--ok);background:#e3f4ea}.sb.dirty{color:#7a4f00;background:#fff3d6}.sb.err{color:var(--stamp);background:var(--warnbg)}
+.db{display:inline-block;font-size:13px;font-weight:700;margin:4px 0 0 6px;padding:2px 8px;border-radius:4px;color:#fff;background:var(--stamp)}
+.inv.isdup{border:2px solid var(--stamp)}
+.inv.flash{outline:4px solid var(--blue);outline-offset:2px}
+.dupbox{margin:0 0 14px;padding:12px;border:2px solid var(--stamp);border-radius:6px;background:var(--warnbg);color:var(--stampink)}
+.dupbox>b{display:block;margin-bottom:6px}
+.dupbox ul{margin:0 0 8px;padding:0;list-style:none;display:grid;gap:8px}
+.dupbox li{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.dupgo{min-height:36px;padding:4px 10px;font-size:13px;border-color:var(--stamp);color:var(--stampink);background:#fff}
+.dupbox .zbtns{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.lbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:0 0 14px;padding:10px;border:1px solid var(--cardline);border-radius:6px;background:var(--soft)}
+.lbar label{display:grid;gap:2px;font-size:13px;font-weight:700;color:var(--lbl)}
+.lbar select{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);max-width:100%}
+.vgrp{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin:10px 0 -4px;padding:8px 10px;background:var(--blue);color:#fff;border-radius:6px;font-size:17px}
+.vgrp small{font-size:13px;font-weight:500;opacity:.95}
 .lhead .gssend{font-size:14px;min-height:40px;border-color:var(--ok);color:var(--ok);font-weight:700}
 .tabs{display:flex;gap:6px;background:var(--paper);border-radius:8px;padding:6px;box-shadow:0 1px 0 var(--cardline)}
 .tabs button{flex:1;border:0;font-weight:700;font-size:16px}
@@ -248,6 +262,8 @@ body:not(.tab-z) #zSec{display:none!important}
   <section class="slip" aria-labelledby="lT">
     <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="gssend" id="gsSend" hidden>☁️ إرسال إلى Google Sheet</button><button class="rvall" id="cropAll" aria-pressed="false" hidden>✂ إظهار المقتطعات</button><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
     <div id="gsRep" class="gsrep" hidden role="status"></div>
+    <div id="dupBox" class="dupbox" hidden role="alert"></div>
+    <div id="lbar" class="lbar" hidden aria-label="فرز وترتيب الفواتير"></div>
     <div id="list"></div>
   </section>
   <section class="slip" id="zSec" hidden aria-labelledby="zT">
@@ -308,7 +324,7 @@ body:not(.tab-z) #zSec{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611270648'; window.APP_VERSION = V;
+(function () { var V = '202611270814'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -316,12 +332,12 @@ body:not(.tab-z) #zSec{display:none!important}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611270648"></script>
-<script src="parse.js?v=202611270648"></script>
-<script src="export.js?v=202611270648"></script>
-<script src="digits.js?v=202611270648"></script>
-<script src="split.js?v=202611270648"></script>
-<script src="simple.js?v=202611270648"></script>
+<script src="config.js?v=202611270814"></script>
+<script src="parse.js?v=202611270814"></script>
+<script src="export.js?v=202611270814"></script>
+<script src="digits.js?v=202611270814"></script>
+<script src="split.js?v=202611270814"></script>
+<script src="simple.js?v=202611270814"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

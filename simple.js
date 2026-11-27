@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const abs = p => new URL(p, location.href).href;
-  const pathOf = f => f.webkitRelativePath || f.name || '';
+  const pathOf = f => f.relPath || f.webkitRelativePath || f.name || '';
   const setProg = p => progress(p);
 
   if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = abs('vendor/pdf.worker.min.js');
@@ -342,9 +342,24 @@
       else if (T - V > 0 && Math.abs(V - (T - V) * 0.15) > Math.max(0.05, T * 0.002)) w.push(`الضريبة لا تساوي 15% (المتوقع تقريبًا ${money(Math.round(T / 1.15 * 0.15 * 100) / 100)}).`);
     }
     if (x.invoice_date && !/^\d{4}-\d{2}-\d{2}$/.test(x.invoice_date)) w.push('تاريخ الفاتورة غير واضح.');
-    const twin = list.find(y => y !== x && y.invoice_number && y.invoice_number === x.invoice_number && (y.vendor_tax_number || y.vendor_name) === (x.vendor_tax_number || x.vendor_name));
-    if (twin) w.push('مكررة: نفس رقم الفاتورة ونفس المورد موجودة في القائمة.');
+    const tw = twinsOf(x);
+    if (tw.length) w.push(`مكررة: نفس المورد ونفس رقم الفاتورة (${x.invoice_number}) في ${tw.length === 1 ? 'فاتورة أخرى' : tw.length + ' فواتير أخرى'}: ${tw.map(y => y.file || 'بدون اسم').join('، ')}`);
     return w;
+  }
+  // مفتاح المورد: أول 10 أرقام من الرقم الضريبي إن كان صحيحًا، وإلا الاسم بعد التوحيد
+  const vNameKey = s => P.normDigits(String(s || '')).toLowerCase().replace(/[إأآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^\p{L}\p{N}]+/gu, '');
+  function vKey(x) {
+    const d = P.normDigits(String(x.vendor_tax_number ?? '')).replace(/\.0+$/, '').replace(/\D/g, '').slice(0, 10);
+    if (/^3\d{9}$/.test(d) && !P.blockedVat(d)) return 'v:' + d;
+    const n = vNameKey(x.vendor_name); return n ? 'n:' + n : '';
+  }
+  const invKey = v => P.normDigits(String(v ?? '')).toUpperCase().replace(/[\s\-_\/#.]+/g, '').replace(/^0+(?=.)/, '');
+  const dupKey = x => { const v = vKey(x), n = invKey(x.invoice_number); return v && n ? v + '|' + n : ''; };
+  const twinsOf = x => { const k = dupKey(x); return k ? list.filter(y => y !== x && dupKey(y) === k) : []; };
+  // مجموعات الفواتير المكررة (نفس المورد ونفس رقم الفاتورة)
+  function dupGroups() {
+    const m = new Map(); list.forEach(x => { const k = dupKey(x); if (k) (m.get(k) || m.set(k, []).get(k)).push(x); });
+    return [...m.values()].filter(a => a.length > 1);
   }
   const noteOf = x => [x.note, ...issues(x)].filter(Boolean).join(' | ');
 
@@ -411,13 +426,14 @@
   function card(x, tr) {
     const w = issues(x);
     if (tr) return `<article class="inv trash" id="c-${esc(x.id)}" aria-label="فاتورة محذوفة">
-      <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small></div><span class="amt">${esc(money(x.total))}</span></header>
+      <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small>${sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
       <fieldset disabled><div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea rows="2">${esc(x.note || '')}</textarea></label></div></fieldset>
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
       ${rvHtml(x)}</article>`;
-    return `<article class="inv${cropHid(x.id) ? ' nocropc' : ''}" id="c-${esc(x.id)}">
-      <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small>${sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
+    const dup = twinsOf(x).length > 0;
+    return `<article class="inv${cropHid(x.id) ? ' nocropc' : ''}${dup ? ' isdup' : ''}" id="c-${esc(x.id)}">
+      <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small>${dupBadge(x)}${sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
       <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       <div class="nosupbox">${noSupHtml(x)}</div>${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
@@ -429,6 +445,72 @@
         <div class="zbtns"><button type="button" class="del" data-delok="${esc(x.id)}" disabled>احذف الفاتورة</button><button type="button" data-delno="">تراجع</button></div></div>` : ''}
     </article>`;
   }
+  const dupBadge = x => twinsOf(x).length ? `<small class="db">⚠ مكررة: نفس المورد ونفس رقم الفاتورة</small>` : '';
+  // ---------- الفرز والترتيب حسب المورد ----------
+  const VK = 'invoice-simple-view-v1';
+  let vw = { sort: 'new', vendor: '', show: '' }; try { Object.assign(vw, JSON.parse(localStorage.getItem(VK) || '{}')); } catch { }
+  const saveVw = () => { try { localStorage.setItem(VK, JSON.stringify(vw)); } catch { } };
+  const vLabel = x => x.vendor_name || vatShort(x.vendor_tax_number) || 'مورد غير معروف';
+  const cmpAr = (a, b) => String(a).localeCompare(String(b), 'ar', { numeric: true, sensitivity: 'base' });
+  function vendorsOf() {
+    const m = new Map(); list.forEach(x => { const k = vKey(x) || '?'; const o = m.get(k) || m.set(k, { k, name: '', n: 0 }).get(k); o.n++; if (!o.name && x.vendor_name) o.name = x.vendor_name; if (!o.name && k !== '?') o.name = vLabel(x); });
+    return [...m.values()].map(o => ({ ...o, name: o.name || 'مورد غير معروف' })).sort((a, b) => a.k === '?' ? 1 : b.k === '?' ? -1 : cmpAr(a.name, b.name));
+  }
+  function viewList() {
+    let a = list.slice();
+    if (vw.vendor) a = a.filter(x => (vKey(x) || '?') === vw.vendor);
+    if (vw.show === 'sent') a = a.filter(x => sendState(x) === 'ok');
+    else if (vw.show === 'unsent') a = a.filter(x => sendState(x) !== 'ok');
+    else if (vw.show === 'dup') a = a.filter(x => twinsOf(x).length);
+    else if (vw.show === 'iss') a = a.filter(x => issues(x).length);
+    const vn = new Map(vendorsOf().map(o => [o.k, o.name]));
+    const vname = x => vn.get(vKey(x) || '?') || '';
+    const d = x => /^\d{4}-\d{2}-\d{2}$/.test(x.invoice_date || '') ? x.invoice_date : '';
+    if (vw.sort === 'vendor') a.sort((p, q) => (vKey(p) ? 0 : 1) - (vKey(q) ? 0 : 1) || cmpAr(vname(p), vname(q)) || cmpAr(vKey(p), vKey(q)) || cmpAr(invKey(p.invoice_number), invKey(q.invoice_number)));
+    else if (vw.sort === 'date') a.sort((p, q) => (d(q) ? 1 : 0) - (d(p) ? 1 : 0) || cmpAr(d(q), d(p)));
+    else if (vw.sort === 'amount') a.sort((p, q) => (+q.total || 0) - (+p.total || 0));
+    else if (vw.sort === 'old') a.reverse();
+    return { a, vname };
+  }
+  function drawBar() {
+    const bar = $('lbar'); if (!bar) return; bar.hidden = list.length < 2 && !vw.vendor && !vw.show;
+    const vs = vendorsOf(); if (vw.vendor && !vs.some(o => o.k === vw.vendor)) vw.vendor = '';
+    const nd = list.filter(x => twinsOf(x).length).length, ns = list.filter(x => sendState(x) === 'ok').length;
+    const o = (v, t, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(t)}</option>`;
+    bar.innerHTML = `<label><span>ترتيب حسب</span><select id="vwSort">${o('new', 'الأحدث أولًا', vw.sort)}${o('old', 'الأقدم أولًا', vw.sort)}${o('vendor', 'المورد (أبجديًا) ثم رقم الفاتورة', vw.sort)}${o('date', 'تاريخ الفاتورة (الأحدث)', vw.sort)}${o('amount', 'المبلغ (الأكبر)', vw.sort)}</select></label>
+      <label><span>المورد</span><select id="vwVendor">${o('', 'كل الموردين (' + list.length + ')', vw.vendor)}${vs.map(v => o(v.k, v.name + ' (' + v.n + ')', vw.vendor)).join('')}</select></label>
+      <label><span>عرض</span><select id="vwShow">${o('', 'كل الفواتير', vw.show)}${o('dup', 'المكررة فقط (' + nd + ')', vw.show)}${GURL || ns ? o('sent', 'المصدرة إلى الشيت (' + ns + ')', vw.show) + o('unsent', 'غير المصدرة (' + (list.length - ns) + ')', vw.show) : ''}${o('iss', 'التي فيها ملاحظات', vw.show)}</select></label>
+      ${vw.vendor || vw.show ? '<button type="button" id="vwClear">إلغاء الفرز</button>' : ''}`;
+  }
+  function drawDups() {
+    const el = $('dupBox'); if (!el) return; const g = dupGroups(); el.hidden = !g.length; if (!g.length) return;
+    const n = g.reduce((s, a) => s + a.length, 0);
+    el.innerHTML = `<b>⚠ تنبيه: ${g.length === 1 ? 'توجد فواتير مكررة' : g.length + ' مجموعات من الفواتير المكررة'} (${n} فاتورة لها نفس المورد ونفس رقم الفاتورة)</b>
+      <ul>${g.map(a => `<li><span><b>${esc(vLabel(a[0]))}</b> · فاتورة رقم <bdi>${esc(a[0].invoice_number)}</bdi> · ${a.length} مرات:</span> ${a.map(x => `<button type="button" class="dupgo" data-go="${esc(x.id)}">📄 ${esc(x.file || 'بدون اسم')}${x.invoice_date ? ' · ' + esc(x.invoice_date) : ''}${!blank(x.total) ? ' · ' + esc(money(x.total)) : ''}</button>`).join('')}</li>`).join('')}</ul>
+      <div class="zbtns">${vw.show !== 'dup' ? '<button type="button" id="dupOnly">عرض المكررة فقط</button>' : ''}<small>راجعها واحذف المكرر (مع ذكر السبب)، أو صحّح رقم الفاتورة إن كان مقروءًا خطأ.</small></div>`;
+  }
+  document.addEventListener('change', e => {
+    const t = e.target; if (!['vwSort', 'vwVendor', 'vwShow'].includes(t.id)) return;
+    vw[{ vwSort: 'sort', vwVendor: 'vendor', vwShow: 'show' }[t.id]] = t.value; saveVw(); draw(); const n = $(t.id); if (n) n.focus();
+  });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'vwClear') { vw.vendor = ''; vw.show = ''; saveVw(); draw(); }
+    if (b.id === 'dupOnly') { vw.show = 'dup'; vw.vendor = ''; vw.sort = 'vendor'; saveVw(); draw(); }
+    if (b.dataset.go) { let c = $('c-' + b.dataset.go); if (!c) { vw.vendor = ''; vw.show = ''; saveVw(); draw(); c = $('c-' + b.dataset.go); }
+      if (c) { c.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' }); c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1600); } }
+  });
+  function listHtml() {
+    const { a, vname } = viewList();
+    if (!a.length) return list.length ? '<p class="empty">لا توجد فواتير تطابق الفرز الحالي.</p>' : '';
+    if (vw.sort !== 'vendor') return a.map(x => card(x)).join('');
+    let out = '', cur = null;
+    a.forEach((x, i) => { const k = vKey(x) || '?';
+      if (k !== cur) { cur = k; const g = a.filter(y => (vKey(y) || '?') === k), sum = g.reduce((s, y) => s + (+y.total || 0), 0), vat = k.startsWith('v:') ? k.slice(2) : '';
+        out += `<h3 class="vgrp"><span>${esc(vname(x) || 'مورد غير معروف')}</span>${vat ? `<small>الرقم الضريبي ${esc(vat)}…</small>` : ''}<small>${g.length} فاتورة · ${esc(money(sum))}</small></h3>`; }
+      out += card(x); });
+    return out;
+  }
   function draw() {
     const dw = delAsk && $('dr-' + delAsk), keepWhy = dw ? dw.value : '';
     const pend = Object.values(live).filter(v => !v.reread);
@@ -437,8 +519,8 @@
     const nIss = list.filter(x => issues(x).length).length;
     $('sum').textContent = list.length ? (nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة') : '';
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : v.status === 'split' ? 'بانتظار اختيار طريقة قراءة الملف' : 'بالانتظار'}</span></article>`).join('')
-      + (list.map(x => card(x)).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
-    drawZones(); drawTrash(); drawWipe(); rvAllLabel(); sendLabel(); mountViewers();
+      + (listHtml() || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
+    drawBar(); drawDups(); drawZones(); drawTrash(); drawWipe(); rvAllLabel(); sendLabel(); mountViewers();
     const cb = $('cropAll'); if (cb) { cb.hidden = !list.length; cb.textContent = cropOff ? '✂ إظهار المقتطعات' : 'إخفاء المقتطعات'; cb.setAttribute('aria-pressed', !cropOff); }
     mountCrops();
     if (keepWhy) { const t = $('dr-' + delAsk), ok = document.querySelector(`[data-delok="${CSS.escape(delAsk)}"]`); if (t) t.value = keepWhy; if (ok) ok.disabled = !keepWhy.trim(); }
@@ -447,14 +529,17 @@
     $('trSec').hidden = !trash.length; $('trCount').textContent = trash.length ? `(${trash.length})` : '';
     const d = s => { try { return new Date(s).toLocaleString('ar-SA-u-nu-latn', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return ''; } };
     $('trList').innerHTML = trash.map(x => { const id = esc(x.id), o = !!trOpen[x.id];
-      return `<li><div class="trrow"><span class="trn"><b>📄 ${esc(x.file || x.file_name || 'بدون اسم')}</b><small>${esc(x.vendor_name || 'مورد غير معروف')}${x.total !== '' && x.total != null ? ' · ' + esc(money(x.total)) : ''}${x.deletedAt ? ' · حُذفت ' + esc(d(x.deletedAt)) : ''}</small>${x.delReason ? `<span class="trwhy">سبب الحذف: ${esc(x.delReason)}</span>` : ''}</span>
+      return `<li><div class="trrow"><span class="trn"><b>📄 ${esc(x.file || x.file_name || 'بدون اسم')}</b><small>${esc(x.vendor_name || 'مورد غير معروف')}${x.total !== '' && x.total != null ? ' · ' + esc(money(x.total)) : ''}${x.deletedAt ? ' · حُذفت ' + esc(d(x.deletedAt)) : ''}</small>${x.delReason ? `<span class="trwhy">سبب الحذف: ${esc(x.delReason)}</span>` : ''}${sentBadge(x)}</span>
         <button type="button" data-trview="${id}" aria-expanded="${o}">${o ? 'إغلاق' : 'مراجعة'}</button><button type="button" data-trback="${id}">↩ استرجاع</button><button type="button" class="del" data-trdel="${id}">حذف نهائي</button>
         ${trAsk === x.id ? `<div class="trask" role="alert"><b>حذف هذه الفاتورة نهائيًا؟</b>ستُحذف بياناتها وصورتها من المتصفح ولا تظهر هنا بعد ذلك.<div class="zbtns"><button type="button" class="del" data-trok="${id}">نعم، احذف نهائيًا</button><button type="button" data-trno="">تراجع</button></div></div>` : ''}</div>
         ${o ? card(x, true) : ''}</li>`; }).join('');
   }
   // تحديث ملاحظات وحالة بطاقة واحدة بدون إعادة رسم (حتى لا يضيع مكان الكتابة)
-  function refreshCard(x) {
+  function refreshCard(x, only) {
     const c = $('c-' + x.id); if (!c) return;
+    c.classList.toggle('isdup', twinsOf(x).length > 0);
+    { const hd = c.querySelector('header > div'), od = hd && hd.querySelector('.db'); if (od) od.remove(); if (hd) hd.querySelector('.fp').insertAdjacentHTML('afterend', dupBadge(x)); }
+    if (!only) { list.forEach(y => { if (y !== x) refreshCard(y, true); }); drawDups(); }
     const w = issues(x), box = c.querySelector('.warn, .okline');
     const html = w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>';
     box.outerHTML = html;
@@ -559,14 +644,16 @@
 
   // ---------- الرفع والقراءة ----------
   const queue = [], live = {}; let busy = false;
-  const sig = f => String(f.name || '').trim().toLowerCase(); // منع التكرار باسم الملف فقط
+  const sig = f => String(pathOf(f)).trim().toLowerCase(); // منع التكرار: نفس الملف بنفس المسار (ملفان بنفس الاسم في مجلدين فرعيين مختلفين لا يُعدّان تكرارًا)
   // ملخص آخر عملية رفع: عدد الملفات، وما أُضيف، والمكرر، وغير المدعوم، ونتيجة القراءة
   let upSum = null;
   const isInv = f => /^image\//.test(f.type) || /\.(pdf|jpe?g|png|webp|heic|bmp|gif)$/i.test(f.name || '') || f.type === 'application/pdf';
   function addFiles(files, fromCam, kind) {
-    const seen = new Set(list.map(x => x.sig).filter(Boolean).concat(queue.map(j => j.sig0 || sig(j.file))));
-    const all = [...(files || [])].filter(f => !/(^|\/)\.[^/]*$/.test(pathOf(f))); // نتجاهل ملفات النظام المخفية مثل .DS_Store
+    const seen = new Set(list.flatMap(x => [x.sig, String(x.file || '').toLowerCase()]).filter(Boolean).concat(queue.map(j => j.sig0 || sig(j.file))));
+    const all = [...(files || [])].filter(f => !/(^|\/)\./.test(pathOf(f))); // نتجاهل الملفات والمجلدات المخفية مثل .DS_Store
     const b = { kind: fromCam ? 'cam' : kind || 'files', total: all.length, added: 0, dups: [], other: [], read: 0, failed: 0 };
+    const sub = new Set(all.map(f => pathOf(f).split('/')).filter(a => a.length > 2).map(a => a.slice(0, -1).join('/')));
+    b.subDirs = sub.size; b.subFiles = all.filter(f => pathOf(f).split('/').length > 2).length;
     all.forEach((f, i) => {
       if (!isInv(f)) { b.other.push(pathOf(f)); return; }
       const s = sig(f); if (!fromCam && seen.has(s)) { b.dups.push(pathOf(f)); return; } seen.add(s);
@@ -584,7 +671,8 @@
     el.innerHTML = `<div class="ushead"><b>ملخص آخر رفع</b><button type="button" class="usx" id="upSumX" aria-label="إغلاق الملخص">✕</button></div>
       <ul class="usn"><li><span>${where}</span><b>${b.total}</b></li>
         <li class="ok"><span>أُضيفت للقراءة</span><b>${b.added}</b></li>
-        <li class="${b.dups.length ? 'bad' : ''}"><span>لم تُضف لأنها مكررة (نفس اسم ملف في القائمة)</span><b>${b.dups.length}</b></li>
+        ${b.subDirs ? `<li><span>منها في المجلدات الفرعية (${b.subDirs} مجلد فرعي)</span><b>${b.subFiles}</b></li>` : ''}
+        <li class="${b.dups.length ? 'bad' : ''}"><span>لم تُضف لأنها مكررة (نفس الملف بنفس المسار موجود في القائمة)</span><b>${b.dups.length}</b></li>
         ${b.splitFiles ? `<li><span>ملفات قُسّمت إلى عدة فواتير</span><b>${b.splitFiles}</b></li>` : ''}
         ${b.skipped ? `<li><span>ملفات تم تخطيها</span><b>${b.skipped}</b></li>` : ''}
         ${b.other.length ? `<li><span>ليست صورة أو PDF فتم تجاهلها</span><b>${b.other.length}</b></li>` : ''}
@@ -669,7 +757,20 @@
   const drop = $('drop');
   ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', e => addFiles(e.dataTransfer.files, false, 'drop'));
+  // السحب والإفلات: نقرأ المجلدات وكل المجلدات الفرعية تحتها
+  drop.addEventListener('drop', async e => {
+    const items = [...(e.dataTransfer.items || [])], ents = items.map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    if (!ents.some(en => en.isDirectory)) { addFiles(e.dataTransfer.files, false, 'drop'); return; }
+    status('جارٍ قراءة المجلد والمجلدات الفرعية…');
+    const out = [];
+    const readAll = r => new Promise(res => { const acc = []; const step = () => r.readEntries(es => { if (!es.length) return res(acc); acc.push(...es); step(); }, () => res(acc)); step(); });
+    const walk = async en => {
+      if (en.isFile) { try { const f = await new Promise((res, rej) => en.file(res, rej)); Object.defineProperty(f, 'relPath', { value: en.fullPath.replace(/^\//, '') }); out.push(f); } catch { } }
+      else if (en.isDirectory && !/^\./.test(en.name)) for (const c of await readAll(en.createReader())) await walk(c);
+    };
+    for (const en of ents) await walk(en);
+    status(''); addFiles(out, false, 'dir');
+  });
 
   // ---------- Excel ----------
   const XL = [['invoice_number', 'رقم الفاتورة', 18], ['invoice_date', 'تاريخ الفاتورة', 14], ['total', 'المبلغ الإجمالي', 16], ['tax_amount', 'مبلغ الضريبة', 14],
@@ -1384,13 +1485,15 @@
   const sentSig = x => JSON.stringify([x.invoice_number, x.invoice_date, x.total, x.tax_amount, x.vendor_name, x.vendor_tax_number, x.payment_method, x.project || '', noteOf(x), x.file || '', !!x.deletedAt, x.delReason || '']);
   const sendState = x => !x.sentAt ? (x.sendErr ? 'err' : 'new') : x.sentSig === sentSig(x) ? 'ok' : 'dirty';
   function sentBadge(x) {
-    if (!GURL) return '';
+    if (!GURL && !x.sentAt) return '';
     const st = sendState(x);
-    if (st === 'ok') return `<small class="sb ok">✓ في Google Sheet${x.sentRow ? ' (صف ' + x.sentRow + ')' : ''}</small>`;
-    if (st === 'dirty') return '<small class="sb dirty">⟳ عُدّلت بعد الإرسال، ستُحدَّث في الشيت عند الإرسال</small>';
+    const when = x.sentAt ? ' · ' + sentWhen(x.sentAt) : '', row = x.sentRow ? ' · صف ' + x.sentRow : '';
+    if (st === 'ok') return `<small class="sb ok">✓ صُدّرت إلى Google Sheet${esc(when + row)}</small>`;
+    if (st === 'dirty') return `<small class="sb dirty">⟳ صُدّرت إلى Google Sheet${esc(when)} ثم عُدّلت: ستُحدَّث في الشيت عند الإرسال</small>`;
     if (st === 'err') return `<small class="sb err">لم تُرسل: ${esc(x.sendErr)}</small>`;
     return '';
   }
+  function sentWhen(t) { try { return new Date(t).toLocaleString('ar-SA-u-nu-latn-ca-gregory', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return ''; } }
   const toSend = () => list.filter(x => sendState(x) !== 'ok').concat(trash.filter(x => x.sentAt && sendState(x) === 'dirty'));
   let sending = false;
   function sendLabel() {
