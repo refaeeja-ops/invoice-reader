@@ -1538,9 +1538,9 @@
   async function gsCall(cfg, body) {
     const r = body ? await fetch(GURL, { method: 'POST', body: JSON.stringify({ email: cfg.email, token: cfg.token, ...body }), redirect: 'follow' })
       : await fetch(GURL + (GURL.includes('?') ? '&' : '?') + 'action=zones&email=' + encodeURIComponent(cfg.email) + '&token=' + encodeURIComponent(cfg.token), { redirect: 'follow' });
-    let j; try { j = await r.json(); } catch { throw new Error('رد غير متوقع من الشيت. تأكد أن Apps Script حُدّث بالنسخة الجديدة'); }
-    if (!j.ok) throw new Error(j.error || 'تعذّر الاتصال بالشيت');
-    if (!j.zones) throw new Error('الشيت لا يدعم القوالب بعد: حدّث كود Apps Script وانشر نسخة جديدة');
+    let j; try { j = await r.json(); } catch { throw new Error('رد غير متوقع من الإقرار. تأكد أن Apps Script حُدّث بالنسخة الجديدة'); }
+    if (!j.ok) throw new Error(j.error || 'تعذّر الاتصال بالإقرار');
+    if (!j.zones) throw new Error('الإقرار لا يدعم القوالب بعد: حدّث كود Apps Script وانشر نسخة جديدة');
     return j;
   }
   function zMerge(j) { // يدمج القوالب: الأحدث يفوز، والتعديلات المحلية غير المرسلة لها الأولوية
@@ -1562,7 +1562,7 @@
       for (const k in sent) delete zpend[k];
       try { localStorage.setItem(ZPK, JSON.stringify(zpend)); } catch { }
       saveZones(); zst.at = new Date().toLocaleTimeString('ar-SA-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
-    } catch (e) { console.warn(e); zst.err = (e && e.message) || 'تعذّر الاتصال بالشيت'; }
+    } catch (e) { console.warn(e); zst.err = (e && e.message) || 'تعذّر الاتصال بالإقرار'; }
     zst.busy = false; draw();
     if (Object.keys(zpend).length && !zst.err) { clearTimeout(zTimer); zTimer = setTimeout(zSync, 3000); }
   }
@@ -1572,12 +1572,12 @@
     const n = Object.keys(zpend).length;
     if (!gs) {
       if (b.querySelector('form')) return; // لا نمسح ما يكتبه المستخدم
-      b.innerHTML = `<p><b>القوالب محفوظة في هذا المتصفح فقط.</b> اربط التطبيق بـ Google Sheet لتُحفظ القوالب دائمًا وتظهر على كل أجهزتك، ولتتمكن من إرسال الفواتير إلى الشيت.</p>
-        <form id="zsForm" class="zsform"><input id="zsEmail" type="email" autocomplete="email" placeholder="البريد الإلكتروني" required><input id="zsToken" autocomplete="off" placeholder="رمز الدخول" required><button class="primary" id="zsGo">ربط بـ Google Sheet</button></form>
-        <small>البريد والرمز من قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له» في الشيت.</small>`;
+      b.innerHTML = `<p><b>القوالب محفوظة في هذا المتصفح فقط.</b> اربط التطبيق بالإقرار لتُحفظ القوالب دائمًا وتظهر على كل أجهزتك، ولتتمكن من إرسال الفواتير إلى الإقرار.</p>
+        <form id="zsForm" class="zsform"><input id="zsEmail" type="email" autocomplete="email" placeholder="البريد الإلكتروني" required><input id="zsToken" autocomplete="off" placeholder="رمز الدخول" required><button class="primary" id="zsGo">ربط بالإقرار</button></form>
+        <small>البريد والرمز من قائمة «قارئ الفواتير» ← «إضافة مستخدم مسموح له» في الإقرار.</small>`;
       return;
     }
-    b.innerHTML = `<p class="zson">☁️ <b>القوالب محفوظة في Google Sheet</b> باسم ${esc(gs.email)}${zst.busy ? ' · جارٍ المزامنة…' : zst.err ? '' : zst.at ? ' · آخر مزامنة ' + esc(zst.at) : ''}${n && !zst.busy ? ` · ${n} تعديل بانتظار الإرسال` : ''}</p>
+    b.innerHTML = `<p class="zson">☁️ <b>القوالب محفوظة في الإقرار</b> باسم ${esc(gs.email)}${zst.busy ? ' · جارٍ المزامنة…' : zst.err ? '' : zst.at ? ' · آخر مزامنة ' + esc(zst.at) : ''}${n && !zst.busy ? ` · ${n} تعديل بانتظار الإرسال` : ''}</p>
       ${zst.err ? `<p class="zserr" role="alert">تعذّرت المزامنة: ${esc(zst.err)}. القوالب باقية في هذا المتصفح وستُرسل لاحقًا.</p>` : ''}
       <div class="zbtns"><button type="button" id="zsNow"${zst.busy ? ' disabled' : ''}>🔄 مزامنة الآن</button><button type="button" id="zsOff">إلغاء الربط</button></div>`;
   }
@@ -1587,14 +1587,14 @@
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !token) { toast('اكتب البريد ورمز الدخول'); return; }
     $('zsGo').disabled = true; $('zsGo').textContent = 'جارٍ الربط…';
     try { await gsCall({ email, token }); gs = { url: GURL, email, token }; try { localStorage.setItem(GKEY, JSON.stringify(gs)); } catch { }
-      $('zSync').innerHTML = ''; await zSync(); toast('تم الربط: القوالب محفوظة في Google Sheet'); }
-    catch (er) { toast((er && er.message) || 'تعذّر الربط'); const g = $('zsGo'); if (g) { g.disabled = false; g.textContent = 'ربط بـ Google Sheet'; } }
+      $('zSync').innerHTML = ''; await zSync(); toast('تم الربط: القوالب محفوظة في الإقرار'); }
+    catch (er) { toast((er && er.message) || 'تعذّر الربط'); const g = $('zsGo'); if (g) { g.disabled = false; g.textContent = 'ربط بالإقرار'; } }
   });
   document.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.id === 'zsNow') zSync();
     if (b.id === 'zsOff') { const old = gs; gs = null; try { localStorage.setItem(GKEY, JSON.stringify({ url: GURL })); } catch { } drawSync();
-      undoBar('أُلغي الربط مع Google Sheet. القوالب باقية في هذا المتصفح', () => { gs = old; try { localStorage.setItem(GKEY, JSON.stringify(old)); } catch { } drawSync(); }, () => { }); }
+      undoBar('أُلغي الربط مع الإقرار. القوالب باقية في هذا المتصفح', () => { gs = old; try { localStorage.setItem(GKEY, JSON.stringify(old)); } catch { } drawSync(); }, () => { }); }
   });
   if (gs) setTimeout(zSync, 1500);
   if (gs) setTimeout(supSync, 2500);
@@ -1608,7 +1608,7 @@
     const when = x.sentAt ? ' · ' + sentWhen(x.sentAt) : '', row = x.sentRow ? ' · صف ' + x.sentRow : '';
     if (st === 'ok') return `<small class="sb ok">✓ صُدّرت إلى الإقرار${esc(when + row)}</small>`;
     if (st === 'dirty') return `<small class="sb dirty">⟳ صُدّرت إلى الإقرار${esc(when)} ثم عُدّلت: ستُحدَّث عند الإرسال</small>`;
-    if (st === 'err') return `<small class="sb err">لم تُرسل: ${esc(String(x.sendErr).replace(/الشيت|Google Sheet/g, 'الإقرار'))}</small>`;
+    if (st === 'err') return `<small class="sb err">لم تُرسل: ${esc(String(x.sendErr).replace(/الإقرار|الإقرار/g, 'الإقرار'))}</small>`;
     return '';
   }
   function sentWhen(t) { try { return new Date(t).toLocaleString('ar-SA-u-nu-latn-ca-gregory', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return ''; } }
@@ -1622,7 +1622,7 @@
     b.textContent = sending ? 'جارٍ الإرسال والنقل إلى InvoiceT…' : n ? `☁️ إرسال ونقل إلى InvoiceT (${n})` : '☁️ نقل إلى InvoiceT';
   }
   $('gsSend').onclick = async () => {
-    if (!gs) { toast('اربط التطبيق بـ Google Sheet أولًا: اكتب بريدك ورمز الدخول'); showTab('z'); const f = $('zsEmail'); if (f) { f.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => f.focus({ preventScroll: true }), 300); } return; }
+    if (!gs) { toast('اربط التطبيق بالإقرار أولًا: اكتب بريدك ورمز الدخول'); showTab('z'); const f = $('zsEmail'); if (f) { f.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => f.focus({ preventScroll: true }), 300); } return; }
     if (sending) return; const items = toSend();
     sending = true; sendLabel();
     const sig = new Map(items.map(x => [x.id, sentSig(x)]));
@@ -1631,16 +1631,16 @@
       const invoices = items.map(x => ({ id: x.id, InvoiceNo: String(x.invoice_number || ''), Date: x.invoice_date || '', Total: n2s(x.total), Vat: n2s(x.tax_amount), Vendor: x.vendor_name || '',
         VATID: x.vendor_tax_number || '', Payment: x.payment_method || '', Project: x.project || '', Note: noteOf(x), File: x.file || '', Deleted: !!x.deletedAt, DeleteReason: x.delReason || '' }));
       const r = await fetch(GURL, { method: 'POST', body: JSON.stringify(items.length ? { email: gs.email, token: gs.token, action: 'appInvoices', invoices, copy: true } : { email: gs.email, token: gs.token, action: 'copyToInvoiceT' }), redirect: 'follow' });
-      let j; try { j = await r.json(); } catch { throw new Error('رد غير متوقع من الشيت'); }
+      let j; try { j = await r.json(); } catch { throw new Error('رد غير متوقع من الإقرار'); }
       if (!j.ok) throw new Error(j.error || 'تعذّر الإرسال');
-      if (!j.results) throw new Error('الشيت لا يستقبل الفواتير بعد: حدّث كود Apps Script وانشر نسخة جديدة');
+      if (!j.results) throw new Error('الإقرار لا يستقبل الفواتير بعد: حدّث كود Apps Script وانشر نسخة جديدة');
       let ok = 0, sk = 0; const now = new Date().toISOString(), all = list.concat(trash);
       j.results.forEach(o => { const x = all.find(y => y.id === o.id); if (!x) return;
-        if (o.skipped) { x.sendErr = String(o.skipped).replace(/الشيت/g, 'الإقرار'); sk++; return; }
+        if (o.skipped) { x.sendErr = String(o.skipped).replace(/الإقرار/g, 'الإقرار'); sk++; return; }
         x.sentAt = now; x.sentRow = o.row; x.sentSig = sig.get(x.id); delete x.sendErr; ok++; });
       save(); saveTrash();
       const head = items.length ? (sk ? `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق»، ولم تُرسل ${sk} لأنها مكررة في الإقرار.` : `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق».`) : '';
-      if (!j.copy) showRep(head + '\n\nلم يتم النقل إلى InvoiceT: حدّث كود Apps Script في الشيت وانشر نسخة جديدة (New version).', true);
+      if (!j.copy) showRep(head + '\n\nلم يتم النقل إلى InvoiceT: حدّث كود Apps Script في الإقرار وانشر نسخة جديدة (New version).', true);
       else if (j.copy.error) showRep(head + '\n\nتعذّر النقل إلى InvoiceT: ' + j.copy.error, true);
       else showRep((head ? head + '\n\n' : '') + j.copy.msg, false);
     } catch (e) { console.warn(e); showRep('تعذّر الإرسال: ' + ((e && e.message) || 'تحقق من الاتصال'), true); }
