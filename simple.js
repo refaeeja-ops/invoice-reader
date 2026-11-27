@@ -455,7 +455,7 @@
   const cmpAr = (a, b) => String(a).localeCompare(String(b), 'ar', { numeric: true, sensitivity: 'base' });
   const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   const dOf = x => /^\d{4}-\d{2}-\d{2}$/.test(x.invoice_date || '') ? x.invoice_date : '';
-  const vendorName = k => { const y = list.find(z => (vKey(z) || '?') === k && z.vendor_name) || list.find(z => (vKey(z) || '?') === k); return y && k !== '?' ? vLabel(y) : 'مورد غير معروف'; };
+  const vendorName = k => { if (k === '?') return 'مورد غير معروف'; const c = new Map(); list.forEach(z => { if ((vKey(z) || '?') === k) { const n = vLabel(z); c.set(n, (c.get(n) || 0) + 1); } }); return [...c.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'مورد غير معروف'; };
   // لكل تجميع: مفتاح المجموعة، اسمها، والخانات التي تظهر في رأس المجموعة فلا تتكرر في كل فاتورة
   const GR = {
     vendor: { k: x => vKey(x) || '?', name: k => vendorName(k), meta: k => k.startsWith('v:') ? 'الرقم الضريبي ' + ((list.find(z => vKey(z) === k) || {}).vendor_tax_number || '') : '', hide: ['vendor_name', 'vendor_tax_number'], order: (a, b) => a === '?' ? 1 : b === '?' ? -1 : cmpAr(vendorName(a), vendorName(b)) },
@@ -492,12 +492,36 @@
     if (tot) { const a = viewList(), ds = a.map(dOf).filter(Boolean).sort(); tot.hidden = !list.length;
       tot.innerHTML = `<span>المعروض:</span>${statsHtml(sumOf(a))}${ds.length ? `<span>تاريخ أول فاتورة <b>${ds[0]}</b></span><span>تاريخ آخر فاتورة <b>${ds[ds.length - 1]}</b></span>` : ''}`; }
   }
+  // نسخ مطابقة تمامًا: نفس اسم الملف ونفس البيانات. نُبقي واحدة (المرسلة أو المعدّلة أولًا) وننقل الباقي إلى المحذوفات
+  const copyKey = x => JSON.stringify([String(x.file || '').toLowerCase(), invKey(x.invoice_number), x.invoice_date || '', String(x.total ?? ''), vKey(x)]);
+  function exactCopies() {
+    const m = new Map(); list.forEach(x => { if (!x.file) return; const k = copyKey(x); (m.get(k) || m.set(k, []).get(k)).push(x); });
+    const extra = [];
+    m.forEach(a => { if (a.length < 2) return; const keep = a.slice().sort((p, q) => (q.sentAt ? 2 : 0) + (q.edited ? 1 : 0) - (p.sentAt ? 2 : 0) - (p.edited ? 1 : 0) || String(p.at).localeCompare(String(q.at)))[0]; a.forEach(x => { if (x !== keep) extra.push(x); }); });
+    return extra;
+  }
+  let copyAsk = false;
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'cpDel') { copyAsk = true; drawDups(); const n = $('cpNo'); if (n) n.focus(); }
+    if (b.id === 'cpNo') { copyAsk = false; drawDups(); }
+    if (b.id === 'cpOk') {
+      copyAsk = false; const ex = exactCopies(); if (!ex.length) return drawDups();
+      const pos = ex.map(x => [x, list.indexOf(x)]), now = new Date().toISOString();
+      ex.forEach(x => { list.splice(list.indexOf(x), 1); x.deletedAt = now; x.delReason = 'نسخة مكررة من نفس الملف (حُذفت تلقائيًا)'; trash.unshift(x); delete rrS[x.id]; });
+      save(); saveTrash(); draw();
+      undoBar(`نُقلت ${ex.length} نسخة مكررة إلى «الفواتير المحذوفة»`, () => { pos.sort((a, b) => a[1] - b[1]).forEach(([x, i]) => { trash.splice(trash.indexOf(x), 1); delete x.deletedAt; delete x.delReason; list.splice(i, 0, x); }); save(); saveTrash(); draw(); }, () => { });
+    }
+  });
   function drawDups() {
     const el = $('dupBox'); if (!el) return; const g = dupGroups(); el.hidden = !g.length; if (!g.length) return;
+    const nc = exactCopies().length;
     const n = g.reduce((s, a) => s + a.length, 0);
     el.innerHTML = `<b>⚠ تنبيه: ${g.length === 1 ? 'توجد فواتير مكررة' : g.length + ' مجموعات من الفواتير المكررة'} (${n} فاتورة لها نفس المورد ونفس رقم الفاتورة)</b>
-      <ul>${g.map(a => { const sp = a.every(x => x.sig && x.sig === a[0].sig);
-        return `<li><span><b>${esc(vLabel(a[0]))}</b> · فاتورة رقم <bdi>${esc(a[0].invoice_number)}</bdi> · ${a.length} مرات${sp ? ' (كلها من نفس الملف المقسّم: قد يكون الرقم مقروءًا خطأ في إحداها، أو تكون الصفحات من فاتورة واحدة)' : ''}:</span> ${a.map(x => `<button type="button" class="dupgo" data-go="${esc(x.id)}">📄 ${esc(x.file || 'بدون اسم')}${x.invoice_date ? ' · ' + esc(x.invoice_date) : ''}${!blank(x.total) ? ' · ' + esc(money(x.total)) : ''}</button>`).join('')}<button type="button" class="dupno" data-notdup="${esc(dupKey(a[0]))}">ليست مكررة</button></li>`; }).join('')}</ul>
+      <ul>${g.map(a => { const same = a.every(x => x.file && x.file === a[0].file), sp = !same && a.every(x => x.sig && x.sig === a[0].sig);
+        return `<li><span><b>${esc(vLabel(a[0]))}</b> · فاتورة رقم <bdi>${esc(a[0].invoice_number)}</bdi> · ${a.length} مرات${same ? ' (نفس الملف أُضيف أكثر من مرة)' : ''}${sp ? ' (كلها من نفس الملف المقسّم: قد يكون الرقم مقروءًا خطأ في إحداها، أو تكون الصفحات من فاتورة واحدة)' : ''}:</span> ${a.map(x => `<button type="button" class="dupgo" data-go="${esc(x.id)}">📄 ${esc(x.file || 'بدون اسم')}${x.invoice_date ? ' · ' + esc(x.invoice_date) : ''}${!blank(x.total) ? ' · ' + esc(money(x.total)) : ''}</button>`).join('')}<button type="button" class="dupno" data-notdup="${esc(dupKey(a[0]))}">ليست مكررة</button></li>`; }).join('')}</ul>
+      ${nc ? (copyAsk ? `<div class="cpask" role="alert"><b>نقل ${nc} نسخة مكررة إلى «الفواتير المحذوفة»؟</b> هذه نسخ من نفس الملف بنفس البيانات تمامًا. تبقى نسخة واحدة من كل فاتورة (المرسلة إلى الإقرار أو المعدّلة إن وجدت)، ويمكن استرجاع المحذوف.<div class="zbtns"><button type="button" class="del" id="cpOk">نعم، انقلها</button><button type="button" id="cpNo">تراجع</button></div></div>`
+        : `<div class="zbtns"><button type="button" class="del" id="cpDel">🗑 حذف النسخ المطابقة تمامًا (${nc})</button><small>نفس الملف ونفس البيانات، أُضيف أكثر من مرة.</small></div>`) : ''}
       <div class="zbtns">${vw.show !== 'dup' ? '<button type="button" id="dupOnly">عرض المكررة فقط</button>' : ''}<small>راجعها واحذف المكرر (مع ذكر السبب)، أو صحّح رقم الفاتورة إن كان مقروءًا خطأ.</small></div>`;
   }
   document.addEventListener('change', e => {
@@ -655,21 +679,24 @@
 
   // ---------- الرفع والقراءة ----------
   const queue = [], live = {}; let busy = false;
-  const sig = f => String(pathOf(f)).trim().toLowerCase(); // منع التكرار: نفس الملف بنفس المسار (ملفان بنفس الاسم في مجلدين فرعيين مختلفين لا يُعدّان تكرارًا)
+  const sig = f => String(pathOf(f)).trim().toLowerCase();
+  const fkeyOf = f => String(f.name || '').trim().toLowerCase() + '|' + (f.size || 0); // نفس الملف حتى لو رُفع من مجلد آخر // منع التكرار: نفس الملف بنفس المسار (ملفان بنفس الاسم في مجلدين فرعيين مختلفين لا يُعدّان تكرارًا)
   // ملخص آخر عملية رفع: عدد الملفات، وما أُضيف، والمكرر، وغير المدعوم، ونتيجة القراءة
   let upSum = null;
   const isInv = f => /^image\//.test(f.type) || /\.(pdf|jpe?g|png|webp|heic|bmp|gif)$/i.test(f.name || '') || f.type === 'application/pdf';
   function addFiles(files, fromCam, kind) {
-    const seen = new Set(list.flatMap(x => [x.sig, String(x.file || '').toLowerCase()]).filter(Boolean).concat(queue.map(j => j.sig0 || sig(j.file))));
+    // نقارن بما في القائمة وما في الانتظار وما يُقرأ الآن (ومنه ملف ينتظر اختيار طريقة التقسيم)
+    const seen = new Set(list.flatMap(x => [x.sig, String(x.file || '').toLowerCase(), x.fkey]).filter(Boolean)
+      .concat(queue.flatMap(j => [j.sig0 || sig(j.file), j.fkey0 || fkeyOf(j.file)]), Object.values(live).flatMap(v => [v.sig, v.fkey]).filter(Boolean)));
     const all = [...(files || [])].filter(f => !/(^|\/)\./.test(pathOf(f))); // نتجاهل الملفات والمجلدات المخفية مثل .DS_Store
     const b = { kind: fromCam ? 'cam' : kind || 'files', total: all.length, added: 0, dups: [], other: [], read: 0, failed: 0 };
     const sub = new Set(all.map(f => pathOf(f).split('/')).filter(a => a.length > 2).map(a => a.slice(0, -1).join('/')));
     b.subDirs = sub.size; b.subFiles = all.filter(f => pathOf(f).split('/').length > 2).length;
     all.forEach((f, i) => {
       if (!isInv(f)) { b.other.push(pathOf(f)); return; }
-      const s = sig(f); if (!fromCam && seen.has(s)) { b.dups.push(pathOf(f)); return; } seen.add(s);
+      const s = sig(f), fk = fkeyOf(f); if (!fromCam && (seen.has(s) || seen.has(fk))) { b.dups.push(pathOf(f)); return; } seen.add(s); seen.add(fk);
       const id = Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).slice(2, 6);
-      queue.push({ id, file: f, batch: b }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا' }; b.added++;
+      queue.push({ id, file: f, batch: b }); live[id] = { status: 'queued', file: pathOf(f) || 'صورة من الكاميرا', sig: fromCam ? '' : s, fkey: fromCam ? '' : fk }; b.added++;
     });
     if (!fromCam || b.dups.length || b.other.length) upSum = b;
     drawSum(); draw(); pump();
@@ -683,7 +710,7 @@
       <ul class="usn"><li><span>${where}</span><b>${b.total}</b></li>
         <li class="ok"><span>أُضيفت للقراءة</span><b>${b.added}</b></li>
         ${b.subDirs ? `<li><span>منها في المجلدات الفرعية (${b.subDirs} مجلد فرعي)</span><b>${b.subFiles}</b></li>` : ''}
-        <li class="${b.dups.length ? 'bad' : ''}"><span>لم تُضف لأنها مكررة (نفس الملف بنفس المسار موجود في القائمة)</span><b>${b.dups.length}</b></li>
+        <li class="${b.dups.length ? 'bad' : ''}"><span>لم تُضف لأنها مكررة (نفس الملف موجود في القائمة أو قيد القراءة)</span><b>${b.dups.length}</b></li>
         ${b.splitFiles ? `<li><span>ملفات قُسّمت إلى عدة فواتير</span><b>${b.splitFiles}</b></li>` : ''}
         ${b.skipped ? `<li><span>ملفات تم تخطيها</span><b>${b.skipped}</b></li>` : ''}
         ${b.other.length ? `<li><span>ليست صورة أو PDF فتم تجاهلها</span><b>${b.other.length}</b></li>` : ''}
@@ -736,8 +763,8 @@
         if (r.applyAll && job.batch) job.batch.splitMode = r.applyAll;
         if (r.files.length !== 1 || r.files[0] !== job.file) { // كل فاتورة تصبح ملفًا مستقلًا يُقرأ لوحده
           delete live[job.id];
-          const subs = r.files.map((f, i) => ({ id: job.id + '-' + (i + 1), file: f, batch: job.batch, split: true, sig0: sig(job.file) }));
-          subs.forEach(j => { live[j.id] = { status: 'queued', file: j.file.name }; });
+          const subs = r.files.map((f, i) => ({ id: job.id + '-' + (i + 1), file: f, batch: job.batch, split: true, sig0: sig(job.file), fkey0: fkeyOf(job.file) }));
+          subs.forEach(j => { live[j.id] = { status: 'queued', file: j.file.name, sig: j.sig0, fkey: j.fkey0 }; });
           if (job.batch) { job.batch.added += subs.length - 1; job.batch.splitFiles = (job.batch.splitFiles || 0) + 1; if (job.batch === upSum) drawSum(); }
           queue.unshift(...subs); draw(); continue;
         }
@@ -745,7 +772,7 @@
       }
       try {
         const { d, pages, src, plines } = await processFile(job.file, say);
-        const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: job.sig0 || sig(job.file),
+        const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: job.sig0 || sig(job.file), fkey: job.fkey0 || fkeyOf(job.file),
           invoice_number: d.invoice_number || '', invoice_date: d.invoice_date || '', total: d.total ?? '', tax_amount: d.tax_amount ?? '',
           vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: payNorm(d.payment_method), note: '' };
         if (zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { await applyZones(x, src); } catch (e) { console.warn(e); } }
@@ -754,7 +781,7 @@
         IMG.put(job.id, { pages, blob: job.file.size < 25e6 ? job.file : null });
       } catch (e) {
         console.error(e);
-        const x = { id: job.id, at: new Date().toISOString(), file: live[job.id].file, sig: job.sig0 || sig(job.file), invoice_number: '', invoice_date: '', total: '', tax_amount: '', vendor_name: '', vendor_tax_number: '', payment_method: '', note: 'تعذّرت قراءة الملف تلقائيًا: أدخل البيانات يدويًا' };
+        const x = { id: job.id, at: new Date().toISOString(), file: live[job.id].file, sig: job.sig0 || sig(job.file), fkey: job.fkey0 || fkeyOf(job.file), invoice_number: '', invoice_date: '', total: '', tax_amount: '', vendor_name: '', vendor_tax_number: '', payment_method: '', note: 'تعذّرت قراءة الملف تلقائيًا: أدخل البيانات يدويًا' };
         list.unshift(x); save(); IMG.put(job.id, { pages: [], blob: job.file }); if (job.batch) { job.batch.failed++; if (job.batch === upSum) drawSum(); }
       }
       delete live[job.id]; done++; draw();
@@ -985,6 +1012,8 @@
     });
   }
   // استخراج قيمة الخانة من النص المقروء
+  // نص بحروف متباعدة (ا س م ا ل م و ر د) يأتي أحيانًا من ملفات PDF: نجمع الحروف
+  const unspace = s => { const tk = s.split(' ').filter(Boolean); return tk.length >= 6 && tk.filter(w => [...w].length === 1).length / tk.length > 0.6 ? tk.join('') : s; };
   function extract(k, raw) {
     const t = P.normDigits(raw || '').replace(/[ \t]+/g, ' ').trim(); if (!t) return '';
     if (k === 'total' || k === 'tax_amount') {
@@ -1005,7 +1034,7 @@
       const m = t.match(/[A-Za-z0-9][A-Za-z0-9\-\/]*\d[A-Za-z0-9\-\/]*/g); return m ? m.sort((a, b) => b.length - a.length)[0] : '';
     }
     if (k === 'payment_method') { const p = PAYMAP.find(([re]) => re.test(t)); if (p) return p[1]; }
-    return t.replace(/\n+/g, ' ').replace(/^(اسم\s*)?(المورد|البائع|التاجر|الشركة|طريقة\s*الدفع|الدفع)\s*[:：-]?\s*/, '').replace(/^(vendor|seller|supplier|payment(\s*method)?)(\s*name)?\s*[:：-]?\s*/i, '').trim();
+    return unspace(t.replace(/\n+/g, ' ')).replace(/\n+/g, ' ').replace(/^(اسم\s*)?(المورد|البائع|التاجر|الشركة|طريقة\s*الدفع|الدفع)\s*[:：-]?\s*/, '').replace(/^(vendor|seller|supplier|payment(\s*method)?)(\s*name)?\s*[:：-]?\s*/i, '').trim();
   }
   // تطبيق القالب على فاتورة مقروءة. يعيد عدد الخانات التي أُخذت من القالب.
   async function applyZones(x, src) {
