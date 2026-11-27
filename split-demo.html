@@ -35,8 +35,15 @@ button:disabled{opacity:.5;cursor:default}
 .shead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
 .shead h2{font-size:21px}
 .fname{color:var(--mute);font-size:13px;word-break:break-all;flex-basis:100%}
-.tools{display:flex;flex-wrap:wrap;gap:8px}
-.tools button{min-height:40px;font-size:15px}
+.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 14px;padding:0;border:0}
+.modes legend{font-weight:700;margin-bottom:8px;font-size:17px;padding:0}
+.mode{min-height:64px;flex-direction:column;gap:0;border-width:2px;font-size:16px;font-weight:700;text-align:center;padding:8px}
+.mode small{font-weight:400;font-size:13px;color:var(--mute)}
+.mode[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:#fff}
+.mode[aria-pressed=true] small{color:#fff}
+.hint{margin:0 0 12px;padding:8px 12px;background:#fffbd6;border:1px solid #111;border-radius:4px;font-size:15px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hint button{min-height:36px;font-size:14px}
+@media (max-width:520px){.modes{grid-template-columns:1fr}.mode{min-height:52px}}
 /* الصفحات */
 .pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
 .pg{border:3px solid var(--gc);border-radius:8px;background:var(--paper);display:grid;grid-template-rows:auto auto 1fr auto;overflow:hidden;position:relative}
@@ -96,10 +103,9 @@ button:disabled{opacity:.5;cursor:default}
   <section class="slip" id="how">
     <h2 style="font-size:19px;margin-bottom:6px">طريقة الاستخدام</h2>
     <ol class="how">
-      <li>بعد رفع الملف تظهر صفحاته مصغّرة، والصفحة 1 دائمًا بداية الفاتورة الأولى.</li>
-      <li>اضغط <b>«بداية فاتورة جديدة»</b> على الصفحة التي تبدأ بها فاتورة أخرى. كل فاتورة تأخذ لونًا مختلفًا.</li>
-      <li>يقترح البرنامج التقسيم تلقائيًا: الصفحة التي بعد رمز QR الضريبي تُعدّ بداية فاتورة جديدة. يمكنك تعديل الاقتراح.</li>
-      <li>صفحة غلاف أو صفحة فارغة؟ اضغط <b>«تجاهل الصفحة»</b> فلا تُقرأ.</li>
+      <li>إذا كان الملف أكثر من صفحة تظهر ثلاثة خيارات: <b>فاتورة واحدة</b>، أو <b>كل صفحة فاتورة</b>، أو <b>أحدد بنفسي</b>.</li>
+      <li>عند اختيار <b>«أحدد بنفسي»</b> يظهر في كل صفحة بعد الأولى زر <b>«بداية فاتورة جديدة»</b>. كل فاتورة تأخذ لونًا مختلفًا.</li>
+      <li>صفحة غلاف أو صفحة فارغة؟ في «أحدد بنفسي» اضغط <b>«تجاهل الصفحة»</b> فلا تُقرأ.</li>
       <li>اضغط على أي صفحة مصغّرة لتكبيرها والتأكد من محتواها.</li>
     </ol>
   </section>
@@ -107,13 +113,15 @@ button:disabled{opacity:.5;cursor:default}
   <section class="slip" id="work" hidden>
     <div class="shead">
       <h2 id="wT">صفحات الملف</h2>
-      <div class="tools">
-        <button type="button" id="tAuto">الاقتراح التلقائي</button>
-        <button type="button" id="tEach">كل صفحة فاتورة</button>
-        <button type="button" id="tOne">الملف كله فاتورة واحدة</button>
-      </div>
       <div class="fname" id="fname"></div>
     </div>
+    <fieldset class="modes" id="modes">
+      <legend>الملف فيه أكثر من صفحة. كيف تريد قراءته؟</legend>
+      <button type="button" class="mode" data-mode="one" aria-pressed="false">فاتورة واحدة<small>كل الصفحات فاتورة واحدة</small></button>
+      <button type="button" class="mode" data-mode="each" aria-pressed="false">كل صفحة فاتورة<small>كل صفحة تُقرأ لوحدها</small></button>
+      <button type="button" class="mode" data-mode="manual" aria-pressed="false">أحدد بنفسي<small>أختار بداية كل فاتورة</small></button>
+    </fieldset>
+    <p class="hint" id="hint" hidden></p>
     <div class="pages" id="pages"></div>
   </section>
 
@@ -181,7 +189,7 @@ button:disabled{opacity:.5;cursor:default}
     try { doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise; }
     catch (e) { console.error(e); status('تعذّر فتح الملف. تأكد أنه PDF سليم.', true); prog(null); return; }
     const n = Math.min(doc.numPages, MAXP);
-    S = { name: file.name || 'ملف PDF', total: doc.numPages, pages: [] };
+    S = { name: file.name || 'ملف PDF', total: doc.numPages, pages: [], mode: null };
     for (let p = 1; p <= n; p++) {
       if (my !== tok) return;
       status(`جارٍ تجهيز الصفحة ${p} من ${n}…`); prog(p / n);
@@ -191,13 +199,13 @@ button:disabled{opacity:.5;cursor:default}
       const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
       await pg.render({ canvasContext: x, viewport: v }).promise;
       let qr = null; try { qr = scanQR(c); } catch (e) { }
-      S.pages.push({ img: c.toDataURL('image/jpeg', 0.8), start: p === 1, skip: false, qr });
-      if (p === 1 || p % 4 === 0) { autoSplit(); draw(); }
+      S.pages.push({ img: c.toDataURL('image/jpeg', 0.8), mark: false, skip: false, qr });
+      if (p === 1 || p % 4 === 0) draw();
     }
     prog(null);
-    autoSplit(); draw();
-    const k = groups().length;
-    status(`جاهز: ${n} ${n >= 3 && n <= 10 ? 'صفحات' : 'صفحة'}${doc.numPages > MAXP ? ` (من أصل ${doc.numPages}، تُعرض أول ${MAXP} فقط)` : ''}. الاقتراح: ${k} ${k === 1 ? 'فاتورة' : 'فواتير'}.`);
+    if (n === 1) S.mode = 'one'; // صفحة واحدة: لا حاجة للخيارات
+    draw();
+    status(`جاهز: ${n} ${n >= 3 && n <= 10 ? 'صفحات' : 'صفحة'}${doc.numPages > MAXP ? ` (من أصل ${doc.numPages}، تُعرض أول ${MAXP} فقط)` : ''}.${n > 1 ? ' اختر طريقة القراءة.' : ''}`);
     $('work').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -211,7 +219,7 @@ button:disabled{opacity:.5;cursor:default}
       { v: 'محطة الوقود الحديثة', no: '558201', t: '230.00', qr: true, page: '1 / 1' },
       { v: 'مكتبة جرير', no: 'JR-90311', t: '415.25', qr: true, page: '1 / 1' },
       { v: '', no: '', t: '', qr: false, page: '', blank: true }];
-    S = { name: 'ملف-نموذجي.pdf (للتجربة)', total: spec.length, pages: spec.map((s, i) => {
+    S = { name: 'ملف-نموذجي.pdf (للتجربة)', total: spec.length, mode: null, pages: spec.map((s, i) => {
       const c = document.createElement('canvas'); c.width = 620; c.height = 877;
       const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
       x.direction = 'rtl'; x.textAlign = 'right'; x.fillStyle = '#111';
@@ -226,23 +234,26 @@ button:disabled{opacity:.5;cursor:default}
         else { x.font = '20px sans-serif'; x.fillStyle = '#666'; x.fillText('يتبع في الصفحة التالية…', 590, 680); }
         if (s.qr) { x.fillStyle = '#111'; x.fillRect(40, 700, 130, 130); x.fillStyle = '#fff'; for (let a = 0; a < 10; a++) for (let b = 0; b < 10; b++) if ((a * 7 + b * 3 + i) % 3) x.fillRect(48 + a * 12, 708 + b * 12, 9, 9); }
       }
-      return { img: c.toDataURL('image/jpeg', 0.85), start: i === 0, skip: false, qr: s.qr ? { seller: s.v, total: +s.t.replace(/,/g, '') } : null, blank: !!s.blank };
+      return { img: c.toDataURL('image/jpeg', 0.85), mark: false, skip: false, qr: s.qr ? { seller: s.v, total: +s.t.replace(/,/g, '') } : null, blank: !!s.blank };
     }) };
-    autoSplit(); S.pages[5].skip = true; draw(); prog(null);
-    status('تم تحميل الملف النموذجي: جرّب تغيير بداية الفواتير أو تجاهل الصفحات.');
+    draw(); prog(null);
+    status('تم تحميل الملف النموذجي (6 صفحات): اختر طريقة القراءة.');
     $('work').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // ---------- التقسيم ----------
-  function autoSplit() { // الصفحة التي بعد رمز QR تبدأ فاتورة جديدة؛ وبدون أي رمز تكون كل صفحة فاتورة
-    const ps = S.pages, anyQr = ps.some(p => p.qr);
-    ps.forEach((p, i) => { p.start = i === 0 || (anyQr ? !!(ps[i - 1].qr) : true); });
+  // بداية كل فاتورة حسب الخيار: «فاتورة واحدة» الصفحة 1 فقط، «كل صفحة فاتورة» كل الصفحات، «أحدد بنفسي» ما يحدده المستخدم
+  const isStart = i => i === 0 || S.mode === 'each' || (S.mode === 'manual' && S.pages[i].mark);
+  const isSkip = i => S.mode === 'manual' && S.pages[i].skip;
+  function suggest() { // اقتراح: الصفحة التي بعد رمز QR الضريبي تبدأ فاتورة جديدة
+    S.pages.forEach((p, i) => { p.mark = i > 0 && !!(S.pages[i - 1].qr); });
   }
   function groups() { // الصفحات المتجاهلة لا تدخل في أي فاتورة
+    if (!S.mode) return [];
     const out = []; let cur = null;
     S.pages.forEach((p, i) => {
-      if (p.start || !cur) { cur = { pages: [], qr: null }; out.push(cur); }
-      if (!p.skip) { cur.pages.push(i); if (p.qr && p.qr.seller && !cur.qr) cur.qr = p.qr; }
+      if (isStart(i) || !cur) { cur = { pages: [], qr: null }; out.push(cur); }
+      if (!isSkip(i)) { cur.pages.push(i); if (p.qr && p.qr.seller && !cur.qr) cur.qr = p.qr; }
     });
     return out.filter(g => g.pages.length);
   }
@@ -255,29 +266,36 @@ button:disabled{opacity:.5;cursor:default}
   // ---------- الرسم ----------
   function draw() {
     const has = S.pages.length > 0;
-    $('work').hidden = !has; $('sumBox').hidden = !has;
+    $('work').hidden = !has; $('sumBox').hidden = !has || !S.mode;
     if (!has) return;
     $('fname').textContent = S.name;
     $('wT').textContent = `صفحات الملف (${S.pages.length})`;
+    const multi = S.pages.length > 1, man = S.mode === 'manual';
+    $('modes').hidden = !multi;
+    document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
+    const qrs = S.pages.slice(0, -1).filter(p => p.qr).length;
+    $('hint').hidden = !(man && qrs);
+    if (man && qrs) $('hint').innerHTML = `<span>وُجد رمز QR في ${qrs} من الصفحات. يمكن أن يقترح البرنامج البدايات: الصفحة التي بعد رمز QR تبدأ فاتورة جديدة.</span><button type="button" id="sug">طبّق الاقتراح</button><button type="button" id="clr">مسح التحديد</button>`;
     let g = -1;
     $('pages').innerHTML = S.pages.map((p, i) => {
-      if (p.start) g++;
-      const first = i === 0, gc = `var(--g${g % 6})`;
-      return `<article class="pg${p.skip ? ' skip' : ''}" style="--gc:${gc}">
-        <div class="gh${p.start ? '' : ' cont'}">${p.skip ? '<span>متجاهلة</span>' : p.start ? `<span>فاتورة ${g + 1}</span><span>بداية</span>` : `<span>فاتورة ${g + 1}</span><span>تكملة</span>`}</div>
+      const st = isStart(i), sk = isSkip(i); if (st) g++;
+      const gc = S.mode ? `var(--g${g % 6})` : 'var(--line)';
+      const head = !S.mode ? `<span>صفحة ${i + 1}</span>` : sk ? '<span>متجاهلة</span>' : `<span>فاتورة ${g + 1}</span><span>${st ? 'بداية' : 'تكملة'}</span>`;
+      return `<article class="pg${sk ? ' skip' : ''}" style="--gc:${gc}">
+        <div class="gh${st || !S.mode ? '' : ' cont'}"${S.mode ? '' : ' style="color:var(--ink)"'}>${head}</div>
         <div class="meta"><span>صفحة ${i + 1}</span>${p.qr ? '<span class="qr" title="وُجد رمز QR في هذه الصفحة">QR</span>' : ''}</div>
         <button type="button" class="thumb" data-view="${i}" aria-label="تكبير الصفحة ${i + 1}"><img src="${p.img}" alt="" loading="lazy"></button>
-        <div class="acts">
-          <button type="button" class="start" data-start="${i}" aria-pressed="${p.start}"${first ? ' disabled' : ''}>${first ? 'بداية الفاتورة الأولى' : p.start ? '✓ بداية فاتورة جديدة' : 'بداية فاتورة جديدة'}</button>
+        ${man ? `<div class="acts">
+          ${i > 0 ? `<button type="button" class="start" data-start="${i}" aria-pressed="${p.mark}">${p.mark ? '✓ بداية فاتورة جديدة' : 'بداية فاتورة جديدة'}</button>` : ''}
           <button type="button" class="skipb" data-skip="${i}" aria-pressed="${p.skip}">${p.skip ? 'متجاهلة: إلغاء' : 'تجاهل الصفحة'}</button>
-        </div></article>`;
+        </div>` : ''}</article>`;
     }).join('');
     drawSum();
   }
   function drawSum() {
-    const gs = groups(), skipped = S.pages.filter(p => p.skip).length;
+    const gs = groups(), skipped = S.pages.filter((p, i) => isSkip(i)).length;
     $('sumT').textContent = `الفواتير التي ستُقرأ (${gs.length})`;
-    let gi = -1; const colorOf = {}; S.pages.forEach((p, i) => { if (p.start) gi++; colorOf[i] = gi; });
+    let gi = -1; const colorOf = {}; S.pages.forEach((p, i) => { if (isStart(i)) gi++; colorOf[i] = gi; });
     $('sum').innerHTML = gs.map((g, k) => {
       const w = [];
       if (g.pages.length > PER) w.push(`فيها ${g.pages.length} صفحات: ستُقرأ أول ${PER} فقط`);
@@ -294,13 +312,13 @@ button:disabled{opacity:.5;cursor:default}
   // ---------- التفاعل ----------
   document.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.start != null) { const p = S.pages[+b.dataset.start]; p.start = !p.start; draw(); }
+    if (b.dataset.mode) { S.mode = b.dataset.mode; $('result').hidden = true; draw(); }
+    else if (b.id === 'sug') { suggest(); draw(); }
+    else if (b.id === 'clr') { S.pages.forEach(p => { p.mark = false; p.skip = false; }); draw(); }
+    else if (b.dataset.start != null) { const p = S.pages[+b.dataset.start]; p.mark = !p.mark; draw(); }
     else if (b.dataset.skip != null) { const p = S.pages[+b.dataset.skip]; p.skip = !p.skip; draw(); }
     else if (b.dataset.view != null) openLb(+b.dataset.view);
   });
-  $('tAuto').onclick = () => { autoSplit(); draw(); };
-  $('tEach').onclick = () => { S.pages.forEach(p => p.start = true); draw(); };
-  $('tOne').onclick = () => { S.pages.forEach((p, i) => p.start = i === 0); draw(); };
   $('goBtn').onclick = () => {
     const gs = groups();
     $('result').hidden = false;
@@ -322,8 +340,8 @@ button:disabled{opacity:.5;cursor:default}
     lbLast = document.activeElement; lbI = i; $('lb').hidden = false; document.body.style.overflow = 'hidden'; showLb(); $('lbX').focus();
   }
   function showLb() {
-    const p = S.pages[lbI]; let g = -1; S.pages.slice(0, lbI + 1).forEach(q => { if (q.start) g++; });
-    $('lbT').textContent = `صفحة ${lbI + 1} من ${S.pages.length} · ${p.skip ? 'متجاهلة' : `فاتورة ${g + 1}`}`;
+    const p = S.pages[lbI]; let g = -1; S.pages.slice(0, lbI + 1).forEach((q, i) => { if (isStart(i)) g++; });
+    $('lbT').textContent = `صفحة ${lbI + 1} من ${S.pages.length}${!S.mode ? '' : isSkip(lbI) ? ' · متجاهلة' : ` · فاتورة ${g + 1}`}`;
     $('lbS').innerHTML = `<img src="${p.img}" alt="الصفحة ${lbI + 1}">`;
     $('lbPrev').disabled = lbI === 0; $('lbNext').disabled = lbI === S.pages.length - 1;
   }
