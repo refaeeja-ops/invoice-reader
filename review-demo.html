@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1838b8">
+<title>نموذج: اختيار التعديلات المقترحة ومراجعتها</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;--bg:#dfe3ee;--band:#1838b8;--paper:#fff;--ink:#0f1222;--mute:#4a5068;--line:#a9b1c8;--cardline:#c3c9da;--lbl:#2f3550;--blue:#1838b8;--stamp:#b3121f;--stampink:#8f0d18;--ok:#0b6a35;--soft:#f3f5fa;--warnbg:#ffe9eb;--alt:#eaf0ff}
+*{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif}
+h1,h2,h3{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.25;margin:0}
+.top{background:var(--band);color:#fff;padding:24px max(5vw,16px) 76px}
+.top h1{font-size:clamp(22px,5vw,32px)}.top p{margin:6px 0 0;opacity:.95}
+main{max-width:1000px;margin:-56px auto 48px;padding:0 max(3vw,12px);display:grid;gap:18px}
+.slip{background:var(--paper);border-radius:6px;padding:clamp(14px,3vw,24px);box-shadow:0 1px 0 var(--cardline),0 18px 40px -24px #0b1550aa}
+.slip>h2{font-size:20px;margin-bottom:10px}
+.demo{background:#fffbd6;border:1px solid #c9b400;border-radius:6px;padding:10px 12px;font-size:14px}
+.demo ul{margin:6px 0 0;padding-inline-start:20px}
+button{font:inherit;font-weight:500;min-height:44px;padding:6px 14px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.del{color:var(--stamp);border-color:currentColor}
+button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+/* لوحة التعديلات المقترحة */
+.rr{border:2px solid var(--blue);border-radius:8px;padding:12px;background:#eef2ff;display:grid;gap:10px}
+.rr>b{font-size:16px}.rr p{margin:0;font-size:14px;color:var(--lbl)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px}
+.chip{min-height:36px;padding:2px 12px;border-radius:18px;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--blue);color:#fff;border-color:var(--blue)}
+.inv{background:#fff;border:1px solid var(--cardline);border-radius:6px;overflow:hidden}
+.inv h3{font-size:15px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:8px 10px;background:var(--soft);border-bottom:1px solid var(--cardline)}
+.inv h3 small{font-weight:500;color:var(--mute);font-size:12px}
+.inv h3 label{margin-inline-start:auto;font-size:13px;font-weight:500;display:flex;gap:6px;align-items:center}
+.ch{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--cardline)}
+.ch:last-child{border-bottom:0}
+.ch.odd{background:var(--alt)}
+.ch input[type=checkbox],.inv h3 input{width:22px;height:22px;accent-color:var(--blue)}
+.ch .lb{font-weight:700;font-size:14px;color:var(--lbl)}
+.ch .vv{font-size:15px;overflow-wrap:anywhere}
+.ch s{color:var(--stamp)}.ch ins{text-decoration:none;color:var(--ok);font-weight:700}
+.ch.off .vv ins{color:var(--mute);font-weight:500}
+.ch.sk{color:var(--mute);font-size:14px;grid-template-columns:1fr}
+.ch .rv{min-height:40px;padding:4px 10px;font-size:14px}
+.ch>.row{grid-column:2}.ch canvas{grid-column:2;max-width:100%;height:auto;border:2px solid var(--blue);border-radius:4px;background:#fff;justify-self:start}
+.apply{position:sticky;bottom:0;background:#eef2ff;padding-top:6px}
+.done{border:2px solid var(--ok);background:#e3f4ea;border-radius:8px;padding:12px}
+/* نافذة المراجعة */
+.dlg{position:fixed;inset:0;background:#0f1222cc;display:flex;align-items:center;justify-content:center;padding:10px;z-index:9}
+.box{background:#fff;border-radius:8px;width:min(760px,100%);max-height:96vh;overflow:auto;padding:14px;display:grid;gap:10px}
+.box header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.box header b{font-size:17px}.box header small{display:block;color:var(--mute);font-size:13px}
+.pg{position:relative;border:1px solid var(--cardline);border-radius:4px;overflow:hidden;background:#f6f6f6}
+.pg canvas{display:block;width:100%;height:auto}
+.hl{position:absolute;border:3px solid #ffd400;box-shadow:0 0 0 2000px #0f122255;border-radius:3px;pointer-events:none}
+.crop{display:grid;gap:4px;justify-items:start}
+.crop canvas{max-width:100%;border:2px solid var(--blue);border-radius:4px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cmp div{border:1px solid var(--cardline);border-radius:6px;padding:8px}
+.cmp small{display:block;color:var(--mute);font-size:12px}
+.cmp .o b{color:var(--stamp)}.cmp .n b{color:var(--ok)}
+.dec{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dec button{min-height:52px;font-weight:700}
+.acc[aria-pressed="true"]{background:var(--ok);color:#fff;border-color:var(--ok)}
+.rej[aria-pressed="true"]{background:var(--stamp);color:#fff;border-color:var(--stamp)}
+/* قائمة الفواتير التجريبية */
+.lst{display:grid;gap:8px}
+.mini{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:4px 12px;border:1px solid var(--cardline);border-radius:6px;padding:8px 10px;font-size:14px}
+.mini.odd{background:var(--alt)}
+.mini b{grid-column:1/-1;font-size:14px}
+.mini span small{display:block;color:var(--mute);font-size:12px}
+.mini .chg{color:var(--ok);font-weight:700}
+/* التكرار */
+.dupbox{padding:10px 12px;border:2px solid var(--stamp);border-radius:6px;background:var(--warnbg);color:var(--stampink);font-size:14px;display:grid;gap:8px}
+.split{display:grid;gap:8px}
+.sp{border:1px solid var(--cardline);border-radius:6px;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 12px}
+.sp.isdup{border:2px solid var(--stamp)}
+.sp b{grid-column:1/-1}
+.sp label{display:grid;font-size:13px;color:var(--lbl);font-weight:500}
+.sp input{font:inherit;min-height:44px;padding:4px 10px;border:1px solid var(--line);border-radius:6px}
+.db{display:inline-block;font-size:13px;font-weight:700;padding:1px 8px;border-radius:4px;color:#fff;background:var(--stamp);margin-inline-start:6px}
+.okl{color:var(--ok);font-weight:700}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>نموذج: اختيار التعديلات المقترحة ومراجعتها</h1>
+  <p>نموذج تفاعلي ببيانات وفواتير تجريبية. لا يغيّر شيئًا في التطبيق.</p>
+</header>
+<main>
+  <section class="slip">
+    <div class="demo"><b>الحالة في النموذج:</b> حدّدت في فاتورة «مؤسسة البناء الحديث» مكان رقم الفاتورة والتاريخ والإجمالي والضريبة، وأعاد البرنامج قراءة 4 فواتير أخرى من نفس المورد. <b>لا يُطبّق أي تعديل قبل أن تختاره.</b>
+      <ul>
+        <li>علّم أو ألغِ أي تعديل بمفرده، أو كل تعديلات فاتورة واحدة، أو كل تعديلات خانة واحدة (مثلًا «الإجمالي» فقط).</li>
+        <li>اضغط «👁 مراجعة» لترى المكان على صفحة الفاتورة نفسها مع القيمة قبل وبعد، ثم «اقبل» أو «ارفض» وتنتقل للتالي.</li>
+        <li>«✂ إظهار المقتطع» يعرض جزء الفاتورة تحت التعديل مباشرة.</li>
+        <li>اضغط «طبّق المحدد» وانظر القائمة بالأسفل، ثم جرّب «تراجع».</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="slip">
+    <h2>التعديلات المقترحة</h2>
+    <div id="rr"></div>
+  </section>
+
+  <section class="slip">
+    <h2>الفواتير (بيانات تجريبية)</h2>
+    <div class="lst" id="lst"></div>
+  </section>
+
+  <section class="slip">
+    <h2>إصلاح تحذير التكرار بعد تقسيم ملف</h2>
+    <div class="demo">ملف PDF قُسّم إلى فاتورتين، وقرأ البرنامج رقم الفاتورة نفسه في الاثنتين. <b>جرّب:</b> صحّح رقم الفاتورة في القطعة الثانية: يختفي التحذير فورًا (هذا هو الخلل الذي سأصلحه: كان التحذير يبقى). وإن كانت الفاتورتان فعلًا مختلفتين مع أن الرقم واحد، اضغط «ليستا مكررتين».</div>
+    <div class="split" id="split" style="margin-top:10px"></div>
+  </section>
+</main>
+
+<div class="dlg" id="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="dT">
+  <div class="box">
+    <header><div><b id="dT"></b><small id="dS"></small></div><button type="button" id="dX">✕ إغلاق</button></header>
+    <div class="cmp"><div class="o"><small>القيمة الحالية</small><b id="dO"></b></div><div class="n"><small>القيمة المقترحة من القالب</small><b id="dN"></b></div></div>
+    <div class="crop"><small>المقتطع من الفاتورة (مكبّر):</small><canvas id="dC"></canvas></div>
+    <div class="pg" id="dP"><canvas id="dPg"></canvas><div class="hl" id="dH"></div></div>
+    <div class="dec"><button type="button" class="acc" id="dA" aria-pressed="false">✓ اقبل هذا التعديل</button><button type="button" class="rej" id="dR" aria-pressed="false">✕ ارفض</button></div>
+    <div class="row" style="justify-content:space-between"><button type="button" id="dPrev">→ السابق</button><span id="dPos"></span><button type="button" id="dNext">التالي ←</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = v => (+v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const LBL = { invoice_number: 'رقم الفاتورة', invoice_date: 'تاريخ الفاتورة', total: 'المبلغ الإجمالي', tax_amount: 'مبلغ الضريبة' };
+  const shown = (k, v) => v === '' || v == null ? 'فارغ' : (k === 'total' || k === 'tax_amount') ? money(v) : String(v);
+  // أماكن القالب (نسبة من الصفحة)
+  const Z = { invoice_number: { x: .06, y: .17, w: .34, h: .05 }, invoice_date: { x: .06, y: .23, w: .34, h: .05 }, total: { x: .06, y: .80, w: .34, h: .055 }, tax_amount: { x: .06, y: .74, w: .34, h: .05 } };
+  const W = 600, H = 820;
+  // ما هو مطبوع فعلًا في كل فاتورة تجريبية
+  const P = [
+    { id: 'a', file: 'البناء/نوفمبر/7731.pdf', printed: { invoice_number: '7731', invoice_date: '2026-11-18', total: 9200, tax_amount: 1200 }, cur: { invoice_number: '7731', invoice_date: '2026-11-18', total: 9200, tax_amount: 1200 }, me: true },
+    { id: 'b', file: 'البناء/نوفمبر/7745.pdf', printed: { invoice_number: '7745', invoice_date: '2026-11-21', total: 4830, tax_amount: 630 }, cur: { invoice_number: '300987654', invoice_date: '2026-11-12', total: 630, tax_amount: 630 } },
+    { id: 'c', file: 'البناء/أكتوبر/7702.pdf', printed: { invoice_number: '7702', invoice_date: '2026-10-28', total: 3450, tax_amount: 450 }, cur: { invoice_number: '7702', invoice_date: '', total: 3450, tax_amount: 0 } },
+    { id: 'd', file: 'البناء/أكتوبر/7688.pdf', printed: { invoice_number: '7688', invoice_date: '2026-10-11', total: 1150, tax_amount: 150 }, cur: { invoice_number: '688', invoice_date: '2026-10-11', total: 1150, tax_amount: 150 }, edited: { total: 1 }, odd: true },
+    { id: 'e', file: 'البناء/سبتمبر/7650.jpg', printed: { invoice_number: '7650', invoice_date: '2026-09-30', total: 2300, tax_amount: 300 }, cur: { invoice_number: '7650', invoice_date: '2026-03-09', total: 23000, tax_amount: 300 }, misread: { total: 2300.5 } },
+  ];
+  // رسم فاتورة تجريبية
+  const pages = {};
+  function page(x) {
+    if (pages[x.id]) return pages[x.id];
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.fillStyle = '#0f1222'; g.textBaseline = 'middle';
+    g.font = '700 26px "IBM Plex Sans Arabic",sans-serif'; g.textAlign = 'right'; g.fillText('مؤسسة البناء الحديث', W - 30, 50);
+    g.font = '15px "IBM Plex Sans Arabic",sans-serif'; g.fillText('الرقم الضريبي 300987654300003', W - 30, 85); g.fillText('فاتورة ضريبية', W - 30, 110);
+    g.strokeStyle = '#999'; g.beginPath(); g.moveTo(30, 125); g.lineTo(W - 30, 125); g.stroke();
+    const row = (lab, val, y) => { g.textAlign = 'right'; g.font = '16px "IBM Plex Sans Arabic",sans-serif'; g.fillText(lab, W - 30, y); g.textAlign = 'left'; g.font = '700 20px monospace'; g.fillText(val, 50, y); };
+    row('رقم الفاتورة', x.printed.invoice_number, H * .195); row('التاريخ', x.printed.invoice_date, H * .255);
+    g.font = '14px "IBM Plex Sans Arabic",sans-serif'; g.textAlign = 'right';
+    [['حديد تسليح 12 ملم', 3], ['أسمنت مقاوم', 10], ['رمل ناعم', 2]].forEach(([t, q], i) => { const y = H * (.34 + i * .06); g.fillText(t, W - 30, y); g.textAlign = 'left'; g.fillText('× ' + q, 260, y); g.textAlign = 'right'; });
+    g.beginPath(); g.moveTo(30, H * .70); g.lineTo(W - 30, H * .70); g.stroke();
+    row('ضريبة القيمة المضافة 15%', money(x.printed.tax_amount), H * .765); row('الإجمالي شامل الضريبة', money(x.printed.total), H * .828);
+    g.strokeStyle = '#333'; g.strokeRect(W - 130, H - 120, 100, 100); g.font = '12px sans-serif'; g.textAlign = 'center'; g.fillText('QR', W - 80, H - 70);
+    return pages[x.id] = c;
+  }
+  function cropTo(cv, x, k, maxW) {
+    const src = page(x), z = Z[k], px = .015, sx = Math.max(0, z.x - px) * W, sy = Math.max(0, z.y - px) * H, sw = (z.w + 2 * px) * W, sh = (z.h + 2 * px) * H, sc = Math.min(3, maxW / sw);
+    cv.width = Math.round(sw * sc); cv.height = Math.round(sh * sc); const g = cv.getContext('2d'); g.drawImage(src, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  }
+  // التعديلات المقترحة (لم تُطبّق بعد)
+  let changes = [], skipped = [], applied = null;
+  function build() {
+    changes = []; skipped = [];
+    P.filter(x => !x.me).forEach(x => Object.keys(Z).forEach(k => {
+      const nv = x.misread && x.misread[k] != null ? x.misread[k] : x.printed[k];
+      if (x.edited && x.edited[k]) { skipped.push({ x, k, why: 'لم يُقترح تعديل لأنك عدّلت هذه الخانة بيدك' }); return; }
+      if (String(nv) !== String(x.cur[k])) changes.push({ id: x.id + ':' + k, x, k, from: x.cur[k], to: nv, on: true, crop: false });
+    }));
+  }
+  build();
+  let fOn = Object.fromEntries(Object.keys(Z).map(k => [k, true]));
+  const visible = () => changes;
+  function drawRR() {
+    const el = $('rr');
+    if (applied) {
+      el.innerHTML = `<div class="done"><b>✓ طُبّقت التعديلات المختارة: ${applied.length} من ${changes.length}.</b> التعديلات التي لم تخترها بقيت كما هي.<div class="row" style="margin-top:8px"><button type="button" id="undo">↩ تراجع عن التطبيق</button><button type="button" id="again">ابدأ النموذج من جديد</button></div></div>`;
+      return;
+    }
+    const on = changes.filter(c => c.on).length, byX = new Map(); changes.forEach(c => (byX.get(c.x) || byX.set(c.x, []).get(c.x)).push(c));
+    const kCount = k => changes.filter(c => c.k === k), kState = k => { const a = kCount(k); return a.length && a.every(c => c.on); };
+    el.innerHTML = `<div class="rr"><b>أعاد البرنامج قراءة ${byX.size} فواتير من «مؤسسة البناء الحديث» واقترح ${changes.length} تعديلًا</b>
+      <p>علّم ما تريد تطبيقه فقط. التعديلات غير المعلّمة لا تتغير.</p>
+      <div class="chips"><span>حسب الخانة:</span>${Object.keys(Z).filter(k => kCount(k).length).map(k => `<button type="button" class="chip" data-kall="${k}" aria-pressed="${kState(k)}">${kState(k) ? '✓ ' : ''}${LBL[k]} (${kCount(k).length})</button>`).join('')}</div>
+      <div class="row"><button type="button" id="all">تحديد الكل</button><button type="button" id="none">إلغاء تحديد الكل</button><button type="button" id="revAll">👁 مراجعة واحدًا واحدًا</button></div>
+      ${[...byX.entries()].map(([x, cs]) => { const all = cs.every(c => c.on);
+        return `<div class="inv"><h3>📄 ${esc(x.file)} <small>${cs.length} تعديل</small><label><input type="checkbox" data-xall="${x.id}"${all ? ' checked' : ''}> كل تعديلات الفاتورة</label></h3>
+          ${cs.map((c, i) => `<div class="ch${c.on ? '' : ' off'}${i % 2 ? ' odd' : ''}"><input type="checkbox" data-on="${c.id}"${c.on ? ' checked' : ''} aria-label="${LBL[c.k]}: ${esc(shown(c.k, c.from))} إلى ${esc(shown(c.k, c.to))}">
+            <span><span class="lb">${LBL[c.k]}:</span> <span class="vv"><s><bdi dir="ltr">${esc(shown(c.k, c.from))}</bdi></s> ← <ins><bdi dir="ltr">${esc(shown(c.k, c.to))}</bdi></ins></span></span>
+            <span class="row"><button type="button" class="rv" data-crop="${c.id}" aria-pressed="${c.crop}">${c.crop ? 'إخفاء المقتطع' : '✂ إظهار المقتطع'}</button><button type="button" class="rv" data-rev="${c.id}">👁 مراجعة</button></span>
+            ${c.crop ? `<canvas data-cv="${c.id}"></canvas>` : ''}</div>`).join('')}
+          ${skipped.filter(s => s.x === x).map(s => `<div class="ch sk">${LBL[s.k]}: ${s.why}</div>`).join('')}</div>`; }).join('')}
+      <div class="apply row"><button type="button" class="primary" id="apply"${on ? '' : ' disabled'}>طبّق المحدد (${on} من ${changes.length})</button><button type="button" id="later">لاحقًا</button></div></div>`;
+    el.querySelectorAll('canvas[data-cv]').forEach(cv => { const c = changes.find(q => q.id === cv.dataset.cv); cropTo(cv, c.x, c.k, 420); });
+  }
+  function drawList() {
+    $('lst').innerHTML = P.map((x, i) => `<div class="mini${i % 2 ? ' odd' : ''}"><b>📄 ${esc(x.file)}${x.me ? ' <small>(الفاتورة التي حدّدت فيها الأماكن)</small>' : ''}</b>${Object.keys(Z).map(k => `<span><small>${LBL[k]}</small><span class="${x.chg && x.chg[k] ? 'chg' : ''}">${esc(shown(k, x.cur[k]))}${x.chg && x.chg[k] ? ' ✓' : ''}</span></span>`).join('')}</div>`).join('');
+  }
+  // نافذة المراجعة
+  let ri = -1;
+  function openRev(i) {
+    ri = i; const c = changes[i]; if (!c) return;
+    $('dT').textContent = LBL[c.k]; $('dS').textContent = '📄 ' + c.x.file;
+    $('dO').textContent = shown(c.k, c.from); $('dN').textContent = shown(c.k, c.to);
+    cropTo($('dC'), c.x, c.k, 600);
+    const pc = $('dPg'), src = page(c.x); pc.width = W; pc.height = H; pc.getContext('2d').drawImage(src, 0, 0);
+    const z = Z[c.k], h = $('dH'); h.style.left = z.x * 100 + '%'; h.style.top = z.y * 100 + '%'; h.style.width = z.w * 100 + '%'; h.style.height = z.h * 100 + '%';
+    $('dA').setAttribute('aria-pressed', c.on); $('dR').setAttribute('aria-pressed', !c.on);
+    $('dPos').textContent = `${i + 1} من ${changes.length}`; $('dPrev').disabled = i === 0; $('dNext').textContent = i === changes.length - 1 ? 'إنهاء المراجعة' : 'التالي ←';
+    $('dlg').hidden = false; document.body.style.overflow = 'hidden'; $('dA').focus();
+  }
+  const closeRev = () => { $('dlg').hidden = true; document.body.style.overflow = ''; drawRR(); };
+  const step = d => { if (ri + d >= changes.length) { closeRev(); return; } openRev(Math.max(0, ri + d)); };
+  $('dA').onclick = () => { changes[ri].on = true; step(1); };
+  $('dR').onclick = () => { changes[ri].on = false; step(1); };
+  $('dPrev').onclick = () => step(-1); $('dNext').onclick = () => step(1); $('dX').onclick = closeRev;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('dlg').hidden) closeRev(); });
+  $('dlg').addEventListener('click', e => { if (e.target === $('dlg')) closeRev(); });
+
+  let before = null;
+  $('rr').addEventListener('change', e => {
+    const t = e.target;
+    if (t.dataset.on) { changes.find(c => c.id === t.dataset.on).on = t.checked; drawRR(); const n = document.querySelector(`[data-on="${t.dataset.on}"]`); if (n) n.focus(); }
+    if (t.dataset.xall) { changes.filter(c => c.x.id === t.dataset.xall).forEach(c => c.on = t.checked); drawRR(); const n = document.querySelector(`[data-xall="${t.dataset.xall}"]`); if (n) n.focus(); }
+  });
+  $('rr').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.kall) { const k = b.dataset.kall, a = changes.filter(c => c.k === k), v = !a.every(c => c.on); a.forEach(c => c.on = v); drawRR(); const n = document.querySelector(`[data-kall="${k}"]`); if (n) n.focus(); }
+    if (b.id === 'all' || b.id === 'none') { changes.forEach(c => c.on = b.id === 'all'); drawRR(); }
+    if (b.dataset.crop) { const c = changes.find(q => q.id === b.dataset.crop); c.crop = !c.crop; drawRR(); const n = document.querySelector(`[data-crop="${c.id}"]`); if (n) n.focus(); }
+    if (b.dataset.rev) openRev(changes.findIndex(c => c.id === b.dataset.rev));
+    if (b.id === 'revAll') openRev(0);
+    if (b.id === 'apply') { before = P.map(x => ({ x, cur: { ...x.cur }, chg: x.chg })); applied = changes.filter(c => c.on); applied.forEach(c => { c.x.cur[c.k] = c.to; (c.x.chg = c.x.chg || {})[c.k] = 1; }); drawRR(); drawList(); }
+    if (b.id === 'undo') { before.forEach(o => { o.x.cur = o.cur; o.x.chg = o.chg; }); applied = null; drawRR(); drawList(); }
+    if (b.id === 'again') { before.forEach(o => { o.x.cur = o.cur; o.x.chg = o.chg; }); applied = null; build(); drawRR(); drawList(); }
+    if (b.id === 'later') { $('rr').innerHTML = '<p>أُغلقت اللوحة ولم يتغير شيء. <button type="button" id="again">إظهارها من جديد</button></p>'; }
+  });
+
+  // ---------- التكرار بعد التقسيم ----------
+  const S = [{ id: 's1', file: 'دفعة-نوفمبر.pdf (فاتورة 1 من 2)', vendor: 'مؤسسة البناء الحديث', no: '7731', total: '9,200.00' }, { id: 's2', file: 'دفعة-نوفمبر.pdf (فاتورة 2 من 2)', vendor: 'مؤسسة البناء الحديث', no: '7731', total: '4,830.00' }];
+  let notDup = null; // يُحفظ مع الرقم، ويلغى تلقائيًا إن تغيّر الرقم
+  const key = s => s.vendor + '|' + String(s.no).replace(/^0+/, '').trim();
+  function drawSplit(focusId) {
+    const same = key(S[0]) === key(S[1]) && S[0].no.trim() !== '', dup = same && notDup !== key(S[0]);
+    if (!same) notDup = null;
+    $('split').innerHTML = (dup ? `<div class="dupbox"><b>⚠ فاتورتان لهما نفس المورد ونفس رقم الفاتورة (${esc(S[0].no)})</b><span>كلتاهما من نفس الملف المقسّم «دفعة-نوفمبر.pdf». قد يكون البرنامج قرأ الرقم خطأ في إحداهما، أو تكون الصفحتان من فاتورة واحدة.</span><div class="row"><button type="button" id="nd">ليستا مكررتين</button></div></div>`
+      : same ? `<p class="okl">✓ علّمتهما «ليستا مكررتين». إن تغيّر رقم أي منهما يعود الفحص تلقائيًا.</p>` : '<p class="okl">✓ لا يوجد تكرار: اختفى التحذير فور تصحيح الرقم.</p>')
+      + S.map(s => `<div class="sp${dup ? ' isdup' : ''}"><b>📄 ${esc(s.file)}${dup ? '<span class="db">⚠ مكررة</span>' : ''}</b><label>المورد<input value="${esc(s.vendor)}" readonly></label><label>رقم الفاتورة<input id="in-${s.id}" data-sp="${s.id}" value="${esc(s.no)}" inputmode="numeric"></label><label>الإجمالي<input value="${esc(s.total)}" readonly></label></div>`).join('');
+    if (focusId) { const i = $(focusId); i.focus(); const n = i.value.length; i.setSelectionRange(n, n); }
+  }
+  $('split').addEventListener('input', e => { const s = S.find(q => q.id === e.target.dataset.sp); if (!s) return; s.no = e.target.value; drawSplit(e.target.id); });
+  $('split').addEventListener('click', e => { if (e.target.id === 'nd') { notDup = key(S[0]); drawSplit(); } });
+
+  const go = () => { drawRR(); drawList(); drawSplit(); };
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(() => { for (const k in pages) delete pages[k]; go(); }); go();
+})();
+</script>
+</body>
+</html>
