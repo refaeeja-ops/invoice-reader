@@ -147,6 +147,40 @@ button,.btn{touch-action:manipulation}
 .rr li a{color:var(--blue)}
 .rr li s{color:var(--stamp)}.rr li ins{text-decoration:none;color:var(--ok);font-weight:700}
 .rr li.sk{color:var(--mute)}
+.rr .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px}
+.rr .chip{min-height:36px;padding:2px 12px;border-radius:18px;font-size:14px}
+.rr .chip[aria-pressed="true"]{background:var(--blue);color:#fff;border-color:var(--blue)}
+.rrinv{background:#fff;border:1px solid var(--cardline);border-radius:6px;overflow:hidden}
+.rrinv h4{margin:0;font-size:15px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:8px 10px;background:var(--soft);border-bottom:1px solid var(--cardline);overflow-wrap:anywhere}
+.rrinv h4 a{color:var(--blue)}.rrinv h4 small{font-weight:500;color:var(--mute);font-size:12px}
+.rrinv h4 label{margin-inline-start:auto;font-size:13px;font-weight:500;display:flex;gap:6px;align-items:center}
+.rrch{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--cardline);font-size:15px;overflow-wrap:anywhere}
+.rrch:last-child{border-bottom:0}.rrch.odd{background:#eaf0ff}
+.rrch input[type=checkbox],.rrinv h4 input{width:22px;height:22px;accent-color:var(--blue)}
+.rrch .rrlb{font-weight:700;font-size:14px;color:var(--lbl)}
+.rrch s{color:var(--stamp)}.rrch ins{text-decoration:none;color:var(--ok);font-weight:700}
+.rrch.off ins{color:var(--mute);font-weight:500}
+.rrch.sk{grid-template-columns:1fr;color:var(--mute);font-size:14px}
+.rrch>.row{grid-column:2}.rrch .sm{min-height:40px;padding:4px 10px;font-size:14px}
+.rrch canvas{grid-column:2;max-width:100%;height:auto;border:2px solid var(--blue);border-radius:4px;background:#fff;justify-self:start}
+.rrapply{position:sticky;bottom:0;background:#eef2ff;padding-top:6px}
+.dupno{min-height:36px;padding:4px 10px;font-size:13px}
+.rwd{position:fixed;inset:0;background:#0f1222cc;display:flex;align-items:center;justify-content:center;padding:10px;z-index:60}
+.rwbox{background:#fff;border-radius:8px;width:min(760px,100%);max-height:96vh;overflow:auto;padding:14px;display:grid;gap:10px}
+.rwbox header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.rwbox header b{font-size:17px}.rwbox header small{display:block;color:var(--mute);font-size:13px;overflow-wrap:anywhere}
+.rwcmp{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rwcmp div{border:1px solid var(--cardline);border-radius:6px;padding:8px;overflow-wrap:anywhere}
+.rwcmp small{display:block;color:var(--mute);font-size:12px}
+.rwcmp .o b{color:var(--stamp)}.rwcmp .n b{color:var(--ok)}
+.rwcrop{display:grid;gap:4px;justify-items:start}.rwcrop canvas{max-width:100%;border:2px solid var(--blue);border-radius:4px}
+.rwpg{position:relative;border:1px solid var(--cardline);border-radius:4px;overflow:hidden;background:#f6f6f6}
+.rwpg img{display:block;width:100%;height:auto;min-height:60px}
+.rwhl{position:absolute;border:3px solid #ffd400;box-shadow:0 0 0 2000px #0f122255;border-radius:3px;pointer-events:none}
+.rwdec{display:grid;grid-template-columns:1fr 1fr;gap:8px}.rwdec button{min-height:52px;font-weight:700}
+.rwdec .acc[aria-pressed="true"]{background:var(--ok);color:#fff;border-color:var(--ok)}
+.rwdec .rej[aria-pressed="true"]{background:var(--stamp);color:#fff;border-color:var(--stamp)}
+.rwnav{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .bar2{height:6px;background:#c9d1ea;border-radius:3px;overflow:hidden}.bar2 i{display:block;height:100%;width:0;background:var(--blue);transition:width .3s}
 /* نافذة مراجعة الفاتورة داخل البطاقة */
 .rv{margin-top:12px;border:1px solid var(--cardline);border-radius:8px;overflow:hidden}
@@ -298,6 +332,16 @@ body:not(.tab-z) #zSec{display:none!important}
   </section>
   <p style="text-align:center;margin:0"><a href="full.html" style="color:var(--mute);font-size:13px">النسخة الكاملة السابقة</a> <small style="color:var(--mute)">·</small> <a href="backup/before-split/" style="color:var(--mute);font-size:13px">النسخة قبل تقسيم الملفات</a> <small style="color:var(--mute)">· الإصدار <span id="ver"></span></small></p>
 </main>
+<div class="rwd" id="rw" hidden role="dialog" aria-modal="true" aria-labelledby="rwT">
+  <div class="rwbox">
+    <header><div><b id="rwT"></b><small id="rwS"></small></div><button type="button" id="rwX">✕ إغلاق</button></header>
+    <div class="rwcmp"><div class="o"><small>القيمة الحالية</small><b id="rwO"></b></div><div class="n"><small>القيمة المقترحة من القالب</small><b id="rwN"></b></div></div>
+    <div class="rwcrop"><small>المقتطع من الفاتورة (مكبّر):</small><canvas id="rwC" width="1" height="1"></canvas></div>
+    <div class="rwpg"><img id="rwImg" alt="صفحة الفاتورة"><div class="rwhl" id="rwH"></div></div>
+    <div class="rwdec"><button type="button" class="acc" id="rwA" aria-pressed="false">✓ اقبل هذا التعديل</button><button type="button" class="rej" id="rwR" aria-pressed="false">✕ ارفض</button></div>
+    <div class="rwnav"><button type="button" id="rwPrev">→ السابق</button><span id="rwPos"></span><button type="button" id="rwNext">التالي ←</button></div>
+  </div>
+</div>
 <div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-labelledby="lbT">
   <div class="lbbar"><span id="lbT"></span><button id="lbPrev">السابقة</button><span id="lbPg"></span><button id="lbNext">التالية</button><button id="lbOut" aria-label="تصغير">−</button><span id="lbZ"></span><button id="lbIn" aria-label="تكبير">+</button><a class="btn" id="lbOrig" target="_blank" rel="noopener">الملف الأصلي</a><button id="lbClose" class="primary">إغلاق</button></div>
   <div class="lbstage"><img id="lbImg" alt="صورة الفاتورة"><p id="lbNone">لا توجد صورة محفوظة لهذه الفاتورة.</p></div>
@@ -339,7 +383,7 @@ body:not(.tab-z) #zSec{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611271622'; window.APP_VERSION = V;
+(function () { var V = '202611271917'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -347,12 +391,12 @@ body:not(.tab-z) #zSec{display:none!important}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611271622"></script>
-<script src="parse.js?v=202611271622"></script>
-<script src="export.js?v=202611271622"></script>
-<script src="digits.js?v=202611271622"></script>
-<script src="split.js?v=202611271622"></script>
-<script src="simple.js?v=202611271622"></script>
+<script src="config.js?v=202611271917"></script>
+<script src="parse.js?v=202611271917"></script>
+<script src="export.js?v=202611271917"></script>
+<script src="digits.js?v=202611271917"></script>
+<script src="split.js?v=202611271917"></script>
+<script src="simple.js?v=202611271917"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

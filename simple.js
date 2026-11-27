@@ -355,11 +355,11 @@
   }
   const invKey = v => P.normDigits(String(v ?? '')).toUpperCase().replace(/[\s\-_\/#.]+/g, '').replace(/^0+(?=.)/, '');
   const dupKey = x => { const v = vKey(x), n = invKey(x.invoice_number); return v && n ? v + '|' + n : ''; };
-  const twinsOf = x => { const k = dupKey(x); return k ? list.filter(y => y !== x && dupKey(y) === k) : []; };
+  const twinsOf = x => { const k = dupKey(x); if (!k) return []; const a = list.filter(y => dupKey(y) === k); return a.length < 2 || a.every(y => y.notDup === k) ? [] : a.filter(y => y !== x); };
   // مجموعات الفواتير المكررة (نفس المورد ونفس رقم الفاتورة)
   function dupGroups() {
     const m = new Map(); list.forEach(x => { const k = dupKey(x); if (k) (m.get(k) || m.set(k, []).get(k)).push(x); });
-    return [...m.values()].filter(a => a.length > 1);
+    return [...m.entries()].filter(([k, a]) => a.length > 1 && !a.every(y => y.notDup === k)).map(e => e[1]);
   }
   const noteOf = x => [x.note, ...issues(x)].filter(Boolean).join(' | ');
 
@@ -496,7 +496,8 @@
     const el = $('dupBox'); if (!el) return; const g = dupGroups(); el.hidden = !g.length; if (!g.length) return;
     const n = g.reduce((s, a) => s + a.length, 0);
     el.innerHTML = `<b>⚠ تنبيه: ${g.length === 1 ? 'توجد فواتير مكررة' : g.length + ' مجموعات من الفواتير المكررة'} (${n} فاتورة لها نفس المورد ونفس رقم الفاتورة)</b>
-      <ul>${g.map(a => `<li><span><b>${esc(vLabel(a[0]))}</b> · فاتورة رقم <bdi>${esc(a[0].invoice_number)}</bdi> · ${a.length} مرات:</span> ${a.map(x => `<button type="button" class="dupgo" data-go="${esc(x.id)}">📄 ${esc(x.file || 'بدون اسم')}${x.invoice_date ? ' · ' + esc(x.invoice_date) : ''}${!blank(x.total) ? ' · ' + esc(money(x.total)) : ''}</button>`).join('')}</li>`).join('')}</ul>
+      <ul>${g.map(a => { const sp = a.every(x => x.sig && x.sig === a[0].sig);
+        return `<li><span><b>${esc(vLabel(a[0]))}</b> · فاتورة رقم <bdi>${esc(a[0].invoice_number)}</bdi> · ${a.length} مرات${sp ? ' (كلها من نفس الملف المقسّم: قد يكون الرقم مقروءًا خطأ في إحداها، أو تكون الصفحات من فاتورة واحدة)' : ''}:</span> ${a.map(x => `<button type="button" class="dupgo" data-go="${esc(x.id)}">📄 ${esc(x.file || 'بدون اسم')}${x.invoice_date ? ' · ' + esc(x.invoice_date) : ''}${!blank(x.total) ? ' · ' + esc(money(x.total)) : ''}</button>`).join('')}<button type="button" class="dupno" data-notdup="${esc(dupKey(a[0]))}">ليست مكررة</button></li>`; }).join('')}</ul>
       <div class="zbtns">${vw.show !== 'dup' ? '<button type="button" id="dupOnly">عرض المكررة فقط</button>' : ''}<small>راجعها واحذف المكرر (مع ذكر السبب)، أو صحّح رقم الفاتورة إن كان مقروءًا خطأ.</small></div>`;
   }
   document.addEventListener('change', e => {
@@ -532,7 +533,7 @@
       + (listHtml() || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
     drawBar(); drawDups(); drawZones(); drawTrash(); drawWipe(); rvAllLabel(); sendLabel(); mountViewers();
     const cb = $('cropAll'); if (cb) { cb.hidden = !list.length; cb.textContent = cropOff ? '✂ إظهار المقتطعات' : 'إخفاء المقتطعات'; cb.setAttribute('aria-pressed', !cropOff); }
-    mountCrops();
+    mountCrops(); if (typeof mountRrCrops === 'function') mountRrCrops();
     if (keepWhy) { const t = $('dr-' + delAsk), ok = document.querySelector(`[data-delok="${CSS.escape(delAsk)}"]`); if (t) t.value = keepWhy; if (ok) ok.disabled = !keepWhy.trim(); }
   }
   function drawTrash() {
@@ -1189,7 +1190,7 @@
         t.fields[k] = { pg: r.pg, x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) };
         saveZones(); zMark(key); saved = true;
         const n = list.filter(y => y !== x && zoneFor(y) === key).length;
-        if (n && !(rrS[x.id] && rrS[x.id].state === 'run')) rrS[x.id] = { state: 'offer', key, ks: [...new Set([...((rrS[x.id] && rrS[x.id].state === 'offer' && rrS[x.id].ks) || []), k])] };
+        if (n && !(rrS[x.id] && (rrS[x.id].state === 'run' || rrS[x.id].state === 'pick'))) rrS[x.id] = { state: 'offer', key, ks: [...new Set([...((rrS[x.id] && rrS[x.id].state === 'offer' && rrS[x.id].ks) || []), k])] };
       }
     }
     (x.zsrc = x.zsrc || {})[k] = saved ? 'tpl' : 'pick';
@@ -1376,17 +1377,35 @@
     }
     if (r.state === 'run') return `<div class="rr" role="status"><b>جارٍ إعادة قراءة فواتير ${vn}… ${r.done} من ${r.n}</b><div class="bar2"><i style="width:${r.n ? r.done / r.n * 100 : 0}%"></i></div></div>`;
     const fn = cid => { const y = list.find(q => q.id === cid); return esc((y && (y.invoice_number || y.file)) || 'محذوفة'); };
-    const nInv = new Set(r.changes.map(c => c.id)).size;
-    return `<div class="rr" role="status"><b>${r.changes.length ? `انتهت إعادة القراءة: تغيّرت ${r.changes.length} خانة في ${nInv} فاتورة` : 'انتهت إعادة القراءة: لم تتغير أي خانة'}</b>
-      ${r.changes.length || r.skipped.length ? `<ul>${r.changes.map(c => `<li><a href="#c-${esc(c.id)}">فاتورة ${fn(c.id)}</a>: ${esc(label(c.k))} <s>${esc(shown(c.k, c.from))}</s> ← <ins>${esc(shown(c.k, c.to))}</ins></li>`).join('')}
+    const vv = (k, v) => `<bdi dir="${k === 'vendor_name' ? 'auto' : 'ltr'}">${esc(shown(k, v))}</bdi>`;
+    if (r.state === 'pick') {
+      const on = r.changes.filter(c => c.on).length, byX = new Map(); r.changes.forEach(c => (byX.get(c.id) || byX.set(c.id, []).get(c.id)).push(c));
+      const ks = [...new Set(r.changes.map(c => c.k))], kAll = k => r.changes.filter(c => c.k === k).every(c => c.on);
+      return `<div class="rr rrpick" role="group" aria-label="التعديلات المقترحة"><b>أُعيدت قراءة فواتير ${vn}: ${r.changes.length} تعديل مقترح في ${byX.size} ${byX.size === 1 ? 'فاتورة' : 'فواتير'}</b>
+        <p>علّم ما تريد تطبيقه فقط. التعديلات غير المعلّمة لا تتغير.</p>
+        <div class="chips"><span>حسب الخانة:</span>${ks.map(k => `<button type="button" class="chip" data-rrk="${id}|${k}" aria-pressed="${kAll(k)}">${kAll(k) ? '✓ ' : ''}${esc(label(k))} (${r.changes.filter(c => c.k === k).length})</button>`).join('')}</div>
+        <div class="row"><button type="button" data-rrall="${id}">تحديد الكل</button><button type="button" data-rrnone="${id}">إلغاء تحديد الكل</button><button type="button" data-rrrevall="${id}">👁 مراجعة واحدًا واحدًا</button></div>
+        ${[...byX.entries()].map(([xid, cs]) => { const y = list.find(q => q.id === xid) || {}, all = cs.every(c => c.on);
+          return `<div class="rrinv"><h4>📄 <a href="#c-${esc(xid)}">${esc(y.file || 'فاتورة')}</a> <small>${cs.length} تعديل</small><label><input type="checkbox" data-rrx="${id}|${esc(xid)}"${all ? ' checked' : ''}> كل تعديلات الفاتورة</label></h4>
+            ${cs.map((c, i) => `<div class="rrch${c.on ? '' : ' off'}${i % 2 ? ' odd' : ''}"><input type="checkbox" data-rron="${id}|${esc(c.cid)}"${c.on ? ' checked' : ''} aria-label="${esc(label(c.k))}: ${esc(shown(c.k, c.from))} إلى ${esc(shown(c.k, c.to))}">
+              <span><span class="rrlb">${esc(label(c.k))}:</span> <s>${vv(c.k, c.from)}</s> ← <ins>${vv(c.k, c.to)}</ins></span>
+              <span class="row"><button type="button" class="sm" data-rrcrop="${id}|${esc(c.cid)}" aria-pressed="${!!c.crop}">${c.crop ? 'إخفاء المقتطع' : '✂ إظهار المقتطع'}</button><button type="button" class="sm" data-rrrev="${id}|${esc(c.cid)}">👁 مراجعة</button></span>
+              ${c.crop ? `<canvas data-rrcv="${id}|${esc(c.cid)}" width="1" height="1"></canvas>` : ''}</div>`).join('')}
+            ${r.skipped.filter(s => s.id === xid).map(s => `<div class="rrch sk">${esc(label(s.k))}: ${s.why}</div>`).join('')}</div>`; }).join('')}
+        ${r.skipped.filter(s => !byX.has(s.id)).length ? `<ul>${r.skipped.filter(s => !byX.has(s.id)).map(c => `<li class="sk">فاتورة ${fn(c.id)}: ${esc(label(c.k))} ${c.why}</li>`).join('')}</ul>` : ''}
+        <div class="row rrapply"><button type="button" class="primary" data-rrapply="${id}"${on ? '' : ' disabled'}>طبّق المحدد (${on} من ${r.changes.length})</button><button type="button" data-rrno="${id}">إغلاق بدون تطبيق</button></div></div>`;
+    }
+    const ap = r.applied || [];
+    return `<div class="rr" role="status"><b>${ap.length ? `طُبّق ${ap.length} من ${r.changes.length} تعديل مقترح` : r.changes.length ? 'لم يُطبّق أي تعديل' : 'انتهت إعادة القراءة: لم تتغير أي خانة'}</b>
+      ${ap.length || r.skipped.length ? `<ul>${ap.map(c => `<li><a href="#c-${esc(c.id)}">فاتورة ${fn(c.id)}</a>: ${esc(label(c.k))} <s>${vv(c.k, c.from)}</s> ← <ins>${vv(c.k, c.to)}</ins></li>`).join('')}
         ${r.skipped.map(c => `<li class="sk">فاتورة ${fn(c.id)}: ${esc(label(c.k))} ${c.why}</li>`).join('')}</ul>` : ''}
-      <div class="row">${r.changes.length ? `<button type="button" data-rrundo="${id}">↩ تراجع عن التطبيق</button>` : ''}<button type="button" data-rrno="${id}">إغلاق</button></div></div>`;
+      <div class="row">${ap.length ? `<button type="button" data-rrundo="${id}">↩ تراجع عن التطبيق</button>` : ''}<button type="button" data-rrno="${id}">إغلاق</button></div></div>`;
   }
   async function rerunVendor(id) {
     const x = list.find(y => y.id === id), r0 = rrS[id]; if (!x || !r0 || r0.state !== 'offer') return;
     const key = r0.key, T = zones[key]; if (!T) return;
     const others = list.filter(y => y !== x && zoneFor(y) === key);
-    const r = rrS[id] = { state: 'run', key, n: others.length, done: 0, changes: [], skipped: [], before: [] }; draw();
+    const r = rrS[id] = { state: 'run', key, n: others.length, done: 0, changes: [], skipped: [], same: [], before: [] }; draw();
     for (const y of others) {
       r.before.push({ id: y.id, vals: Object.fromEntries(F.map(([k]) => [k, y[k]])), zsrc: { ...(y.zsrc || {}) }, zrect: JSON.parse(JSON.stringify(y.zrect || {})) });
       try {
@@ -1399,18 +1418,78 @@
             const i = pgIndex(z.pg, c.pages.length); if (i < 0) continue;
             const v = extract(k, await readRegion(await loadSrc(c, i), z));
             if (blank(v)) { r.skipped.push({ id: y.id, k, why: 'لم تُقرأ قيمة واضحة في المكان المحفوظ، فبقيت كما هي' }); continue; }
-            (y.zrect = y.zrect || {})[k] = { ...z };
-            if (String(v) !== String(y[k] ?? '')) { r.changes.push({ id: y.id, k, from: y[k], to: v }); y[k] = v; (y.zsrc = y.zsrc || {})[k] = 'new'; }
-            else (y.zsrc = y.zsrc || {})[k] = (y.zsrc && y.zsrc[k] === 'new') ? 'new' : 'tpl';
+            // اقتراح فقط: لا يتغير شيء حتى يختار المستخدم التعديلات ويضغط «طبّق المحدد»
+            if (String(v) !== String(y[k] ?? '')) r.changes.push({ cid: y.id + ':' + k, id: y.id, k, from: y[k], to: v, z: { ...z }, pg: i, on: true });
+            else r.same.push({ id: y.id, k, z: { ...z } });
           }
           if (c.pdf) try { c.pdf.destroy(); } catch { }
         }
       } catch (e) { console.warn(e); r.skipped.push({ id: y.id, k: Object.keys(T.fields)[0], why: 'تعذّرت قراءتها' }); }
-      r.done++; save(); if (rrS[id] === r) draw();
+      r.done++; if (rrS[id] === r) draw();
     }
-    r.state = 'done'; save(); draw();
-    toast(r.changes.length ? `تحدّثت ${r.changes.length} خانة بالقالب` : 'انتهت إعادة القراءة ولم تتغير البيانات');
+    // الخانات التي قرأها القالب بنفس قيمتها: نحفظ مكانها فقط (لا تغيير في القيم)
+    r.same.forEach(o => { const y = list.find(q => q.id === o.id); if (!y) return; (y.zrect = y.zrect || {})[o.k] = o.z; (y.zsrc = y.zsrc || {})[o.k] = y.zsrc[o.k] === 'new' ? 'new' : 'tpl'; });
+    r.state = r.changes.length ? 'pick' : 'done'; save(); draw();
+    toast(r.changes.length ? `اقتُرح ${r.changes.length} تعديلًا: اختر ما تريد تطبيقه` : 'انتهت إعادة القراءة ولم تتغير البيانات');
   }
+  function applyPicked(id) {
+    const r = rrS[id]; if (!r || r.state !== 'pick') return;
+    const on = r.changes.filter(c => c.on);
+    on.forEach(c => { const y = list.find(q => q.id === c.id); if (!y) return; y[c.k] = c.to; (y.zsrc = y.zsrc || {})[c.k] = 'new'; (y.zrect = y.zrect || {})[c.k] = c.z; });
+    r.applied = on; r.state = 'done'; save(); draw();
+    toast(on.length ? `طُبّق ${on.length} من ${r.changes.length} تعديل` : 'لم يُطبّق أي تعديل');
+  }
+  // مقتطع خانة من صفحة الفاتورة
+  async function cropChange(cv, c, maxW) {
+    const y = list.find(q => q.id === c.id); if (!y) return;
+    const pages = await rvLoadPages(y), u = pages[c.pg]; if (!u) return;
+    const im = await loadPageImg(u); if (!im || !cv.isConnected) return;
+    const W = im.naturalWidth, H = im.naturalHeight, b = c.z, px = 0.012, py = 0.006;
+    const sx = Math.max(0, b.x - px) * W, sy = Math.max(0, b.y - py) * H, sw = Math.min(W - sx, (b.w + 2 * px) * W), sh = Math.min(H - sy, (b.h + 2 * py) * H);
+    if (sw < 2 || sh < 2) return;
+    const sc = Math.min(3, maxW / sw); cv.width = Math.round(sw * sc); cv.height = Math.round(sh * sc);
+    const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(im, sx, sy, sw, sh, 0, 0, cv.width, cv.height); return true;
+  }
+  function mountRrCrops() { document.querySelectorAll('canvas[data-rrcv]').forEach(cv => { const [id, cid] = cv.dataset.rrcv.split('|'), r = rrS[id], c = r && r.changes.find(q => q.cid === cid); if (c) cropChange(cv, c, 520); }); }
+  // نافذة مراجعة كل تعديل مع ملفه
+  let rvw = null;
+  async function openRvw(id, i) {
+    const r = rrS[id]; if (!r || r.state !== 'pick') return; const c = r.changes[i]; if (!c) return;
+    rvw = { id, i }; const y = list.find(q => q.id === c.id) || {};
+    $('rwT').textContent = label(c.k); $('rwS').textContent = '📄 ' + (y.file || '');
+    $('rwO').textContent = shown(c.k, c.from); $('rwN').textContent = shown(c.k, c.to);
+    $('rwA').setAttribute('aria-pressed', c.on); $('rwR').setAttribute('aria-pressed', !c.on);
+    $('rwPos').textContent = `${i + 1} من ${r.changes.length}`; $('rwPrev').disabled = i === 0; $('rwNext').textContent = i === r.changes.length - 1 ? 'إنهاء المراجعة' : 'التالي ←';
+    const h = $('rwH'); h.style.left = c.z.x * 100 + '%'; h.style.top = c.z.y * 100 + '%'; h.style.width = c.z.w * 100 + '%'; h.style.height = c.z.h * 100 + '%';
+    const img = $('rwImg'), cv = $('rwC'); img.removeAttribute('src'); img.parentNode.hidden = true; cv.parentNode.hidden = true;
+    $('rw').hidden = false; document.body.style.overflow = 'hidden'; $('rwA').focus();
+    cv.width = 1; cv.height = 1; cropChange(cv, c, 640).then(ok => { if (ok && rvw && rvw.i === i) cv.parentNode.hidden = false; });
+    const pages = await rvLoadPages(y); if (rvw && rvw.i === i && pages[c.pg]) { img.onload = () => { img.parentNode.hidden = false; }; img.src = pages[c.pg]; }
+  }
+  const closeRvw = () => { $('rw').hidden = true; document.body.style.overflow = ''; const id = rvw && rvw.id; rvw = null; draw(); const b = id && document.querySelector(`[data-rrall="${CSS.escape(id)}"]`); if (b) b.scrollIntoView({ block: 'center' }); };
+  const stepRvw = d => { const r = rvw && rrS[rvw.id]; if (!r) return closeRvw(); const n = rvw.i + d; if (n >= r.changes.length) return closeRvw(); openRvw(rvw.id, Math.max(0, n)); };
+  $('rwA').onclick = () => { const r = rrS[rvw.id]; r.changes[rvw.i].on = true; stepRvw(1); };
+  $('rwR').onclick = () => { const r = rrS[rvw.id]; r.changes[rvw.i].on = false; stepRvw(1); };
+  $('rwPrev').onclick = () => stepRvw(-1); $('rwNext').onclick = () => stepRvw(1); $('rwX').onclick = closeRvw;
+  $('rw').addEventListener('click', e => { if (e.target === $('rw')) closeRvw(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('rw').hidden) closeRvw(); });
+  const rrFocus = sel => { const n = document.querySelector(sel); if (n) n.focus({ preventScroll: true }); };
+  document.addEventListener('change', e => {
+    const t = e.target, d = t.dataset;
+    if (d.rron) { const [id, cid] = d.rron.split('|'), r = rrS[id], c = r && r.changes.find(q => q.cid === cid); if (!c) return; c.on = t.checked; draw(); rrFocus(`[data-rron="${CSS.escape(d.rron)}"]`); }
+    if (d.rrx) { const [id, xid] = d.rrx.split('|'), r = rrS[id]; if (!r) return; r.changes.filter(c => c.id === xid).forEach(c => c.on = t.checked); draw(); rrFocus(`[data-rrx="${CSS.escape(d.rrx)}"]`); }
+  });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
+    if (d.rrk) { const [id, k] = d.rrk.split('|'), r = rrS[id]; if (!r) return; const a = r.changes.filter(c => c.k === k), v = !a.every(c => c.on); a.forEach(c => c.on = v); draw(); rrFocus(`[data-rrk="${CSS.escape(d.rrk)}"]`); }
+    if (d.rrall) { const r = rrS[d.rrall]; if (r) { r.changes.forEach(c => c.on = true); draw(); rrFocus(`[data-rrall="${CSS.escape(d.rrall)}"]`); } }
+    if (d.rrnone) { const r = rrS[d.rrnone]; if (r) { r.changes.forEach(c => c.on = false); draw(); rrFocus(`[data-rrnone="${CSS.escape(d.rrnone)}"]`); } }
+    if (d.rrcrop) { const [id, cid] = d.rrcrop.split('|'), r = rrS[id], c = r && r.changes.find(q => q.cid === cid); if (!c) return; c.crop = !c.crop; draw(); rrFocus(`[data-rrcrop="${CSS.escape(d.rrcrop)}"]`); }
+    if (d.rrrev) { const [id, cid] = d.rrrev.split('|'), r = rrS[id]; if (r) openRvw(id, r.changes.findIndex(c => c.cid === cid)); }
+    if (d.rrrevall) openRvw(d.rrrevall, 0);
+    if (d.rrapply) applyPicked(d.rrapply);
+    if (d.notdup) { const k = d.notdup; list.forEach(y => { if (dupKey(y) === k) y.notDup = k; }); save(); draw(); toast('عُلّمت «ليست مكررة». إن تغيّر الرقم أو المورد يعود الفحص تلقائيًا'); }
+  });
   function undoRerun(id) {
     const r = rrS[id]; if (!r || r.state !== 'done') return;
     r.before.forEach(b => { const y = list.find(q => q.id === b.id); if (!y) return; F.forEach(([k]) => { y[k] = b.vals[k]; }); y.zsrc = b.zsrc; y.zrect = b.zrect; });
@@ -1576,5 +1655,5 @@
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });
   draw();
-  window.__invoiceApp = { addFiles, zones: () => zones, extract, get busy() { return busy || queue.length > 0; }, get list() { return list; } };
+  window.__invoiceApp = { addFiles, zones: () => zones, rr: rrS, redraw: () => draw(), extract, get busy() { return busy || queue.length > 0; }, get list() { return list; } };
 })();
