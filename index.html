@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#1838b8">
-<title>قارئ الفواتير</title>
+<title>قراءة الفواتير</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -215,8 +215,22 @@ button,.btn{touch-action:manipulation}
 .lbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:0 0 14px;padding:10px;border:1px solid var(--cardline);border-radius:6px;background:var(--soft)}
 .lbar label{display:grid;gap:2px;font-size:13px;font-weight:700;color:var(--lbl)}
 .lbar select{font:inherit;font-size:15px;min-height:44px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);max-width:100%}
-.vgrp{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin:10px 0 -4px;padding:8px 10px;background:var(--blue);color:#fff;border-radius:6px;font-size:17px}
-.vgrp small{font-size:13px;font-weight:500;opacity:.95}
+.ltot{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 12px;border-radius:6px;background:var(--ink);color:#fff;margin:0 0 14px;font-size:15px}
+.ltot b{font-family:"Readex Pro",sans-serif;direction:ltr;unicode-bidi:isolate}
+.flat{display:grid;gap:14px}
+.inv.odd{background:#eaf0ff}
+.grp{margin:0}
+.gh{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;width:100%;text-align:start;padding:10px 12px;background:var(--blue);color:#fff;border:0;border-radius:6px 6px 0 0;min-height:52px}
+.grp.closed .gh{border-radius:6px}
+.gh .gn{font-family:"Readex Pro",sans-serif;font-size:18px;font-weight:700}
+.gh .gm{font-size:13px;opacity:.95}
+.gh .gs{margin-inline-start:auto;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px}
+.gh .gs b{font-family:"Readex Pro",sans-serif;direction:ltr;unicode-bidi:isolate}
+.gb{border:1px solid var(--blue);border-top:0;border-radius:0 0 6px 6px;overflow:hidden}
+.gb .inv{border:0;border-radius:0;border-bottom:1px solid var(--cardline)}
+.gb .inv:last-child{border-bottom:0}
+.gb .inv.isdup{box-shadow:inset 4px 0 0 var(--stamp)}
+.grp.closed .gb{display:none}
 .lhead .gssend{font-size:14px;min-height:40px;border-color:var(--ok);color:var(--ok);font-weight:700}
 .tabs{display:flex;gap:6px;background:var(--paper);border-radius:8px;padding:6px;box-shadow:0 1px 0 var(--cardline)}
 .tabs button{flex:1;border:0;font-weight:700;font-size:16px}
@@ -241,7 +255,7 @@ body:not(.tab-z) #zSec{display:none!important}
 </head>
 <body>
 <header class="top">
-  <h1>قارئ الفواتير</h1>
+  <h1>قراءة الفواتير</h1>
   <p>صوّر الفاتورة أو ارفعها، راجع البيانات وأكمل الناقص، ثم نزّل ملف Excel.</p>
 </header>
 <main>
@@ -263,7 +277,8 @@ body:not(.tab-z) #zSec{display:none!important}
     <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="gssend" id="gsSend" hidden>☁️ إرسال إلى Google Sheet</button><button class="rvall" id="cropAll" aria-pressed="false" hidden>✂ إظهار المقتطعات</button><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
     <div id="gsRep" class="gsrep" hidden role="status"></div>
     <div id="dupBox" class="dupbox" hidden role="alert"></div>
-    <div id="lbar" class="lbar" hidden aria-label="فرز وترتيب الفواتير"></div>
+    <div id="lbar" class="lbar" hidden aria-label="تجميع وترتيب الفواتير"></div>
+    <div id="ltot" class="ltot" hidden></div>
     <div id="list"></div>
   </section>
   <section class="slip" id="zSec" hidden aria-labelledby="zT">
@@ -324,7 +339,7 @@ body:not(.tab-z) #zSec{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611270814'; window.APP_VERSION = V;
+(function () { var V = '202611271622'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -332,12 +347,12 @@ body:not(.tab-z) #zSec{display:none!important}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611270814"></script>
-<script src="parse.js?v=202611270814"></script>
-<script src="export.js?v=202611270814"></script>
-<script src="digits.js?v=202611270814"></script>
-<script src="split.js?v=202611270814"></script>
-<script src="simple.js?v=202611270814"></script>
+<script src="config.js?v=202611271622"></script>
+<script src="parse.js?v=202611271622"></script>
+<script src="export.js?v=202611271622"></script>
+<script src="digits.js?v=202611271622"></script>
+<script src="split.js?v=202611271622"></script>
+<script src="simple.js?v=202611271622"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

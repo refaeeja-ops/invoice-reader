@@ -423,7 +423,8 @@
   const cropRetry = {}, cropS = {}; // cropS: اختيار كل فاتورة على حدة (يتقدم على الزر الشامل)
   const cropHid = id => cropS[id] ?? cropOff;
   let cropOff = true; // المقتطعات مقفلة عند كل فتح للتطبيق إلا إذا طلبها المستخدم
-  function card(x, tr) {
+  function card(x, tr, opt) {
+    const hide = (opt && opt.hide) || [], showF = F.filter(([k]) => !hide.includes(k));
     const w = issues(x);
     if (tr) return `<article class="inv trash" id="c-${esc(x.id)}" aria-label="فاتورة محذوفة">
       <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small>${sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
@@ -432,9 +433,9 @@
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
       ${rvHtml(x)}</article>`;
     const dup = twinsOf(x).length > 0;
-    return `<article class="inv${cropHid(x.id) ? ' nocropc' : ''}${dup ? ' isdup' : ''}" id="c-${esc(x.id)}">
-      <header><div><b>${esc(x.vendor_name || 'مورد غير معروف')}</b><small class="fp">📄 ${esc(x.file || '')}</small>${dupBadge(x)}${sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
-      <div class="grid">${F.map(f => fieldHtml(x, f)).join('')}${projHtml(x)}
+    return `<article class="inv${cropHid(x.id) ? ' nocropc' : ''}${dup ? ' isdup' : ''}${opt && opt.odd ? ' odd' : ''}" id="c-${esc(x.id)}">
+      <header><div>${hide.includes('vendor_name') ? '' : `<b>${esc(x.vendor_name || 'مورد غير معروف')}</b>`}<small class="fp">📄 ${esc(x.file || '')}</small>${dupBadge(x)}${hide.includes('sent') ? '' : sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
+      <div class="grid">${showF.map(f => fieldHtml(x, f)).join('')}${hide.includes('project') ? '' : projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       <div class="nosupbox">${noSupHtml(x)}</div>${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
       ${rrHtml(x)}${rvHtml(x)}
@@ -446,41 +447,50 @@
     </article>`;
   }
   const dupBadge = x => twinsOf(x).length ? `<small class="db">⚠ مكررة: نفس المورد ونفس رقم الفاتورة</small>` : '';
-  // ---------- الفرز والترتيب حسب المورد ----------
-  const VK = 'invoice-simple-view-v1';
-  let vw = { sort: 'new', vendor: '', show: '' }; try { Object.assign(vw, JSON.parse(localStorage.getItem(VK) || '{}')); } catch { }
+  // ---------- التجميع (المورد، المشروع، طريقة الدفع، الشهر، التصدير) والترتيب ----------
+  const VK = 'invoice-simple-view-v2';
+  let vw = { group: '', sort: 'new', show: '' }; try { Object.assign(vw, JSON.parse(localStorage.getItem(VK) || '{}')); } catch { }
   const saveVw = () => { try { localStorage.setItem(VK, JSON.stringify(vw)); } catch { } };
   const vLabel = x => x.vendor_name || vatShort(x.vendor_tax_number) || 'مورد غير معروف';
   const cmpAr = (a, b) => String(a).localeCompare(String(b), 'ar', { numeric: true, sensitivity: 'base' });
-  function vendorsOf() {
-    const m = new Map(); list.forEach(x => { const k = vKey(x) || '?'; const o = m.get(k) || m.set(k, { k, name: '', n: 0 }).get(k); o.n++; if (!o.name && x.vendor_name) o.name = x.vendor_name; if (!o.name && k !== '?') o.name = vLabel(x); });
-    return [...m.values()].map(o => ({ ...o, name: o.name || 'مورد غير معروف' })).sort((a, b) => a.k === '?' ? 1 : b.k === '?' ? -1 : cmpAr(a.name, b.name));
-  }
+  const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const dOf = x => /^\d{4}-\d{2}-\d{2}$/.test(x.invoice_date || '') ? x.invoice_date : '';
+  const vendorName = k => { const y = list.find(z => (vKey(z) || '?') === k && z.vendor_name) || list.find(z => (vKey(z) || '?') === k); return y && k !== '?' ? vLabel(y) : 'مورد غير معروف'; };
+  // لكل تجميع: مفتاح المجموعة، اسمها، والخانات التي تظهر في رأس المجموعة فلا تتكرر في كل فاتورة
+  const GR = {
+    vendor: { k: x => vKey(x) || '?', name: k => vendorName(k), meta: k => k.startsWith('v:') ? 'الرقم الضريبي ' + ((list.find(z => vKey(z) === k) || {}).vendor_tax_number || '') : '', hide: ['vendor_name', 'vendor_tax_number'], order: (a, b) => a === '?' ? 1 : b === '?' ? -1 : cmpAr(vendorName(a), vendorName(b)) },
+    project: { k: x => x.project || '?', name: k => k === '?' ? 'بدون مشروع' : 'المشروع ' + k, hide: ['project'], order: (a, b) => a === '?' ? 1 : b === '?' ? -1 : cmpAr(a, b) },
+    pay: { k: x => x.payment_method || '?', name: k => k === '?' ? 'بدون طريقة دفع' : k, hide: ['payment_method'], order: (a, b) => a === '?' ? 1 : b === '?' ? -1 : (PAYS.indexOf(a) + 1 || 99) - (PAYS.indexOf(b) + 1 || 99) || cmpAr(a, b) },
+    month: { k: x => dOf(x).slice(0, 7) || '?', name: k => k === '?' ? 'بدون تاريخ' : MONTHS[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4), hide: [], order: (a, b) => a === '?' ? 1 : b === '?' ? -1 : cmpAr(b, a) },
+    sent: { k: x => sendState(x) === 'ok' ? '1' : '0', name: k => k === '1' ? '✓ المصدرة إلى الإقرار' : 'لم تُصدّر إلى الإقرار بعد', hide: ['sent'], order: (a, b) => cmpAr(a, b) },
+  };
+  if (vw.group && !GR[vw.group]) vw.group = '';
+  const gClosed = new Set();
   function viewList() {
     let a = list.slice();
-    if (vw.vendor) a = a.filter(x => (vKey(x) || '?') === vw.vendor);
     if (vw.show === 'sent') a = a.filter(x => sendState(x) === 'ok');
     else if (vw.show === 'unsent') a = a.filter(x => sendState(x) !== 'ok');
     else if (vw.show === 'dup') a = a.filter(x => twinsOf(x).length);
     else if (vw.show === 'iss') a = a.filter(x => issues(x).length);
-    const vn = new Map(vendorsOf().map(o => [o.k, o.name]));
-    const vname = x => vn.get(vKey(x) || '?') || '';
-    const d = x => /^\d{4}-\d{2}-\d{2}$/.test(x.invoice_date || '') ? x.invoice_date : '';
-    if (vw.sort === 'vendor') a.sort((p, q) => (vKey(p) ? 0 : 1) - (vKey(q) ? 0 : 1) || cmpAr(vname(p), vname(q)) || cmpAr(vKey(p), vKey(q)) || cmpAr(invKey(p.invoice_number), invKey(q.invoice_number)));
-    else if (vw.sort === 'date') a.sort((p, q) => (d(q) ? 1 : 0) - (d(p) ? 1 : 0) || cmpAr(d(q), d(p)));
+    if (vw.sort === 'date') a.sort((p, q) => (dOf(q) ? 1 : 0) - (dOf(p) ? 1 : 0) || cmpAr(dOf(q), dOf(p)));
     else if (vw.sort === 'amount') a.sort((p, q) => (+q.total || 0) - (+p.total || 0));
+    else if (vw.sort === 'no') a.sort((p, q) => cmpAr(invKey(p.invoice_number), invKey(q.invoice_number)));
     else if (vw.sort === 'old') a.reverse();
-    return { a, vname };
+    return a;
   }
+  const sumOf = a => ({ n: a.length, t: a.reduce((s, x) => s + (+x.total || 0), 0), v: a.reduce((s, x) => s + (+x.tax_amount || 0), 0) });
+  const statsHtml = s => `<span>${s.n} فاتورة</span><span>الإجمالي <b>${esc(money(s.t))}</b></span><span>الضريبة <b>${esc(money(s.v))}</b></span>`;
   function drawBar() {
-    const bar = $('lbar'); if (!bar) return; bar.hidden = list.length < 2 && !vw.vendor && !vw.show;
-    const vs = vendorsOf(); if (vw.vendor && !vs.some(o => o.k === vw.vendor)) vw.vendor = '';
+    const bar = $('lbar'), tot = $('ltot'); if (!bar) return; bar.hidden = list.length < 2 && !vw.show && !vw.group;
     const nd = list.filter(x => twinsOf(x).length).length, ns = list.filter(x => sendState(x) === 'ok').length;
     const o = (v, t, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(t)}</option>`;
-    bar.innerHTML = `<label><span>ترتيب حسب</span><select id="vwSort">${o('new', 'الأحدث أولًا', vw.sort)}${o('old', 'الأقدم أولًا', vw.sort)}${o('vendor', 'المورد (أبجديًا) ثم رقم الفاتورة', vw.sort)}${o('date', 'تاريخ الفاتورة (الأحدث)', vw.sort)}${o('amount', 'المبلغ (الأكبر)', vw.sort)}</select></label>
-      <label><span>المورد</span><select id="vwVendor">${o('', 'كل الموردين (' + list.length + ')', vw.vendor)}${vs.map(v => o(v.k, v.name + ' (' + v.n + ')', vw.vendor)).join('')}</select></label>
-      <label><span>عرض</span><select id="vwShow">${o('', 'كل الفواتير', vw.show)}${o('dup', 'المكررة فقط (' + nd + ')', vw.show)}${GURL || ns ? o('sent', 'المصدرة إلى الشيت (' + ns + ')', vw.show) + o('unsent', 'غير المصدرة (' + (list.length - ns) + ')', vw.show) : ''}${o('iss', 'التي فيها ملاحظات', vw.show)}</select></label>
-      ${vw.vendor || vw.show ? '<button type="button" id="vwClear">إلغاء الفرز</button>' : ''}`;
+    const act = document.activeElement && ['vwGroup', 'vwSort', 'vwShow'].includes(document.activeElement.id) ? document.activeElement.id : '';
+    bar.innerHTML = `<label><span>تجميع حسب</span><select id="vwGroup">${o('vendor', 'المورد', vw.group)}${o('project', 'المشروع', vw.group)}${o('pay', 'طريقة الدفع', vw.group)}${o('month', 'شهر الفاتورة', vw.group)}${o('sent', 'التصدير إلى الإقرار', vw.group)}${o('', 'الكل', vw.group)}</select></label>
+      <label><span>${vw.group ? 'الترتيب داخل المجموعة' : 'الترتيب'}</span><select id="vwSort">${o('new', 'الأحدث إضافة', vw.sort)}${o('old', 'الأقدم إضافة', vw.sort)}${o('date', 'تاريخ الفاتورة (الأحدث)', vw.sort)}${o('amount', 'المبلغ (الأكبر)', vw.sort)}${o('no', 'رقم الفاتورة', vw.sort)}</select></label>
+      <label><span>عرض</span><select id="vwShow">${o('', 'كل الفواتير', vw.show)}${o('dup', 'المكررة فقط (' + nd + ')', vw.show)}${GURL || ns ? o('sent', 'المصدرة إلى الإقرار (' + ns + ')', vw.show) + o('unsent', 'غير المصدرة إلى الإقرار (' + (list.length - ns) + ')', vw.show) : ''}${o('iss', 'التي فيها ملاحظات', vw.show)}</select></label>`;
+    if (act) $(act).focus({ preventScroll: true });
+    if (tot) { const a = viewList(), ds = a.map(dOf).filter(Boolean).sort(); tot.hidden = !list.length;
+      tot.innerHTML = `<span>المعروض:</span>${statsHtml(sumOf(a))}${ds.length ? `<span>تاريخ أول فاتورة <b>${ds[0]}</b></span><span>تاريخ آخر فاتورة <b>${ds[ds.length - 1]}</b></span>` : ''}`; }
   }
   function drawDups() {
     const el = $('dupBox'); if (!el) return; const g = dupGroups(); el.hidden = !g.length; if (!g.length) return;
@@ -490,26 +500,26 @@
       <div class="zbtns">${vw.show !== 'dup' ? '<button type="button" id="dupOnly">عرض المكررة فقط</button>' : ''}<small>راجعها واحذف المكرر (مع ذكر السبب)، أو صحّح رقم الفاتورة إن كان مقروءًا خطأ.</small></div>`;
   }
   document.addEventListener('change', e => {
-    const t = e.target; if (!['vwSort', 'vwVendor', 'vwShow'].includes(t.id)) return;
-    vw[{ vwSort: 'sort', vwVendor: 'vendor', vwShow: 'show' }[t.id]] = t.value; saveVw(); draw(); const n = $(t.id); if (n) n.focus();
+    const t = e.target; if (!['vwSort', 'vwGroup', 'vwShow'].includes(t.id)) return;
+    vw[{ vwSort: 'sort', vwGroup: 'group', vwShow: 'show' }[t.id]] = t.value; saveVw(); draw(); const n = $(t.id); if (n) n.focus();
   });
   document.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.id === 'vwClear') { vw.vendor = ''; vw.show = ''; saveVw(); draw(); }
-    if (b.id === 'dupOnly') { vw.show = 'dup'; vw.vendor = ''; vw.sort = 'vendor'; saveVw(); draw(); }
-    if (b.dataset.go) { let c = $('c-' + b.dataset.go); if (!c) { vw.vendor = ''; vw.show = ''; saveVw(); draw(); c = $('c-' + b.dataset.go); }
+    if (b.id === 'dupOnly') { vw.show = 'dup'; vw.group = 'vendor'; saveVw(); draw(); }
+    if (b.dataset.grp) { const id = b.dataset.grp; gClosed.has(id) ? gClosed.delete(id) : gClosed.add(id); draw(); const n = document.querySelector(`[data-grp="${CSS.escape(id)}"]`); if (n) n.focus({ preventScroll: true }); }
+    if (b.dataset.go) { let c = $('c-' + b.dataset.go);
+      if (!c) { vw.show = ''; gClosed.clear(); saveVw(); draw(); c = $('c-' + b.dataset.go); }
       if (c) { c.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' }); c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1600); } }
   });
   function listHtml() {
-    const { a, vname } = viewList();
-    if (!a.length) return list.length ? '<p class="empty">لا توجد فواتير تطابق الفرز الحالي.</p>' : '';
-    if (vw.sort !== 'vendor') return a.map(x => card(x)).join('');
-    let out = '', cur = null;
-    a.forEach((x, i) => { const k = vKey(x) || '?';
-      if (k !== cur) { cur = k; const g = a.filter(y => (vKey(y) || '?') === k), sum = g.reduce((s, y) => s + (+y.total || 0), 0), vat = k.startsWith('v:') ? k.slice(2) : '';
-        out += `<h3 class="vgrp"><span>${esc(vname(x) || 'مورد غير معروف')}</span>${vat ? `<small>الرقم الضريبي ${esc(vat)}…</small>` : ''}<small>${g.length} فاتورة · ${esc(money(sum))}</small></h3>`; }
-      out += card(x); });
-    return out;
+    const a = viewList();
+    if (!a.length) return list.length ? '<p class="empty">لا توجد فواتير تطابق الاختيار الحالي.</p>' : '';
+    if (!vw.group) return `<div class="flat">${a.map((x, i) => card(x, false, { odd: i % 2 })).join('')}</div>`;
+    const G = GR[vw.group], m = new Map(); a.forEach(x => { const k = G.k(x); (m.get(k) || m.set(k, []).get(k)).push(x); });
+    return [...m.keys()].sort(G.order).map(k => { const xs = m.get(k), id = vw.group + ':' + k, c = gClosed.has(id), meta = G.meta ? G.meta(k) : '';
+      const hide = k === '?' || (vw.group === 'sent' && k === '0') ? [] : G.hide;
+      return `<section class="grp${c ? ' closed' : ''}"><button type="button" class="gh" data-grp="${esc(id)}" aria-expanded="${!c}"><span class="ar" aria-hidden="true">${c ? '◀' : '▼'}</span><span class="gn">${esc(G.name(k))}</span>${meta ? `<span class="gm">${esc(meta)}</span>` : ''}<span class="gs">${statsHtml(sumOf(xs))}</span></button>
+        <div class="gb">${c ? '' : xs.map((x, i) => card(x, false, { odd: i % 2, hide })).join('')}</div></section>`; }).join('');
   }
   function draw() {
     const dw = delAsk && $('dr-' + delAsk), keepWhy = dw ? dw.value : '';
@@ -543,9 +553,9 @@
     const w = issues(x), box = c.querySelector('.warn, .okline');
     const html = w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>';
     box.outerHTML = html;
-    c.querySelector('header b').textContent = x.vendor_name || 'مورد غير معروف';
+    { const hb = c.querySelector('header b'); if (hb) hb.textContent = x.vendor_name || 'مورد غير معروف'; }
     c.querySelector('.amt').textContent = money(x.total);
-    const hd = c.querySelector('header > div'); if (hd) { const ob = hd.querySelector('.sb'); if (ob) ob.remove(); hd.insertAdjacentHTML('beforeend', sentBadge(x)); } sendLabel();
+    const hd = c.querySelector('header > div'); if (hd) { const ob = hd.querySelector('.sb'); if (ob) { ob.remove(); hd.insertAdjacentHTML('beforeend', sentBadge(x)); } } sendLabel(); drawBar();
     const ns = noSup(x), nb = c.querySelector('.nosupbox'); if (nb) nb.innerHTML = noSupHtml(x);
     F.forEach(([k]) => { const el = $(`f-${x.id}-${k}`); if (!el) return; const f = el.closest('.f'), m = blank(x[k]) && k !== 'payment_method';
       if (k === 'vendor_tax_number' || k === 'vendor_name') f.classList.toggle('nosup', ns);
@@ -1488,8 +1498,8 @@
     if (!GURL && !x.sentAt) return '';
     const st = sendState(x);
     const when = x.sentAt ? ' · ' + sentWhen(x.sentAt) : '', row = x.sentRow ? ' · صف ' + x.sentRow : '';
-    if (st === 'ok') return `<small class="sb ok">✓ صُدّرت إلى Google Sheet${esc(when + row)}</small>`;
-    if (st === 'dirty') return `<small class="sb dirty">⟳ صُدّرت إلى Google Sheet${esc(when)} ثم عُدّلت: ستُحدَّث في الشيت عند الإرسال</small>`;
+    if (st === 'ok') return `<small class="sb ok">✓ صُدّرت إلى الإقرار${esc(when + row)}</small>`;
+    if (st === 'dirty') return `<small class="sb dirty">⟳ صُدّرت إلى الإقرار${esc(when)} ثم عُدّلت: ستُحدَّث عند الإرسال</small>`;
     if (st === 'err') return `<small class="sb err">لم تُرسل: ${esc(x.sendErr)}</small>`;
     return '';
   }
