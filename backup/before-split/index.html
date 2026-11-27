@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1838b8">
+<title>قارئ الفواتير (نسخة احتياطية قبل التقسيم)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;--bg:#dfe3ee;--band:#1838b8;--paper:#fff;--ink:#0f1222;--mute:#4a5068;--line:#a9b1c8;--cardline:#c3c9da;--lbl:#2f3550;--val:#0f1222;--inbg:#f3f5fa;--tplbg:#fffbd6;--blue:#1838b8;--stamp:#b3121f;--stampink:#8f0d18;--ok:#0b6a35;--soft:#f3f5fa;--warnbg:#ffe9eb;--ld1:#fff;--ld2:#111;--ld3:#ffe600}
+*{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif;overflow-x:clip}
+h1,h2{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.2;margin:0}
+.top{background:var(--band);color:#fff;padding:clamp(20px,4vw,36px) max(5vw,16px) 80px}
+.top h1{font-size:clamp(28px,5vw,40px)}
+.top p{margin:6px 0 0;opacity:.92}
+main{max-width:1000px;margin:-56px auto 48px;padding:0 max(3vw,12px);display:grid;gap:18px}
+.slip{background:var(--paper);border-radius:6px;padding:clamp(16px,3vw,26px);box-shadow:0 1px 0 var(--cardline),0 18px 40px -24px #0b1550aa}
+.drop{border:2px dashed var(--line);border-radius:6px;padding:22px 14px;text-align:center}
+.drop.over{border-color:var(--blue);background:var(--soft)}
+.drop p{margin:0;color:var(--mute)}
+.btns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
+button,.btn{font:inherit;font-weight:500;min-height:44px;padding:8px 18px;border-radius:6px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;position:relative;text-decoration:none}
+button:focus-visible,.btn:focus-within,input:focus-visible,textarea:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.primary{background:var(--blue);border-color:var(--blue);color:var(--ld1)}
+button:disabled{opacity:.5;cursor:default}
+.btn input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.prog{margin-top:14px;display:none}.prog.on{display:block}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--blue);transition:width .3s}
+.status{margin-top:8px;color:var(--mute);text-align:center;min-height:1.6em}.status.err{color:var(--stamp)}
+.lhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.lhead h2{font-size:22px}.lhead .note{color:var(--mute);font-size:14px;flex-basis:100%}
+#list{display:grid;gap:14px}
+.inv{border:1px solid var(--cardline);border-radius:6px;padding:14px;background:var(--paper)}
+.inv.pend{color:var(--mute);background:var(--soft)}
+.inv header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px}
+.inv header b{font-size:17px;display:block}
+.fp{color:var(--mute);font-size:12px;word-break:break-all;display:block}
+.amt{font-family:"Readex Pro",sans-serif;font-weight:700;color:var(--blue);font-size:20px;white-space:nowrap;direction:ltr}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.f{display:grid;gap:3px;font-size:14px;font-weight:500;color:var(--lbl)}.f.wide{grid-column:1/-1}
+.f input,.f textarea{font:inherit;font-size:16px;font-weight:700;color:var(--val);background:var(--inbg);border:1.5px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;min-height:42px}
+.f textarea{font-weight:400}
+.f input::placeholder,.f textarea::placeholder{font-weight:400;color:var(--mute)}
+.f:has(.zb) input{background:var(--tplbg)}
+.f input.num{direction:ltr;text-align:right}
+.f.miss input{border:2px solid var(--stamp);background:var(--warnbg)}
+.f.miss span,.f.miss label{color:var(--stamp);font-weight:700}
+.warn{margin:10px 0 0;padding:8px 12px 8px 8px;list-style:none;background:var(--warnbg);border-inline-start:4px solid var(--stamp);border-radius:4px;color:var(--stampink);font-size:14px;display:grid;gap:2px}
+.warn li::before{content:"⚠ "}
+.okline{margin:10px 0 0;color:var(--ok);font-size:14px}
+.inv footer{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.del{color:var(--stamp);border-color:currentColor}
+.empty{color:var(--mute);text-align:center;margin:10px 0}
+.lb{position:fixed;inset:0;background:#000c;z-index:50;display:flex;flex-direction:column}
+.lbbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px;background:var(--paper)}
+.lbbar #lbT{flex:1 1 200px;font-size:13px;color:var(--mute);word-break:break-all}
+.lbstage{flex:1;overflow:auto;direction:ltr;text-align:center;background:#222}
+.lbstage img{display:block;margin:0 auto;max-width:none;background:#fff}
+#lbNone{color:#fff;padding:30px;text-align:center}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(120px);opacity:0;visibility:hidden;background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:6px;transition:transform .25s;z-index:60;max-width:92vw}
+.toast.on{transform:translateX(-50%);opacity:1;visibility:visible}
+.undo{position:fixed;bottom:18px;inset-inline:0;margin:auto;width:max-content;max-width:92vw;background:var(--ink);color:var(--paper);padding:6px 6px 6px 14px;border-radius:6px;display:flex;gap:12px;align-items:center;z-index:61}
+.undo button{min-height:36px;background:var(--paper);color:var(--ink)}
+.full{color:#fff;opacity:.8;font-size:13px}
+/* زر تحديد مكان الخانة + شارة المصدر */
+.f .fh{display:flex;align-items:center;gap:6px;min-height:34px}
+.f .fh label{flex:1;cursor:pointer}
+.pkb{min-height:34px;width:34px;padding:0;border-radius:6px;color:var(--blue);flex:none}
+.pkb:hover{background:var(--soft)}
+.pkb.need{background:#ffe600;border-color:#111;color:#111}
+.zb{font-style:normal;font-size:11px;font-weight:500;padding:0 6px;border-radius:3px;background:var(--ld2);color:var(--ld3);white-space:nowrap}
+.zb.m{background:#ffe600;color:#111}
+/* نافذة التحديد */
+.pk{position:fixed;inset:0;z-index:55;background:#000b;display:flex;align-items:center;justify-content:center;padding:10px}
+.pkin{background:var(--paper);color:var(--ink);border-radius:8px;width:min(1180px,100%);height:min(100%,940px);display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;padding:12px;overflow:hidden}
+.pkv{display:grid;grid-template-rows:auto minmax(0,1fr);gap:8px;min-height:0}
+.pkbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pkbar .sp{flex:1}
+.pkbar button{min-width:44px;padding:6px 10px}
+.pkbar #pkZ{min-width:3.6em;text-align:center;font-variant-numeric:tabular-nums}
+.pkbar #pkPg{white-space:nowrap}
+button,.btn{touch-action:manipulation}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0}.seg button+button{border-inline-start:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.pkvp{position:relative;overflow:auto;background:#2a2d38;border-radius:6px;min-height:0;overscroll-behavior:contain}
+.pkvp:focus-visible{outline:3px solid var(--blue)}
+.pkcv{width:max-content;margin:auto;padding:12px}
+.pkpaper{position:relative;user-select:none;-webkit-user-select:none;background:#fff}
+.pkpaper img{display:block;width:100%;height:auto;pointer-events:none}
+.pkpad{position:absolute;inset:0;touch-action:none;cursor:crosshair}
+.pkpad.move{cursor:grab}.pkpad.move:active{cursor:grabbing}
+.pksel{position:absolute;outline:2.5px solid #111;background:#ffe600a0;mix-blend-mode:multiply;pointer-events:none}
+.pkold{position:absolute;outline:2px dashed #c81d33;background:#c81d3315;pointer-events:none}
+.pkold span{position:absolute;top:-1.7em;inset-inline-start:-2px;font-size:11px;background:#c81d33;color:#fff;padding:0 6px;border-radius:2px;white-space:nowrap}
+.pkside{overflow:auto;display:flex;flex-direction:column;gap:10px}
+.pkside h2{font-size:20px}.pkside p{margin:0;color:var(--mute);font-size:14px}
+.pkro{border:1px dashed var(--line);border-radius:6px;padding:10px;display:grid;gap:6px}
+.pkro input{font:inherit;font-size:16px;font-weight:700;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:7px 9px;min-height:44px}
+.pkro small{color:var(--mute);font-size:12px;overflow-wrap:anywhere}
+.pkchk{display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer}
+.pkchk input{width:22px;height:22px;flex:none;margin-top:2px}
+.pkbtns{display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--paper);padding-top:6px;margin-top:auto}
+.pkbtns button{flex:1}
+#pkX{font-size:16px;font-weight:700;border-color:var(--stamp);color:var(--stamp)}
+.f.flash input{animation:flash 1.6s ease-out}
+@keyframes flash{0%,40%{box-shadow:0 0 0 4px #ffe600}100%{box-shadow:0 0 0 0 #ffe60000}}
+.pkkeys{font-size:12px!important}
+@media (max-width:760px){.pk{padding:0;height:100dvh}.pkin{border-radius:0;height:100%;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:6px;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+  .pkside{gap:6px;max-height:44dvh}.pkside>p,.pkkeys,#pkRaw{display:none}.pkside>#pkNo:not(:empty){display:block}.pkside h2{font-size:16px}
+  .pkro{padding:6px 8px;gap:4px}.pkro input{min-height:40px}.pkchk{font-size:13px}
+  .pkbar{gap:4px}.pkbar button{min-width:38px;min-height:38px;padding:4px 7px}.pkbar #pkZ{min-width:3em;font-size:14px}}
+/* قوالب الموردين */
+#zList{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:12px}
+.zc{border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:6px}
+.zc small{color:var(--mute)}
+.zchip{display:inline-block;background:#ffe600;color:#111;font-size:13px;padding:0 8px;border-radius:3px;margin:0 0 4px 6px}
+.zask{border:1px solid var(--stamp);border-radius:6px;padding:10px;font-size:14px}
+.zask b{display:block;color:var(--stamp)}
+.zbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+/* المشروع */
+.f select{font:inherit;font-size:16px;font-weight:700;color:var(--val);background:var(--inbg);border:1.5px solid var(--line);border-radius:5px;padding:7px 9px;width:100%;min-height:42px}
+.f.nopj select,.f.nopay select{border:2px solid var(--stamp);background-color:var(--warnbg);color:var(--stamp)}
+.f.nopj .fh label,.f.nopay .fh label{color:var(--stamp);font-weight:700}
+.pj{position:fixed;inset:0;z-index:56;background:#000b;display:flex;align-items:center;justify-content:center;padding:12px}
+.pjin{background:var(--paper);color:var(--ink);border-radius:8px;width:min(460px,100%);max-height:100%;overflow:auto;padding:18px;display:grid;gap:12px}
+.pjin h2{font-size:20px}
+.pjin form{display:flex;gap:8px}
+.pjin form input{flex:1;font:inherit;font-size:16px;border:1px solid var(--line);border-radius:5px;padding:7px 9px;min-height:44px;background:var(--paper);color:var(--ink)}
+.pjask{border:2px solid var(--blue);border-radius:6px;padding:10px 12px;display:grid;gap:6px}
+.pjask b{font-size:16px}.pjask span{color:var(--mute);font-size:14px}
+.pjask div{display:flex;gap:8px}.pjask div button{flex:1}
+#pjList{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+#pjList li{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:6px;padding:6px 6px 6px 12px;padding-inline-start:12px}
+#pjList li b{font-size:17px;min-width:2.5em}#pjList li small{flex:1;color:var(--mute)}
+#pjList li.off b{color:var(--mute);text-decoration:line-through}
+.lhead .pjopen{font-size:14px;min-height:40px}
+/* إعادة قراءة فواتير المورد بالقالب */
+.zb.g{background:var(--ok);color:#fff}
+.rr{margin-top:12px;border:2px solid var(--blue);border-radius:8px;padding:12px;background:#eef2ff;display:grid;gap:8px}
+.rr b{font-size:16px}.rr p{margin:0;font-size:14px;color:var(--lbl)}
+.rr .row{display:flex;flex-wrap:wrap;gap:8px}
+.rr ul{margin:0;padding:0;list-style:none;display:grid;gap:4px;font-size:14px;max-height:260px;overflow:auto}
+.rr li{background:var(--paper);border-radius:5px;padding:6px 10px;border:1px solid var(--cardline);overflow-wrap:anywhere}
+.rr li a{color:var(--blue)}
+.rr li s{color:var(--stamp)}.rr li ins{text-decoration:none;color:var(--ok);font-weight:700}
+.rr li.sk{color:var(--mute)}
+.bar2{height:6px;background:#c9d1ea;border-radius:3px;overflow:hidden}.bar2 i{display:block;height:100%;width:0;background:var(--blue);transition:width .3s}
+/* نافذة مراجعة الفاتورة داخل البطاقة */
+.rv{margin-top:12px;border:1px solid var(--cardline);border-radius:8px;overflow:hidden}
+.rv>h3{margin:0;font-size:15px;padding:6px 12px;background:var(--soft);display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center}
+.rv:not(.off)>h3{border-bottom:1px solid var(--cardline)}
+.rv>h3 small{font-weight:400;color:var(--mute);font-size:13px}
+.rv>h3 .tg{min-height:38px;padding:4px 12px;font-size:14px;flex:none}
+.rvtb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px}
+.rvtb button{min-width:44px;padding:4px 10px}
+.rvtb .zl{min-width:3.4em;text-align:center;font-variant-numeric:tabular-nums}
+.rvtb .sp{flex:1}.rvtb .pg{white-space:nowrap}
+.rvtb .cap{font-size:13px;color:var(--mute);flex-basis:100%}
+.rvvp{position:relative;overflow:auto;background:#2a2d38;height:440px;overscroll-behavior:contain}
+.rvvp:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
+.rvcv{width:max-content;margin:auto;padding:12px}
+.rvpaper{position:relative;background:#fff;user-select:none;-webkit-user-select:none}
+.rvpaper img{display:block;width:100%;height:auto;pointer-events:none}
+.rvpad{position:absolute;inset:0}
+.rvcv{touch-action:none;cursor:grab}.rvcv:active{cursor:grabbing}
+.rvbox{position:absolute;pointer-events:none;border-radius:2px;outline:2.5px solid #111;background:#ffe60070}
+.rvbox span{position:absolute;top:-1.8em;inset-inline-start:-2px;font-size:11px;background:#111;color:#ffe600;padding:0 6px;border-radius:2px;white-space:nowrap}
+.rvnone{color:#fff;padding:24px 16px;text-align:center;display:grid;gap:10px;justify-items:center}.rvnone p{margin:0}
+.f.cur input,.f.cur select{box-shadow:0 0 0 3px #ffe600}
+.lhead .rvall{font-size:14px;min-height:40px}
+@media (max-width:560px){.rvvp{height:340px}.rvtb button{min-width:38px;min-height:38px;padding:4px 7px}}
+/* الفواتير المحذوفة */
+#trList{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+#trList>li>.trrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1px solid var(--cardline);border-radius:6px;padding:6px 6px 6px 12px;padding-inline-start:12px;background:var(--soft)}
+.trrow .trn{flex:1 1 220px;overflow-wrap:anywhere}.trrow .trn b{display:block}.trrow .trn small{color:var(--mute);font-size:13px}
+.trrow button{min-height:40px;font-size:14px}
+.inv.trash{margin-top:8px;border-style:dashed}
+.inv.trash fieldset{border:0;margin:0;padding:0;min-width:0}
+.inv.trash fieldset .pkb{display:none}
+.trask{border:1px solid var(--stamp);border-radius:6px;padding:10px;font-size:14px;flex-basis:100%}
+.trask b{display:block;color:var(--stamp)}
+.delask{margin-top:10px;border:2px solid var(--stamp);border-radius:6px;padding:10px 12px;display:grid;gap:6px;background:var(--warnbg)}
+.delask b{color:var(--stamp)}.delask small{color:var(--mute);font-size:13px}
+.delask textarea{font:inherit;font-size:16px;border:1.5px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;background:var(--paper);color:var(--ink)}
+.trrow .trwhy{display:block;font-size:14px;color:var(--stampink)}
+.zsync{margin-bottom:12px;display:grid;gap:6px}.zsync:empty{display:none}
+.zsync p{margin:0;font-size:14px}.zsync small{color:var(--mute);font-size:13px}
+.zsform{display:flex;flex-wrap:wrap;gap:8px}.zsform input{flex:1 1 180px;font:inherit;font-size:16px;border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-height:44px;background:var(--paper);color:var(--ink)}
+.zson{color:var(--ok)}.zserr{color:var(--stamp)!important}
+.upsum{margin-top:12px;border:2px solid var(--blue);border-radius:8px;padding:10px 14px;background:#eef2ff;display:grid;gap:6px}
+.ushead{display:flex;justify-content:space-between;align-items:center}.ushead b{font-size:16px}
+.usx{min-height:34px;width:34px;padding:0}
+.usn{list-style:none;margin:0;padding:0;display:grid;gap:2px;font-size:15px}
+.usn li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--cardline);padding:3px 0}
+.usn li b{font-family:"Readex Pro",sans-serif;white-space:nowrap}.usn li small{font-family:"IBM Plex Sans Arabic",sans-serif;font-weight:400;color:var(--mute)}
+.usn li.ok b{color:var(--ok)}.usn li.bad b{color:var(--stamp)}
+.upsum details{font-size:14px}.upsum summary{cursor:pointer;color:var(--blue)}.upsum details ul{margin:4px 0 0;padding-inline-start:20px;max-height:200px;overflow:auto;overflow-wrap:anywhere}
+.wipe h2{font-size:20px}.wipe .note{color:var(--mute);font-size:14px;margin:6px 0 10px}
+.wpbox{border:2px solid var(--stamp);border-radius:8px;padding:12px;display:grid;gap:8px;background:var(--warnbg)}
+.wpbox>b{color:var(--stamp);font-size:17px}.wpbox p{margin:0;font-size:14px}
+.wpbox input{font:inherit;font-size:18px;letter-spacing:.05em;direction:ltr;text-align:center;border:1.5px solid var(--line);border-radius:6px;padding:7px 9px;min-height:44px;max-width:220px;background:var(--paper);color:var(--ink)}
+.sb{display:block;font-size:12px;font-weight:500;margin-top:2px}.sb.ok{color:var(--ok)}.sb.dirty{color:#8a5a00}.sb.err{color:var(--stamp)}
+.lhead .gssend{font-size:14px;min-height:40px;border-color:var(--ok);color:var(--ok);font-weight:700}
+.tabs{display:flex;gap:6px;background:var(--paper);border-radius:8px;padding:6px;box-shadow:0 1px 0 var(--cardline)}
+.tabs button{flex:1;border:0;font-weight:700;font-size:16px}
+.tabs button[aria-selected=true]{background:var(--blue);color:#fff}
+body.tab-z main>section:not(#zSec),body.tab-z main>p{display:none!important}
+body:not(.tab-z) #zSec{display:none!important}
+@media (max-width:560px){.grid{grid-template-columns:1fr 1fr}.f-vendor_name,.f-vendor_tax_number{grid-column:1/-1}.inv footer button{flex:1}}
+.gsrep{border:2px solid var(--ok);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--paper);color:var(--ink)}
+.gsrep.bad{border-color:var(--stamp)}
+.gsrep-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.gsrep-b{white-space:pre-line;line-height:1.7;max-height:50vh;overflow:auto;font-size:.95em}
+.fcrop{margin-top:6px}
+.fcrop .fcimg{display:flex;width:100%;padding:0;border:1.5px dashed var(--line);border-radius:8px;background:#fff;cursor:pointer;overflow:hidden;min-height:40px;align-items:center;justify-content:center}
+.fcrop .fcimg canvas{display:block;width:100%;height:auto;max-height:90px;object-fit:contain}
+.fcrop:not(.ok) .fcimg::after{content:'جارٍ تجهيز المقتطع…';font-size:12px;color:var(--mute)}.fcrop:not(.ok) .fcimg canvas{display:none}
+.fcrop.noimg{display:none}
+.f.nosup input,.f.nosup label{color:#8f0d18!important}.f.nosup input{border-color:#8f0d18;background:#ffe9eb;font-weight:700}
+.nosupline{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:#ffe9eb;border-inline-start:4px solid #6e0a12;color:#6e0a12;font-weight:700;font-size:14px}
+.nosupbox:empty{display:none}
+.inv.nocropc .fcrop{display:none}
+</style>
+</head>
+<body>
+<header class="top">
+  <p style="margin:0 0 8px"><span style="background:#ffe600;color:#111;font-weight:700;padding:1px 10px;border-radius:3px;font-size:14px">نسخة احتياطية: قبل إضافة تقسيم الملفات (27 نوفمبر 2026)</span> <a href="../../" style="color:#fff;font-size:14px">الانتقال للنسخة الحالية</a></p>
+  <h1>قارئ الفواتير</h1>
+  <p>صوّر الفاتورة أو ارفعها، راجع البيانات وأكمل الناقص، ثم نزّل ملف Excel.</p>
+</header>
+<main>
+  <nav class="tabs" role="tablist" aria-label="أقسام التطبيق"><button role="tab" id="tabInv" aria-selected="true" aria-controls="lT">🧾 الفواتير</button><button role="tab" id="tabZ" aria-selected="false" aria-controls="zSec">📐 قوالب الموردين <span id="zCount"></span></button></nav>
+  <section class="slip">
+    <div class="drop" id="drop">
+      <p>اسحب الفواتير إلى هنا (صور أو PDF)، أو اختر:</p>
+      <div class="btns">
+        <label class="btn primary">📷 تصوير فاتورة<input id="cam" type="file" accept="image/*" capture="environment"></label>
+        <label class="btn">📄 اختيار ملفات<input id="pick" type="file" accept="image/*,application/pdf" multiple></label>
+        <label class="btn">📂 اختيار مجلد<input id="dir" type="file" webkitdirectory multiple></label>
+      </div>
+    </div>
+    <div class="prog" id="prog"><div class="bar"><i id="barI"></i></div></div>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+    <div class="upsum" id="upSum" hidden aria-live="polite"></div>
+  </section>
+  <section class="slip" aria-labelledby="lT">
+    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="gssend" id="gsSend" hidden>☁️ إرسال إلى Google Sheet</button><button class="rvall" id="cropAll" aria-pressed="false" hidden>✂ إظهار المقتطعات</button><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
+    <div id="gsRep" class="gsrep" hidden role="status"></div>
+    <div id="list"></div>
+  </section>
+  <section class="slip" id="zSec" hidden aria-labelledby="zT">
+    <div class="lhead"><h2 id="zT">قوالب الموردين</h2><span class="note">أماكن الخانات التي حددتها لكل مورد. تُطبّق تلقائيًا على فواتيره الجديدة، والخانات المأخوذة منها عليها شارة «من قالب المورد».</span></div>
+    <div class="zsync" id="zSync"></div>
+    <div id="zList"></div>
+  </section>
+  <section class="slip" id="trSec" hidden aria-labelledby="trT">
+    <div class="lhead"><h2 id="trT">الفواتير المحذوفة <span id="trCount"></span></h2><span class="note">لا تدخل في ملف Excel. افتح أي فاتورة لمراجعة بياناتها وصورتها، أو استرجعها للقائمة.</span></div>
+    <ul id="trList"></ul>
+  </section>
+  <section class="slip wipe" aria-labelledby="wpT">
+    <h2 id="wpT">تصدير وحذف جميع الفواتير</h2>
+    <p class="note">لبدء دفعة جديدة: يُنزَّل ملف Excel بكل الفواتير وبياناتها، ثم تُحذف كلها من التطبيق بعد التأكيد والرمز.</p>
+    <button type="button" class="del" id="wpBtn">🗑 تصدير وحذف جميع الفواتير</button>
+    <div class="wpbox" id="wpBox" hidden role="alert"></div>
+  </section>
+  <p style="text-align:center;margin:0"><a href="../../full.html" style="color:var(--mute);font-size:13px">النسخة الكاملة السابقة</a> <small style="color:var(--mute)">· الإصدار <span id="ver"></span></small></p>
+</main>
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-labelledby="lbT">
+  <div class="lbbar"><span id="lbT"></span><button id="lbPrev">السابقة</button><span id="lbPg"></span><button id="lbNext">التالية</button><button id="lbOut" aria-label="تصغير">−</button><span id="lbZ"></span><button id="lbIn" aria-label="تكبير">+</button><a class="btn" id="lbOrig" target="_blank" rel="noopener">الملف الأصلي</a><button id="lbClose" class="primary">إغلاق</button></div>
+  <div class="lbstage"><img id="lbImg" alt="صورة الفاتورة"><p id="lbNone">لا توجد صورة محفوظة لهذه الفاتورة.</p></div>
+</div>
+<div class="pk" id="pk" hidden role="dialog" aria-modal="true" aria-labelledby="pkT">
+  <div class="pkin">
+    <div class="pkv">
+      <div class="pkbar" role="toolbar" aria-label="أدوات العرض">
+        <span class="seg" role="group" aria-label="وضع السحب"><button id="pkDraw" aria-pressed="true" title="رسم مستطيل">▭ رسم</button><button id="pkMove" aria-pressed="false" title="تحريك الصفحة (أو اضغط مسافة مع السحب)">✥ تحريك</button></span>
+        <span class="sp"></span>
+        <button id="pkOut" aria-label="تصغير">−</button><span id="pkZ" aria-live="polite">100%</span><button id="pkIn" aria-label="تكبير">+</button><button id="pkFit">ملاءمة</button>
+        <span class="sp"></span>
+        <button id="pkPrev" aria-label="الصفحة السابقة">›</button><span id="pkPg"></span><button id="pkNext" aria-label="الصفحة التالية">‹</button>
+        <button id="pkX" aria-label="خروج والعودة للفاتورة" title="خروج">✕ خروج</button>
+      </div>
+      <div class="pkvp" id="pkVp" dir="ltr" tabindex="0" aria-label="صفحة الفاتورة. الأسهم للتحريك، و + و − للتكبير"><div class="pkcv"><div class="pkpaper" id="pkPaper"><img id="pkImg" alt="صفحة الفاتورة" draggable="false"><div class="pkold" id="pkOld" hidden><span>المكان المحفوظ</span></div><div class="pksel" id="pkSel" hidden></div><div class="pkpad" id="pkPad"></div></div></div></div>
+    </div>
+    <div class="pkside">
+      <h2 id="pkT"></h2>
+      <p id="pkP"></p>
+      <div class="pkro" id="pkRo" hidden><span id="pkRoS"></span><input id="pkVal" aria-labelledby="pkRoS"><small id="pkRaw"></small></div>
+      <label class="pkchk" id="pkSaveL"><input type="checkbox" id="pkSave" checked><span id="pkSaveT"></span></label>
+      <p id="pkNo"></p>
+      <div class="pkbtns"><button class="primary" id="pkOk" disabled>اعتمد القيمة</button><button id="pkCancel">إلغاء والعودة</button></div>
+      <p class="pkkeys">على الجوال: إصبع واحد للرسم، وإصبعان للتحريك والتكبير. على الحاسب: Ctrl مع العجلة للتكبير، والمسافة مع السحب للتحريك، و PageUp و PageDown للصفحات.</p>
+    </div>
+  </div>
+</div>
+<div class="pj" id="pj" hidden role="dialog" aria-modal="true" aria-labelledby="pjT">
+  <div class="pjin">
+    <h2 id="pjT">قائمة المشاريع</h2>
+    <form id="pjForm"><input id="pjNew" placeholder="رقم أو اسم مشروع جديد" aria-label="رقم أو اسم مشروع جديد" autocomplete="off"><button class="primary" id="pjAdd">إضافة</button></form>
+    <div class="pjask" id="pjAsk" hidden role="alert"><b id="pjAskT"></b><span id="pjAskS"></span><div><button id="pjYes" class="primary">نعم</button><button id="pjNo">تراجع</button></div></div>
+    <ul id="pjList"></ul>
+    <button id="pjClose">إغلاق</button>
+  </div>
+</div>
+<div class="undo" id="undo" hidden><span></span><button>تراجع</button></div>
+<div class="toast" id="toast" role="status"></div>
+<script>window.APP_VERSION = '202611261532 (نسخة احتياطية)';</script>
+<script src="../../vendor/pdf.min.js"></script>
+<script src="../../vendor/jsQR.js"></script>
+<script src="../../vendor/tesseract.min.js"></script>
+<script src="config.js?v=202611261532"></script>
+<script src="parse.js?v=202611261532"></script>
+<script src="export.js?v=202611261532"></script>
+<script src="digits.js?v=202611261532"></script>
+<script src="simple.js?v=202611261532"></script>
+<script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
+</body>
+</html>
