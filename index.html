@@ -265,7 +265,7 @@ body:not(.tab-z) #zSec{display:none!important}
     <button type="button" class="del" id="wpBtn">🗑 تصدير وحذف جميع الفواتير</button>
     <div class="wpbox" id="wpBox" hidden role="alert"></div>
   </section>
-  <p style="text-align:center;margin:0"><a href="full.html" style="color:var(--mute);font-size:13px">النسخة الكاملة السابقة</a> <small style="color:var(--mute)">· الإصدار <span id="ver"></span></small></p>
+  <p style="text-align:center;margin:0"><a href="full.html" style="color:var(--mute);font-size:13px">النسخة الكاملة السابقة</a> <small style="color:var(--mute)">·</small> <a href="backup/before-split/" style="color:var(--mute);font-size:13px">النسخة قبل تقسيم الملفات</a> <small style="color:var(--mute)">· الإصدار <span id="ver"></span></small></p>
 </main>
 <div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-labelledby="lbT">
   <div class="lbbar"><span id="lbT"></span><button id="lbPrev">السابقة</button><span id="lbPg"></span><button id="lbNext">التالية</button><button id="lbOut" aria-label="تصغير">−</button><span id="lbZ"></span><button id="lbIn" aria-label="تكبير">+</button><a class="btn" id="lbOrig" target="_blank" rel="noopener">الملف الأصلي</a><button id="lbClose" class="primary">إغلاق</button></div>
@@ -308,7 +308,7 @@ body:not(.tab-z) #zSec{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611261532'; window.APP_VERSION = V;
+(function () { var V = '202611270648'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -316,11 +316,12 @@ body:not(.tab-z) #zSec{display:none!important}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611261532"></script>
-<script src="parse.js?v=202611261532"></script>
-<script src="export.js?v=202611261532"></script>
-<script src="digits.js?v=202611261532"></script>
-<script src="simple.js?v=202611261532"></script>
+<script src="config.js?v=202611270648"></script>
+<script src="parse.js?v=202611270648"></script>
+<script src="export.js?v=202611270648"></script>
+<script src="digits.js?v=202611270648"></script>
+<script src="split.js?v=202611270648"></script>
+<script src="simple.js?v=202611270648"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

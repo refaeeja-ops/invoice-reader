@@ -436,7 +436,7 @@
     $('xl').disabled = !list.length; $('xl').textContent = `تنزيل ملف Excel${list.length ? ' (' + list.length + ')' : ''}`;
     const nIss = list.filter(x => issues(x).length).length;
     $('sum').textContent = list.length ? (nIss ? `${nIss} فاتورة فيها ملاحظات أو بيانات ناقصة` : 'كل الفواتير مكتملة') : '';
-    $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : 'بالانتظار'}</span></article>`).join('')
+    $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : v.status === 'split' ? 'بانتظار اختيار طريقة قراءة الملف' : 'بالانتظار'}</span></article>`).join('')
       + (list.map(x => card(x)).join('') || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
     drawZones(); drawTrash(); drawWipe(); rvAllLabel(); sendLabel(); mountViewers();
     const cb = $('cropAll'); if (cb) { cb.hidden = !list.length; cb.textContent = cropOff ? '✂ إظهار المقتطعات' : 'إخفاء المقتطعات'; cb.setAttribute('aria-pressed', !cropOff); }
@@ -564,7 +564,7 @@
   let upSum = null;
   const isInv = f => /^image\//.test(f.type) || /\.(pdf|jpe?g|png|webp|heic|bmp|gif)$/i.test(f.name || '') || f.type === 'application/pdf';
   function addFiles(files, fromCam, kind) {
-    const seen = new Set(list.map(x => x.sig).filter(Boolean).concat(queue.map(j => sig(j.file))));
+    const seen = new Set(list.map(x => x.sig).filter(Boolean).concat(queue.map(j => j.sig0 || sig(j.file))));
     const all = [...(files || [])].filter(f => !/(^|\/)\.[^/]*$/.test(pathOf(f))); // نتجاهل ملفات النظام المخفية مثل .DS_Store
     const b = { kind: fromCam ? 'cam' : kind || 'files', total: all.length, added: 0, dups: [], other: [], read: 0, failed: 0 };
     all.forEach((f, i) => {
@@ -585,6 +585,8 @@
       <ul class="usn"><li><span>${where}</span><b>${b.total}</b></li>
         <li class="ok"><span>أُضيفت للقراءة</span><b>${b.added}</b></li>
         <li class="${b.dups.length ? 'bad' : ''}"><span>لم تُضف لأنها مكررة (نفس اسم ملف في القائمة)</span><b>${b.dups.length}</b></li>
+        ${b.splitFiles ? `<li><span>ملفات قُسّمت إلى عدة فواتير</span><b>${b.splitFiles}</b></li>` : ''}
+        ${b.skipped ? `<li><span>ملفات تم تخطيها</span><b>${b.skipped}</b></li>` : ''}
         ${b.other.length ? `<li><span>ليست صورة أو PDF فتم تجاهلها</span><b>${b.other.length}</b></li>` : ''}
         ${b.added ? `<li><span>${left > 0 ? 'قُرئت حتى الآن' : 'قُرئت'}</span><b>${b.read}${b.failed ? ` <small>(وتعذّرت قراءة ${b.failed})</small>` : ''}${left > 0 ? ` <small>من ${b.added}</small>` : ''}</b></li>` : ''}</ul>
       ${names('أسماء الملفات المكررة', b.dups)}${names('الملفات التي تم تجاهلها', b.other)}`;
@@ -626,9 +628,25 @@
         } catch (e) { console.error(e); toast('تعذّرت إعادة القراءة'); }
         deep = false; delete live[job.id]; done++; draw(); continue;
       }
+      // ملف PDF بأكثر من صفحة: نسأل المستخدم هل هو فاتورة واحدة أو كل صفحة فاتورة أو يحدد بنفسه
+      if (!job.split && window.InvoiceSplit && InvoiceSplit.isPdf(job.file)) {
+        job.split = true; live[job.id].status = 'split'; draw(); say('جارٍ فحص صفحات الملف…');
+        const more = queue.filter(j => !j.reread && !j.split && InvoiceSplit.isPdf(j.file)).length;
+        let r; try { r = await InvoiceSplit.ask(job.file, { more, mode: job.batch && job.batch.splitMode }); } catch (e) { console.warn(e); r = { files: [job.file] }; }
+        if (!r) { delete live[job.id]; if (job.batch) { job.batch.skipped = (job.batch.skipped || 0) + 1; job.batch.added--; if (job.batch === upSum) drawSum(); } draw(); continue; }
+        if (r.applyAll && job.batch) job.batch.splitMode = r.applyAll;
+        if (r.files.length !== 1 || r.files[0] !== job.file) { // كل فاتورة تصبح ملفًا مستقلًا يُقرأ لوحده
+          delete live[job.id];
+          const subs = r.files.map((f, i) => ({ id: job.id + '-' + (i + 1), file: f, batch: job.batch, split: true, sig0: sig(job.file) }));
+          subs.forEach(j => { live[j.id] = { status: 'queued', file: j.file.name }; });
+          if (job.batch) { job.batch.added += subs.length - 1; job.batch.splitFiles = (job.batch.splitFiles || 0) + 1; if (job.batch === upSum) drawSum(); }
+          queue.unshift(...subs); draw(); continue;
+        }
+        live[job.id].status = 'working'; draw();
+      }
       try {
         const { d, pages, src, plines } = await processFile(job.file, say);
-        const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: sig(job.file),
+        const x = { id: job.id, at: new Date().toISOString(), file: d.file, file_name: d.file_name, sig: job.sig0 || sig(job.file),
           invoice_number: d.invoice_number || '', invoice_date: d.invoice_date || '', total: d.total ?? '', tax_amount: d.tax_amount ?? '',
           vendor_name: d.vendor_name || '', vendor_tax_number: d.vendor_tax_number || '', payment_method: payNorm(d.payment_method), note: '' };
         if (zoneFor(x)) { say('جارٍ تطبيق قالب المورد…'); try { await applyZones(x, src); } catch (e) { console.warn(e); } }
@@ -637,7 +655,7 @@
         IMG.put(job.id, { pages, blob: job.file.size < 25e6 ? job.file : null });
       } catch (e) {
         console.error(e);
-        const x = { id: job.id, at: new Date().toISOString(), file: live[job.id].file, sig: sig(job.file), invoice_number: '', invoice_date: '', total: '', tax_amount: '', vendor_name: '', vendor_tax_number: '', payment_method: '', note: 'تعذّرت قراءة الملف تلقائيًا: أدخل البيانات يدويًا' };
+        const x = { id: job.id, at: new Date().toISOString(), file: live[job.id].file, sig: job.sig0 || sig(job.file), invoice_number: '', invoice_date: '', total: '', tax_amount: '', vendor_name: '', vendor_tax_number: '', payment_method: '', note: 'تعذّرت قراءة الملف تلقائيًا: أدخل البيانات يدويًا' };
         list.unshift(x); save(); IMG.put(job.id, { pages: [], blob: job.file }); if (job.batch) { job.batch.failed++; if (job.batch === upSum) drawSum(); }
       }
       delete live[job.id]; done++; draw();
