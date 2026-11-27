@@ -68,6 +68,10 @@ button:disabled{opacity:.5;cursor:default}
 .sum small{color:var(--mute);font-size:14px}
 .sum .w{color:var(--stamp);font-weight:500}
 .go{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.sum li .dl{justify-self:start;min-height:38px;font-size:14px;margin-top:4px}
+.save{margin-top:16px;padding-top:14px;border-top:1px solid var(--cardline);display:grid;gap:8px}
+.save h3{font-size:18px}.save p{margin:0;color:var(--mute);font-size:14px}
+.save .row{display:flex;flex-wrap:wrap;gap:10px}
 .result{margin-top:12px;padding:12px;border:2px solid var(--ok);border-radius:6px;color:var(--ok);font-weight:500}
 /* العرض المكبّر */
 .lb{position:fixed;inset:0;background:#000d;z-index:50;display:flex;flex-direction:column}
@@ -133,6 +137,12 @@ button:disabled{opacity:.5;cursor:default}
       <span class="status" style="margin:0;text-align:start" id="goNote"></span>
     </div>
     <div class="result" id="result" hidden></div>
+    <div class="save">
+      <h3>حفظ الفواتير كملفات منفصلة</h3>
+      <p>كل فاتورة تُحفظ في ملف PDF خاص بها حسب التقسيم أعلاه، والصفحات المتجاهلة لا تُحفظ. يتم ذلك داخل جهازك بدون رفع الملف لأي مكان.</p>
+      <div class="row"><button type="button" class="primary" id="zipBtn">تنزيل كل الفواتير (ملف مضغوط ZIP)</button></div>
+      <p id="saveNote" role="status"></p>
+    </div>
   </section>
 </main>
 
@@ -150,6 +160,7 @@ button:disabled{opacity:.5;cursor:default}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="parse.js"></script>
+<script src="vendor/pdf-lib.min.js"></script>
 <script>
 (function () {
   'use strict';
@@ -186,10 +197,11 @@ button:disabled{opacity:.5;cursor:default}
     if (!window.pdfjsLib) { status('تعذّر تحميل قارئ PDF.', true); return; }
     status('جارٍ فتح الملف…'); prog(0.02); $('result').hidden = true;
     let doc;
-    try { doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise; }
+    let buf;
+    try { buf = await file.arrayBuffer(); doc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise; }
     catch (e) { console.error(e); status('تعذّر فتح الملف. تأكد أنه PDF سليم.', true); prog(null); return; }
     const n = Math.min(doc.numPages, MAXP);
-    S = { name: file.name || 'ملف PDF', total: doc.numPages, pages: [], mode: null };
+    S = { name: file.name || 'ملف PDF', total: doc.numPages, pages: [], mode: null, buf };
     for (let p = 1; p <= n; p++) {
       if (my !== tok) return;
       status(`جارٍ تجهيز الصفحة ${p} من ${n}…`); prog(p / n);
@@ -302,17 +314,84 @@ button:disabled{opacity:.5;cursor:default}
       if (S.pages.some(p => p.qr) && !g.pages.some(i => S.pages[i].qr)) w.push('لا يوجد فيها رمز QR: تأكد أنها فاتورة كاملة');
       const q = g.qr ? `من رمز QR: ${esc(g.qr.seller)}${g.qr.total ? ` · الإجمالي ${(+g.qr.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''}` : '';
       return `<li style="--gc:var(--g${colorOf[g.pages[0]] % 6})"><b>فاتورة ${k + 1}: ${g.pages.length === 1 ? 'الصفحة' : 'الصفحات'} ${rng(g.pages)}</b>
-        ${q ? `<small>${q}</small>` : ''}${w.map(t => `<small class="w">⚠ ${t}</small>`).join('')}</li>`;
+        ${q ? `<small>${q}</small>` : ''}${w.map(t => `<small class="w">⚠ ${t}</small>`).join('')}<button type="button" class="dl" data-dl="${k}">تنزيل هذه الفاتورة PDF</button></li>`;
     }).join('') || '<li><b>كل الصفحات متجاهلة</b></li>';
-    $('goBtn').disabled = !gs.length;
+    $('goBtn').disabled = !gs.length; $('zipBtn').disabled = !gs.length;
+    $('zipBtn').textContent = gs.length > 1 ? `تنزيل ${gs.length} فواتير (ملف مضغوط ZIP)` : 'تنزيل الفاتورة PDF';
     $('goBtn').textContent = gs.length > 1 ? `قراءة ${gs.length} فواتير` : 'قراءة الفاتورة';
     $('goNote').textContent = skipped ? `${skipped} ${skipped === 1 ? 'صفحة متجاهلة' : 'صفحات متجاهلة'}` : '';
+  }
+
+  // ---------- حفظ كل فاتورة في ملف PDF منفصل (مكتبة pdf-lib المجانية) ----------
+  const base = () => S.name.replace(/\s*\(.*\)\s*$/, '').replace(/\.pdf$/i, '').trim() || 'فواتير';
+  const safe = t => String(t || '').replace(/[\\/:*?"<>|\n\r\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  function fileName(g, k) { // مثال: «ملف - فاتورة 2 - Beta Supplies - ص2-3.pdf»
+    const r = rng(g.pages).replace(/–/g, '-').replace(/،\s*/g, ',');
+    return [base(), `فاتورة ${k + 1}`, g.qr && safe(g.qr.seller), `ص${r}`].filter(Boolean).join(' - ') + '.pdf';
+  }
+  // اسم التنزيل نفسه بحروف إنجليزية لأن بعض المتصفحات تتجاهل الأسماء العربية وتسمّي الملف «download» بدون امتداد؛
+  // أما أسماء الملفات داخل الملف المضغوط فتبقى عربية
+  const asciiBase = () => base().replace(/[^A-Za-z0-9 _.-]+/g, ' ').replace(/\s+/g, ' ').replace(/^[\s_.-]+|[\s_.-]+$/g, '').slice(0, 40);
+  const dlName = (g, k) => [asciiBase(), `invoice-${k + 1}`, 'p' + rng(g.pages).replace(/–/g, '-').replace(/،\s*/g, '_')].filter(Boolean).join('_') + '.pdf';
+  let srcDoc = null;
+  async function makePdf(g) {
+    const L = window.PDFLib; if (!L) throw new Error('pdf-lib');
+    const out = await L.PDFDocument.create();
+    if (S.buf) { // الملف الأصلي: ننسخ الصفحات كما هي (يبقى النص والجودة)
+      srcDoc = srcDoc && srcDoc._b === S.buf ? srcDoc : Object.assign(await L.PDFDocument.load(S.buf.slice(0), { ignoreEncryption: true }), { _b: S.buf });
+      (await out.copyPages(srcDoc, g.pages)).forEach(p => out.addPage(p));
+    } else { // الملف النموذجي: نبني الصفحات من الصور
+      for (const i of g.pages) {
+        const img = await out.embedJpg(await (await fetch(S.pages[i].img)).arrayBuffer());
+        const pg = out.addPage([595, 842]); pg.drawImage(img, { x: 0, y: 0, width: 595, height: 842 });
+      }
+    }
+    return out.save();
+  }
+  function download(data, name, type) {
+    const u = URL.createObjectURL(new Blob([data], { type })), a = document.createElement('a');
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+  }
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  function zip(files) { // ملف ZIP بسيط بدون ضغط (ملفات PDF مضغوطة أصلًا)
+    const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
+    const h = (n, v) => { const a = new Uint8Array(n); for (let i = 0; i < n; i++) a[i] = (v >>> (8 * i)) & 255; return a; };
+    const cat = a => { const n = a.reduce((s, x) => s + x.length, 0), o = new Uint8Array(n); let p = 0; a.forEach(x => { o.set(x, p); p += x.length; }); return o; };
+    files.forEach(f => {
+      const nm = enc.encode(f.name), d = f.data, c = crc32(d);
+      const common = [h(2, 20), h(2, 0x0800), h(2, 0), h(2, 0), h(2, 0x21), h(4, c), h(4, d.length), h(4, d.length), h(2, nm.length), h(2, 0)];
+      const loc = cat([h(4, 0x04034b50), ...common, nm]);
+      cen.push(cat([h(4, 0x02014b50), h(2, 20), ...common, h(2, 0), h(2, 0), h(2, 0), h(4, 0), h(4, off), nm]));
+      parts.push(loc, d); off += loc.length + d.length;
+    });
+    const cd = cat(cen);
+    return cat([...parts, cd, h(4, 0x06054b50), h(2, 0), h(2, 0), h(2, files.length), h(2, files.length), h(4, cd.length), h(4, off), h(2, 0)]);
+  }
+  async function saveOne(k) {
+    const g = groups()[k]; if (!g) return;
+    try { download(await makePdf(g), dlName(g, k), 'application/pdf'); $('saveNote').textContent = 'تم تنزيل: ' + dlName(g, k); }
+    catch (e) { console.error(e); $('saveNote').textContent = 'تعذّر إنشاء الملف.'; }
+  }
+  async function saveAll() {
+    const gs = groups(); if (!gs.length) return;
+    if (gs.length === 1) return saveOne(0);
+    const b = $('zipBtn'); b.disabled = true;
+    try {
+      const files = [];
+      for (let k = 0; k < gs.length; k++) { $('saveNote').textContent = `جارٍ تجهيز فاتورة ${k + 1} من ${gs.length}…`; files.push({ name: fileName(gs[k], k), data: await makePdf(gs[k]) }); }
+      download(zip(files), (asciiBase() || 'invoices') + '_split.zip', 'application/zip');
+      $('saveNote').textContent = `تم تنزيل ملف مضغوط فيه ${gs.length} ملفات PDF.`;
+    } catch (e) { console.error(e); $('saveNote').textContent = 'تعذّر إنشاء الملفات.'; }
+    b.disabled = false;
   }
 
   // ---------- التفاعل ----------
   document.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.mode) { S.mode = b.dataset.mode; $('result').hidden = true; draw(); }
+    if (b.dataset.dl != null) saveOne(+b.dataset.dl);
+    else if (b.id === 'zipBtn') saveAll();
+    else if (b.dataset.mode) { S.mode = b.dataset.mode; $('result').hidden = true; $('saveNote').textContent = ''; draw(); }
     else if (b.id === 'sug') { suggest(); draw(); }
     else if (b.id === 'clr') { S.pages.forEach(p => { p.mark = false; p.skip = false; }); draw(); }
     else if (b.dataset.start != null) { const p = S.pages[+b.dataset.start]; p.mark = !p.mark; draw(); }
