@@ -476,7 +476,11 @@
     else if (vw.sort === 'amount') a.sort((p, q) => (+q.total || 0) - (+p.total || 0));
     else if (vw.sort === 'no') a.sort((p, q) => cmpAr(invKey(p.invoice_number), invKey(q.invoice_number)));
     else if (vw.sort === 'old') a.reverse();
-    return a;
+    // الفواتير المكررة (نفس المورد ونفس الرقم) تأتي متتالية: كل نسخة تلي أول ظهور لها
+    const put = new Set(), out = [];
+    a.forEach(x => { if (put.has(x)) return; put.add(x); out.push(x);
+      if (twinsOf(x).length) { const k = dupKey(x); a.forEach(y => { if (!put.has(y) && dupKey(y) === k) { put.add(y); out.push(y); } }); } });
+    return out;
   }
   const sumOf = a => ({ n: a.length, t: a.reduce((s, x) => s + (+x.total || 0), 0), v: a.reduce((s, x) => s + (+x.tax_amount || 0), 0) });
   const statsHtml = s => `<span>${s.n} فاتورة</span><span>الإجمالي <b>${esc(money(s.t))}</b></span><span>الضريبة <b>${esc(money(s.v))}</b></span>`;
