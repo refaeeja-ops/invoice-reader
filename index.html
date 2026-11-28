@@ -278,15 +278,50 @@ body:not(.tab-z) #zSec{display:none!important}
 .gsrep.bad{border-color:var(--stamp)}
 .gsrep-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
 .gsrep-b{white-space:pre-line;line-height:1.7;max-height:50vh;overflow:auto;font-size:.95em}
-.fcrop{margin-top:6px}
-.fcrop .fcimg{display:flex;width:100%;padding:0;border:1.5px dashed var(--line);border-radius:8px;background:#fff;cursor:pointer;overflow:hidden;min-height:40px;align-items:center;justify-content:center}
-.fcrop .fcimg canvas{display:block;width:100%;height:auto;max-height:90px;object-fit:contain}
-.fcrop:not(.ok) .fcimg::after{content:'جارٍ تجهيز المقتطع…';font-size:12px;color:var(--mute)}.fcrop:not(.ok) .fcimg canvas{display:none}
-.fcrop.noimg{display:none}
 .f.nosup input,.f.nosup label{color:#8f0d18!important}.f.nosup input{border-color:#8f0d18;background:#ffe9eb;font-weight:700}
 .nosupline{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:#ffe9eb;border-inline-start:4px solid #6e0a12;color:#6e0a12;font-weight:700;font-size:14px}
 .nosupbox:empty{display:none}
-.inv.nocropc .fcrop{display:none}
+
+/* مراجعة بيانات الفاتورة / المورد: الملف كاملًا مع بلاطة عائمة */
+.pk.multi .pkin{grid-template-columns:minmax(0,1fr)}.pk.multi .pkside{display:none}
+.pkv{position:relative}
+.pkmk{position:absolute;inset:0;pointer-events:none}
+.pkmk .mk{position:absolute;border:3px solid var(--c);background:color-mix(in srgb,var(--c) 14%,transparent);border-radius:3px}
+.pkmk .mk.cur{border-style:dashed}
+.pkmk .mk i{position:absolute;bottom:100%;inset-inline-start:-3px;background:var(--c);color:#fff;font:700 12px/1 "IBM Plex Sans Arabic",system-ui,sans-serif;padding:4px 6px;border-radius:4px 4px 0 0;font-style:normal;white-space:nowrap}
+.pkmk .mka{position:absolute;border:2px dashed var(--c);border-radius:3px;background:color-mix(in srgb,var(--c) 8%,transparent)}
+.pkmk .mka i{position:absolute;top:50%;inset-inline-start:-22px;transform:translateY(-50%);font:14px/1 sans-serif;font-style:normal}
+.pkmk .mkc{position:absolute;pointer-events:auto;border:2px solid #7d8399;background:#ffffff01;border-radius:4px;padding:0;min-height:0;min-width:0;cursor:pointer}
+.pkmk .mkc:hover,.pkmk .mkc:focus-visible{border-color:var(--c);background:color-mix(in srgb,var(--c) 15%,transparent)}.pkmk .mkc.sel{border:3px dashed var(--c)}
+.mrhint{position:absolute;top:52px;inset-inline:0;margin:auto;width:max-content;max-width:90%;background:#111;color:#fff;padding:6px 12px;border-radius:20px;font-size:14px;pointer-events:none;z-index:2}
+.pkt{position:fixed;inset-inline:8px;bottom:calc(8px + env(safe-area-inset-bottom));max-width:560px;margin-inline:auto;background:var(--paper);color:var(--ink);border:2px solid #111;border-radius:10px;box-shadow:0 10px 30px #0008;z-index:60;display:grid;max-height:calc(100dvh - 16px)}
+.pkt.free{inset:auto;margin:0;width:min(560px,calc(100vw - 16px))}
+.pkt.drag{box-shadow:0 18px 44px #000a;outline:3px solid var(--blue)}
+.mr-th{display:flex;align-items:center;gap:6px;padding:4px;border-bottom:1px solid var(--line);background:var(--soft);border-radius:8px 8px 0 0;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.pkt.drag .mr-th{cursor:grabbing}
+.mr-th b{flex:1;font-size:15px}
+.mr-th button{min-height:40px;padding:4px 10px;font-size:14px}
+.grip{display:inline-flex;flex-direction:column;justify-content:center;gap:3px;padding:6px 4px;flex:none}.grip i{display:block;width:22px;height:3px;border-radius:2px;background:var(--mute)}
+.mr-b{overflow:auto;max-height:min(40dvh,460px)}
+.mr-f{border-top:1px solid var(--line)}
+.pkt.min .mr-b,.pkt.min .mr-f{display:none}
+.mr-r{display:grid;grid-template-columns:6px 1fr auto;gap:2px 8px;align-items:center;padding:4px 8px 4px 6px;border-bottom:1px solid var(--line);cursor:pointer}
+.mr-r .sw{grid-row:1/3;align-self:stretch;border-radius:3px;background:var(--c)}
+.mr-r.on{background:#eef2ff;box-shadow:inset 0 0 0 2px var(--blue)}
+.mr-r .mrlb{font-weight:700;font-size:13px;line-height:1.3;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mr-r .st{font-size:12px;font-weight:500;color:var(--mute)}.mr-r .st.ok{color:#0b6a35}.mr-r .st.bad{color:var(--stamp);font-weight:700}
+.mr-r input{grid-column:2;width:100%;font:inherit;font-size:16px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;min-height:40px;background:var(--paper);color:var(--ink)}
+.mr-r .pick{min-height:44px;padding:2px 10px;font-size:14px;grid-row:1/3;grid-column:3}
+.mr-r .pick[aria-pressed="true"]{background:var(--blue);color:#fff;border-color:var(--blue)}
+.mr-r .lk{grid-column:2/4;font-size:12px;color:var(--blue);line-height:1.4}
+.lkb{min-height:34px;padding:0 8px;font-size:12px;margin-inline-start:4px;border-color:var(--blue);color:var(--blue)}
+.mr-ch{display:none;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 8px;font-size:13px;color:var(--mute)}
+.mr-ch button{min-height:38px;padding:2px 10px;font-size:13px;border-color:var(--c,var(--line));border-inline-start-width:5px}
+.mr-ch button.primary{margin-inline-start:auto;border-inline-start-width:1px}
+.pkt.focus .mr-r:not(.on),.pkt.focus .mr-f{display:none}.pkt.focus .mr-ch{display:flex}
+.mr-f{display:grid;gap:6px;padding:8px}
+.mr-f .chk{font-size:13px;color:var(--mute)}.mr-f .chk.bad{color:var(--stamp);font-weight:700}
+.mr-f .pkbtns{position:static;padding:0;margin:0}
 </style>
 </head>
 <body>
@@ -310,7 +345,7 @@ body:not(.tab-z) #zSec{display:none!important}
     <div class="upsum" id="upSum" hidden aria-live="polite"></div>
   </section>
   <section class="slip" aria-labelledby="lT">
-    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="gssend" id="gsSend" hidden>☁️ إرسال إلى الإقرار</button><button class="rvall" id="cropAll" aria-pressed="false" hidden>✂ إظهار المقتطعات</button><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
+    <div class="lhead"><h2 id="lT">الفواتير <span id="count"></span></h2><span style="display:flex;gap:8px;flex-wrap:wrap"><button class="gssend" id="gsSend" hidden>☁️ إرسال إلى الإقرار</button><button class="rvall" id="rvAll" aria-pressed="false">👁 إظهار صور كل الفواتير</button><button class="pjopen" id="pjOpen">قائمة المشاريع</button><button class="primary" id="xl" disabled>تنزيل ملف Excel</button></span><span class="note" id="sum"></span></div>
     <div id="gsRep" class="gsrep" hidden role="status"></div>
     <div id="dupBox" class="dupbox" hidden role="alert"></div>
     <div id="lbar" class="lbar" hidden aria-label="تجميع وترتيب الفواتير"></div>
@@ -359,8 +394,13 @@ body:not(.tab-z) #zSec{display:none!important}
         <button id="pkPrev" aria-label="الصفحة السابقة">›</button><span id="pkPg"></span><button id="pkNext" aria-label="الصفحة التالية">‹</button>
         <button id="pkX" aria-label="خروج والعودة للفاتورة" title="خروج">✕ خروج</button>
       </div>
-      <div class="pkvp" id="pkVp" dir="ltr" tabindex="0" aria-label="صفحة الفاتورة. الأسهم للتحريك، و + و − للتكبير"><div class="pkcv"><div class="pkpaper" id="pkPaper"><img id="pkImg" alt="صفحة الفاتورة" draggable="false"><div class="pkold" id="pkOld" hidden><span>المكان المحفوظ</span></div><div class="pksel" id="pkSel" hidden></div><div class="pkpad" id="pkPad"></div></div></div></div>
+      <div class="pkvp" id="pkVp" dir="ltr" tabindex="0" aria-label="صفحة الفاتورة. الأسهم للتحريك، و + و − للتكبير"><div class="pkcv"><div class="pkpaper" id="pkPaper"><img id="pkImg" alt="صفحة الفاتورة" draggable="false"><div class="pkold" id="pkOld" hidden><span>المكان المحفوظ</span></div><div class="pksel" id="pkSel" hidden></div><div class="pkpad" id="pkPad"></div><div class="pkmk" id="pkMk"></div></div></div><div class="mrhint" id="mrHint" hidden aria-live="polite"></div></div>
     </div>
+    <section class="pkt" id="pkTile" hidden aria-labelledby="mrH">
+      <div class="mr-th" id="mrTh" title="اسحب لتحريك البلاطة"><span class="grip" aria-hidden="true"><i></i><i></i><i></i></span><b id="mrH"></b><button type="button" id="mrDock" title="إرجاع البلاطة لأسفل الشاشة" aria-label="إرجاع البلاطة لأسفل الشاشة" hidden>⤓</button><button type="button" id="mrMin" aria-expanded="true">▾ تصغير</button></div>
+      <div class="mr-b" id="mrB"></div>
+      <div class="mr-f" id="mrF"></div>
+    </section>
     <div class="pkside">
       <h2 id="pkT"></h2>
       <p id="pkP"></p>
@@ -385,7 +425,7 @@ body:not(.tab-z) #zSec{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611272032'; window.APP_VERSION = V;
+(function () { var V = '202611281106'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -393,12 +433,12 @@ body:not(.tab-z) #zSec{display:none!important}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611272032"></script>
-<script src="parse.js?v=202611272032"></script>
-<script src="export.js?v=202611272032"></script>
-<script src="digits.js?v=202611272032"></script>
-<script src="split.js?v=202611272032"></script>
-<script src="simple.js?v=202611272032"></script>
+<script src="config.js?v=202611281106"></script>
+<script src="parse.js?v=202611281106"></script>
+<script src="export.js?v=202611281106"></script>
+<script src="digits.js?v=202611281106"></script>
+<script src="split.js?v=202611281106"></script>
+<script src="simple.js?v=202611281106"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>

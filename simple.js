@@ -374,14 +374,14 @@
     else input = `<input ${attrs} value="${esc(type === 'num' && !blank(v) && isFinite(+v) ? (+v).toFixed(2) : v)}"${type !== 'text' ? ' inputmode="decimal" class="num"' : ''} placeholder="${miss ? 'لم يُقرأ — أدخله' : ''}">`;
     const zs = x.zsrc && x.zsrc[k];
     const badge = zs ? `<em class="zb${zs === 'pick' ? ' m' : zs === 'new' ? ' g' : ''}">${zs === 'pick' ? 'محددة يدويًا' : zs === 'new' ? 'حُدّث بالقالب' : 'من قالب المورد'}</em>` : '';
-    return `<div class="f f-${k}${miss ? ' miss' : ''}${(k === 'vendor_tax_number' || k === 'vendor_name') && noSup(x) ? ' nosup' : ''}${k === 'payment_method' && blank(v) ? ' nopay' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}${LOC_KEYS.includes(k) ? cropHtml(x, k, label) : ''}</div>`;
+    return `<div class="f f-${k}${miss ? ' miss' : ''}${(k === 'vendor_tax_number' || k === 'vendor_name') && noSup(x) ? ' nosup' : ''}${k === 'payment_method' && blank(v) ? ' nopay' : ''}${rv.cur[x.id] === k && isOpen(x.id) ? ' cur' : ''}"><span class="fh"><label for="f-${esc(x.id)}-${k}">${label}</label>${badge}<button type="button" class="pkb${miss ? ' need' : ''}" data-pick="${esc(x.id)}" data-pk="${k}" aria-label="حدد مكان ${label} على الفاتورة" title="حدد مكان ${label} على الفاتورة">${PICK_ICON}</button></span>${input}</div>`;
   };
   // الموردون المسجلون في SuppliersT (أرقامهم المختصرة) من Google Sheet، لتنبيه المورد غير المسجل
   const SUPK = 'invoice-simple-sup-v1';
   let supVats = null; try { const o = JSON.parse(localStorage.getItem(SUPK) || 'null'); if (o && Array.isArray(o.v)) supVats = new Set(o.v); } catch (e) { }
   const vatShort = v => { const d = P.normDigits(String(v ?? '')).replace(/\.0+$/, '').replace(/\D/g, '').slice(0, 10); return /^3\d{9}$/.test(d) ? d : ''; };
   const noSup = x => P.blockedVat(x.vendor_tax_number) || !!(supVats && vatShort(x.vendor_tax_number) && !supVats.has(vatShort(x.vendor_tax_number)));
-  const noSupHtml = x => P.blockedVat(x.vendor_tax_number) ? '' : noSup(x) ? `<p class="nosupline" role="note">⚠ الرقم الضريبي ${esc(vatShort(x.vendor_tax_number))} غير مسجل في SuppliersT: مورد جديد، سيُضاف عند النقل إلى InvoiceT.</p>` : '';
+  const noSupHtml = x => P.blockedVat(x.vendor_tax_number) ? '' : noSup(x) ? `<p class="nosupline" role="note">⚠ الرقم الضريبي ${esc(vatShort(x.vendor_tax_number))} غير مسجل في قائمة الموردين في الإقرار: مورد جديد، سيُضاف عند النقل إلى الإقرار.</p>` : '';
   async function supSync() {
     if (!gs || !GURL) return;
     try {
@@ -393,36 +393,8 @@
       draw();
     } catch (e) { console.warn(e); }
   }
-  // مقتطع من صورة الفاتورة تحت الخانة: من قالب المورد أو التحديد اليدوي أو موضع النص المقروء
-  const hasRect = (x, k) => !!((x.zrect && x.zrect[k]) || (x.loc && x.loc[k]) || (x.zsrc && x.zsrc[k] && x.zsrc[k] !== 'pick' && zoneFor(x) && (zones[zoneFor(x)].fields || {})[k]));
-  function cropHtml(x, k, label) {
-    const id = esc(x.id);
-    if (!hasRect(x, k)) return '';
-    return `<div class="fcrop"><button type="button" class="fcimg" data-pick="${id}" data-pk="${k}" aria-label="${label} كما في الفاتورة، اضغط لتعديل المنطقة" title="اضغط لتعديل المنطقة على الفاتورة"><canvas data-crop="${id}" data-ck="${k}" width="1" height="1"></canvas></button></div>`;
-  }
   const imgCache = new Map();
   const loadPageImg = u => { if (!imgCache.has(u)) { if (imgCache.size > 40) imgCache.clear(); imgCache.set(u, loadImg(u).catch(() => null)); } return imgCache.get(u); };
-  async function mountCrops() {
-    const cs = [...document.querySelectorAll('canvas[data-crop]')].filter(cv => !cropHid(cv.dataset.crop));
-    for (const cv of cs) {
-      const id = cv.dataset.crop, k = cv.dataset.ck, x = list.find(y => y.id === id) || trash.find(y => y.id === id); if (!x) continue;
-      try {
-        const pages = await rvLoadPages(x);
-        if (!pages.length) { delete rvPages[x.id]; if (!cropRetry[id]) { cropRetry[id] = 1; setTimeout(mountCrops, 1200); } else cv.closest('.fcrop').classList.add('noimg'); continue; }
-        const b = boxFor(x, k, pages.length); if (!b) continue;
-        const im = await loadPageImg(pages[b.pg]); if (!im || !cv.isConnected) continue;
-        const W = im.naturalWidth, H = im.naturalHeight, px = 0.012, py = 0.006;
-        const sx = Math.max(0, b.x - px) * W, sy = Math.max(0, b.y - py) * H, sw = Math.min(W - sx, (b.w + 2 * px) * W), sh = Math.min(H - sy, (b.h + 2 * py) * H);
-        if (sw < 2 || sh < 2) continue;
-        const sc = Math.min(3, 720 / sw); cv.width = Math.round(sw * sc); cv.height = Math.round(sh * sc);
-        const c = cv.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(im, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
-        cv.closest('.fcrop').classList.add('ok');
-      } catch (e) { console.warn(e); }
-    }
-  }
-  const cropRetry = {}, cropS = {}; // cropS: اختيار كل فاتورة على حدة (يتقدم على الزر الشامل)
-  const cropHid = id => cropS[id] ?? cropOff;
-  let cropOff = true; // المقتطعات مقفلة عند كل فتح للتطبيق إلا إذا طلبها المستخدم
   function card(x, tr, opt) {
     const hide = (opt && opt.hide) || [], showF = F.filter(([k]) => !hide.includes(k));
     const w = issues(x);
@@ -433,13 +405,13 @@
       ${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
       ${rvHtml(x)}</article>`;
     const dup = twinsOf(x).length > 0;
-    return `<article class="inv${cropHid(x.id) ? ' nocropc' : ''}${dup ? ' isdup' : ''}${opt && opt.odd ? ' odd' : ''}" id="c-${esc(x.id)}">
+    return `<article class="inv${dup ? ' isdup' : ''}${opt && opt.odd ? ' odd' : ''}" id="c-${esc(x.id)}">
       <header><div>${hide.includes('vendor_name') ? '' : `<b>${esc(x.vendor_name || 'مورد غير معروف')}</b>`}<small class="fp">📄 ${esc(x.file || '')}</small>${dupBadge(x)}${hide.includes('sent') ? '' : sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
       <div class="grid">${showF.map(f => fieldHtml(x, f)).join('')}${hide.includes('project') ? '' : projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       <div class="nosupbox">${noSupHtml(x)}</div>${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
       ${rrHtml(x)}${rvHtml(x)}
-      <footer><button data-view="${esc(x.id)}">فتح الملف للمراجعة</button>${cropOff && LOC_KEYS.some(k => hasRect(x, k)) ? `<button data-croptg="${esc(x.id)}" aria-pressed="${!cropHid(x.id)}">${cropHid(x.id) ? '✂ إظهار المقتطعات' : 'إخفاء المقتطعات'}</button>` : ''}<button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}"${delAsk === x.id ? ' hidden' : ''}>حذف الفاتورة</button></footer>
+      <footer><button class="primary" data-rvw="${esc(x.id)}" data-rm="inv">🧾 مراجعة بيانات الفاتورة</button><button data-rvw="${esc(x.id)}" data-rm="ven">🏪 مراجعة بيانات المورد</button><button data-reread="${esc(x.id)}"${live[x.id] ? ' disabled' : ''}>${live[x.id] ? (live[x.id].status === 'working' ? 'جارٍ إعادة القراءة…' : 'بانتظار إعادة القراءة…') : '🔄 إعادة قراءة الفاتورة'}</button><button class="del" data-del="${esc(x.id)}"${delAsk === x.id ? ' hidden' : ''}>حذف الفاتورة</button></footer>
       ${delAsk === x.id ? `<div class="delask" role="alert"><label for="dr-${esc(x.id)}"><b>سبب حذف هذه الفاتورة (إلزامي)</b></label>
         <textarea id="dr-${esc(x.id)}" data-delwhy="${esc(x.id)}" rows="2" placeholder="مثال: فاتورة مكررة، أو ليست لنا"></textarea>
         <small>تنتقل الفاتورة إلى «الفواتير المحذوفة» أسفل الصفحة مع السبب، ويمكن استرجاعها.</small>
@@ -560,8 +532,6 @@
     $('list').innerHTML = pend.map(v => `<article class="inv pend"><b>📄 ${esc(v.file)}</b> <span>${v.status === 'working' ? 'جارٍ القراءة…' : v.status === 'split' ? 'بانتظار اختيار طريقة قراءة الملف' : 'بالانتظار'}</span></article>`).join('')
       + (listHtml() || (pend.length ? '' : '<p class="empty">لا توجد فواتير بعد. ارفع فاتورة أو صوّرها للبدء.</p>'));
     drawBar(); drawDups(); drawZones(); drawTrash(); drawWipe(); rvAllLabel(); sendLabel(); mountViewers();
-    const cb = $('cropAll'); if (cb) { cb.hidden = !list.length; cb.textContent = cropOff ? '✂ إظهار المقتطعات' : 'إخفاء المقتطعات'; cb.setAttribute('aria-pressed', !cropOff); }
-    mountCrops(); if (typeof mountRrCrops === 'function') mountRrCrops();
     if (keepWhy) { const t = $('dr-' + delAsk), ok = document.querySelector(`[data-delok="${CSS.escape(delAsk)}"]`); if (t) t.value = keepWhy; if (ok) ok.disabled = !keepWhy.trim(); }
   }
   function drawTrash() {
@@ -617,7 +587,8 @@
       undoBar(`نُقلت الفاتورة إلى «الفواتير المحذوفة» أسفل الصفحة`, () => { trash.splice(trash.indexOf(x), 1); delete x.deletedAt; delete x.delReason; list.splice(i, 0, x); save(); saveTrash(); draw(); }, () => { });
     }
     if (b.dataset.view) view(b.dataset.view);
-    if (b.dataset.pick) openPick(b.dataset.pick, b.dataset.pk);
+    if (b.dataset.rvw) openReview(b.dataset.rvw, b.dataset.rm);
+    if (b.dataset.pick) { const k = b.dataset.pk, m = MR.inv.ks.includes(k) ? 'inv' : MR.ven.ks.includes(k) ? 'ven' : ''; if (m) openReview(b.dataset.pick, m, k); else openPick(b.dataset.pick, k); }
     if (b.dataset.zdel) { zConfirm = b.dataset.zdel; drawZones(); const n = document.querySelector('[data-zno]'); if (n) n.focus(); }
     if (b.dataset.zno !== undefined) { const k = zConfirm; zConfirm = null; drawZones(); const d = document.querySelector(`[data-zdel="${CSS.escape(k || '')}"]`); if (d) d.focus(); }
     if (b.dataset.zok) {
@@ -641,8 +612,6 @@
     }
     if (b.dataset.rvtg) { const id = b.dataset.rvtg; rv.open[id] = !isOpen(id); draw(); const t = document.querySelector(`[data-rvtg="${CSS.escape(id)}"]`); if (t) t.focus({ preventScroll: true }); }
     if (b.id === 'rvAll') { rv.hideAll = !rv.hideAll; rv.open = {}; draw(); }
-    if (b.dataset.croptg) { const id = b.dataset.croptg; cropS[id] = !cropHid(id); draw(); const t = document.querySelector(`[data-croptg="${CSS.escape(id)}"]`); if (t) t.focus({ preventScroll: true }); }
-    if (b.id === 'cropAll') { for (const k in cropS) delete cropS[k]; cropOff = !cropOff; draw(); }
     if (b.dataset.cz) { // تكبير: نفتح صورة الفاتورة في البطاقة على موضع الخانة
       const id = b.dataset.cz, k = b.dataset.ck; rv.open[id] = true; rv.cur[id] = k; draw();
       const h = $('rvh-' + id); if (h) { h.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => { if (rvLive[id]) rvLive[id].focus(k); }, 350); }
@@ -1065,7 +1034,7 @@
       return out;
     });
   }
-  const aNorm = s => P.normDigits(String(s)).replace(/[إأآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase();
+  const aNorm = s => P.normDigits(String(s).normalize('NFKC')).replace(/[إأآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase();
   const isLabW = w => /\p{L}/u.test(w.s) && !/\d{4,}/.test(P.normDigits(w.s));
   // الكلمات سطرًا سطرًا
   function wLines(ws) {
@@ -1084,17 +1053,26 @@
     return out;
   }
   // يختار النص المرجعي لمستطيل الخانة: أقرب تسمية على نفس السطر، وإلا فوقه. ar = نسبة الطول للعرض للصفحة
-  function pickAnchor(ws, r, ar) {
-    const cyr = r.y + r.h / 2, inR = p => p.x + p.w / 2 > r.x && p.x + p.w / 2 < r.x + r.w && p.y + p.h / 2 > r.y && p.y + p.h / 2 < r.y + r.h;
+  // f = صندوق القيمة نفسها داخل المستطيل (إن عُرف)، لاختيار التسمية الموجودة على سطر القيمة لا على وسط المستطيل
+  function pickAnchor(ws, r, ar, f) {
+    const v = f || r, cyr = v.y + v.h / 2, inR = p => p.x + p.w / 2 > r.x && p.x + p.w / 2 < r.x + r.w && p.y + p.h / 2 > r.y && p.y + p.h / 2 < r.y + r.h;
     const ps = labPhrases(ws).filter(p => !inR(p) && aNorm(p.t).length >= 2);
-    const same = ps.filter(p => Math.abs(p.y + p.h / 2 - cyr) < Math.max(r.h, p.h) * 0.6);
-    const above = ps.filter(p => p.y + p.h / 2 < r.y && p.y + p.h / 2 > r.y - Math.max(4 * r.h, 0.06) && p.x < r.x + r.w && p.x + p.w > r.x);
-    const d = p => Math.hypot((p.x + p.w / 2 - (r.x + r.w / 2)), (p.y + p.h / 2 - cyr) * ar);
+    // التسمية العربية تكون يمين القيمة والإنجليزية يسارها: لا نربط بتسمية في الجهة الأخرى (مثل «السجل التجاري» يسار رقم الفاتورة)
+    const tol = 0.01, side = p => /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(p.t) ? p.x >= v.x + v.w - tol : p.x + p.w <= v.x + tol;
+    const same = ps.filter(p => Math.abs(p.y + p.h / 2 - cyr) < Math.max(v.h, p.h) * 0.6 && side(p));
+    const above = ps.filter(p => p.y + p.h / 2 < v.y && p.y + p.h / 2 > v.y - Math.max(4 * v.h, 0.06) && p.x < r.x + r.w && p.x + p.w > r.x);
+    const d = p => Math.hypot((p.x + p.w / 2 - (v.x + v.w / 2)), (p.y + p.h / 2 - cyr) * ar);
     const a = (same.length ? same : above).sort((p, q) => d(p) - d(q))[0];
+    return a ? anchorFrom(a, r, ar) : null;
+  }
+  // النص المرجعي من تسمية محددة (تلقائيًا أو باختيار المستخدم). b = مكان التسمية للعرض فقط ولا يُحفظ
+  function anchorFrom(a, r, ar) {
     if (!a || !(a.h > 0)) return null;
     const u = a.h * ar; // ارتفاع النص المرجعي بوحدة عرض الصفحة
     const n = v => +v.toFixed(3);
-    return { t: a.t.slice(0, 80), y0: n(a.y), off: { x: n((r.x - a.x) / u), y: n((r.y - a.y) / a.h), w: n(r.w / u), h: n(r.h / a.h) } };
+    const o = { t: a.t.slice(0, 80), y0: n(a.y), off: { x: n((r.x - a.x) / u), y: n((r.y - a.y) / a.h), w: n(r.w / u), h: n(r.h / a.h) } };
+    Object.defineProperty(o, 'b', { value: { x: a.x, y: a.y, w: a.w, h: a.h }, enumerable: false });
+    return o;
   }
   function anchorSim(a, b) {
     const toks = s => String(s).split(/\s+/).map(w => aNorm(w).replace(/^ال/, '')).filter(Boolean);
@@ -1110,7 +1088,8 @@
     const ar = src.canvas.height / src.canvas.width;
     // كل العبارات المتتالية (حتى 7 كلمات) على كل سطر
     const cands = [];
-    wLines(ws).forEach(line => { for (let i = 0; i < line.length; i++) for (let j = i; j < Math.min(line.length, i + 7); j++) { const g = line.slice(i, j + 1); if (!g.every(isLabW) && j > i) break; if (!isLabW(line[i])) break; cands.push({ ...spanBox(g), line }); } });
+    const L = aNorm(z.a.t).length * 1.4 + 3; // بعض ملفات PDF تكتب كل حرف وحده، فنحدّ العبارة بطول النص لا بعدد الكلمات
+    wLines(ws).forEach(line => { for (let i = 0; i < line.length; i++) for (let j = i; j < Math.min(line.length, i + 40); j++) { const g = line.slice(i, j + 1); if (!g.every(isLabW) && j > i) break; if (!isLabW(line[i])) break; const sb = spanBox(g); if (j > i + 6 && aNorm(sb.t).length > L) break; cands.push({ ...sb, line }); } });
     let best = null;
     cands.forEach(c => { const s = anchorSim(z.a.t, c.t); if (s < 0.75) return; const sc = s - Math.abs(c.y - (z.a.y0 ?? c.y)) * 0.3; if (!best || sc > best.sc) best = { ...c, s, sc }; });
     if (!best) return null;
@@ -1119,11 +1098,23 @@
     r.x = Math.max(0, Math.min(0.99, r.x)); r.y = Math.max(0, Math.min(0.99, r.y)); r.w = Math.min(1 - r.x, r.w); r.h = Math.min(1 - r.y, r.h);
     return { r, line: best.line, anchor: best };
   }
+  // إن قطع المستطيل قيمة في ملف PDF (حروف وأرقام متفرقة)، نوسّعه على نفس السطر ليشمل بقية القيمة الملاصقة
+  function growLine(src, r) {
+    if (!src.items || !src.items.length) return r;
+    r = { ...r };
+    for (let n = 0; n < 40; n++) {
+      const cy = r.y + r.h / 2, it = src.items.find(i => i.s && i.s.trim() && Math.abs(i.y + i.h / 2 - cy) < Math.max(i.h, r.h) * 0.5 && i.x < r.x + r.w + i.h * 0.6 && i.x + i.w > r.x - i.h * 0.6 && (i.x < r.x - 1e-4 || i.x + i.w > r.x + r.w + 1e-4) && i.x + i.w / 2 > r.x - i.h && i.x + i.w / 2 < r.x + r.w + i.h);
+      if (!it || isLabW({ s: it.s }) && /\p{L}{2,}/u.test(it.s)) break;
+      const x0 = Math.min(r.x, it.x), x1 = Math.max(r.x + r.w, it.x + it.w); r.x = x0; r.w = x1 - x0;
+    }
+    return r;
+  }
   // قراءة خانة بالقالب: بالنص المرجعي أولًا، ثم القيمة على نفس السطر، ثم المكان الثابت
   async function readZone(src, k, z) {
     try {
       const A = await anchorRect(src, z);
       if (A) {
+        if (k !== 'vendor_name') A.r = growLine(src, A.r);
         let v = extract(k, await readRegion(src, A.r));
         if (!blank(v) && !(k === 'vendor_tax_number' && P.blockedVat(v))) return { v, r: A.r, how: 'anchor' };
         const cx = A.r.x + A.r.w / 2, near = A.line.filter(w => !A.anchor.t.includes(w.s)).sort((p, q) => Math.abs(p.x + p.w / 2 - cx) - Math.abs(q.x + q.w / 2 - cx));
@@ -1143,7 +1134,7 @@
       const i = pgIndex(r.pg, src.length); if (i < 0) continue;
       const o = await readZone(src[i], k, r), v = o.v;
       // قالب قديم بلا نص مرجعي: نضيفه تلقائيًا من هذه الفاتورة متى قُرئت القيمة من مكانها
-      if (!r.a && o.how === 'fixed' && !blank(v) && src[i].canvas) try {
+      if (!r.a && !r.fx && o.how === 'fixed' && !blank(v) && src[i].canvas) try {
         const up = Math.max(4 * r.h, 0.06), a = pickAnchor(await regionWords(src[i], { x: 0, y: r.y - up, w: 1, h: r.h + up + r.h * 0.5 }), r, src[i].canvas.height / src[i].canvas.width);
         if (a) { r.a = a; saveZones(); zMark(key); }
       } catch (e) { console.warn(e); }
@@ -1192,7 +1183,7 @@
     if (!rec || !rec.pages || !rec.pages.length) { // نفتح «مراجعة الفاتورة» وفيها زر لإرفاق الملف
       toast('لا توجد صورة محفوظة لهذه الفاتورة على هذا الجهاز. أرفق ملفها من «مراجعة الفاتورة»');
       rv.open[id] = true; draw(); const h = $('rvh-' + id); if (h) h.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); return; }
-    Object.assign(pk, { x, k, rec, pages: rec.pages, src: [], pdf: null, rect: null, mode: 'draw', last: document.activeElement });
+    Object.assign(pk, { x, k, rec, pages: rec.pages, src: [], pdf: null, rect: null, mode: 'draw', last: document.activeElement, multi: '', link: '', cands: null });
     const key = zoneFor(x), z = key && zones[key].fields[k];
     $('pkT').textContent = 'حدد مكان: ' + label(k);
     $('pkP').textContent = 'كبّر الصفحة وحرّكها حتى ترى ' + label(k) + ' بوضوح، ثم اسحب مستطيلًا حول القيمة. لا يضر أن يدخل معها اسم الخانة.';
@@ -1206,14 +1197,15 @@
     await showPg(z ? Math.max(0, pgIndex(z.pg, pk.pages.length)) : 0);
     pkVp.focus({ preventScroll: true });
   }
-  function closePick() { $('pk').hidden = true; document.body.style.overflow = ''; pk.tok++; pk.src = []; pk.pdf = null; }
+  function closePick() { $('pk').hidden = true; document.body.style.overflow = ''; pk.tok++; pk.src = []; pk.pdf = null; $('pk').classList.remove('multi'); $('pkTile').hidden = true; $('mrHint').hidden = true; $('pkMk').innerHTML = ''; pk.link = ''; pk.cands = null; pk.multi = ''; }
   function showPg(i) {
     const n = pk.pages.length; pk.pg = Math.max(0, Math.min(n - 1, i));
     pk.rect = null; pkSel.hidden = true; $('pkRo').hidden = true; $('pkOk').disabled = true;
     $('pkPg').textContent = `صفحة ${pk.pg + 1} من ${n}`; $('pkPrev').hidden = $('pkNext').hidden = false;
     $('pkPrev').disabled = pk.pg === 0; $('pkNext').disabled = pk.pg === n - 1;
     const key = zoneFor(pk.x), z = key && zones[key].fields[pk.k], old = $('pkOld');
-    old.hidden = !(z && pgIndex(z.pg, n) === pk.pg);
+    old.hidden = !!pk.multi || !(z && pgIndex(z.pg, n) === pk.pg);
+    if (pk.multi) { pk.link = pk.link && pk.d[pk.link].pi === pk.pg ? pk.link : ''; mrMarks(); }
     if (!old.hidden) Object.assign(old.style, { left: z.x * 100 + '%', top: z.y * 100 + '%', width: z.w * 100 + '%', height: z.h * 100 + '%' });
     return new Promise(ok => { pkImg.onload = () => { setZoom(1); pkVp.scrollTop = 0; ok(); }; pkImg.onerror = ok; pkImg.src = pk.pages[pk.pg]; });
   }
@@ -1245,7 +1237,7 @@
     glide = requestAnimationFrame(step);
   }
   const effMode = () => spaceHeld ? 'move' : pk.mode;
-  function setMode(m) { pk.mode = m; $('pkDraw').setAttribute('aria-pressed', m === 'draw'); $('pkMove').setAttribute('aria-pressed', m === 'move'); pkPad.classList.toggle('move', effMode() === 'move'); }
+  function setMode(m) { pk.mode = m; $('pkDraw').setAttribute('aria-pressed', m === 'draw'); $('pkMove').setAttribute('aria-pressed', m === 'move'); pkPad.classList.toggle('move', effMode() === 'move'); if (pk.multi) drawTile(); }
   {
     const pts = new Map(); let st = null, pan = null, pinch = null, hold = false, tmp = null, lastPt = null, edge = 0;
     const pt = c => { const b = pkPad.getBoundingClientRect(); return { x: Math.max(0, Math.min(1, (c.x - b.left) / b.width)), y: Math.max(0, Math.min(1, (c.y - b.top) / b.height)) }; };
@@ -1281,7 +1273,8 @@
       if (pan) { const h = pan.h, a = h[0], b = h[h.length - 1], dt = b.t - a.t; pan = null; if (e.type === 'pointerup' && dt > 0 && e.timeStamp - b.t < 80) startGlide((b.x - a.x) / dt, (b.y - a.y) / dt); return; }
       if (!st) return;
       cancelAnimationFrame(edge); upd(pt({ x: e.clientX, y: e.clientY })); const r = tmp; st = null; lastPt = null;
-      if (r.w < 0.012 || r.h < 0.006) { if (pk.rect) showSel(pk.rect); else pkSel.hidden = true; return; }
+      if (r.w < 0.012 || r.h < 0.006) { if (pk.multi) { pkSel.hidden = true; mrTap(r); return; } if (pk.rect) showSel(pk.rect); else pkSel.hidden = true; return; }
+      if (pk.multi) { pkSel.hidden = true; mrPicked(r); return; }
       pk.rect = { ...r, pg: pgFor(pk.k, pk.pg, pk.pages.length) };
       readPicked();
     };
@@ -1367,6 +1360,249 @@
       else if (e.key === '0') animZoom(1);
     }
   });
+
+  // ---------- مراجعة بيانات الفاتورة / المورد: الملف كاملًا مع بلاطة عائمة تُسحب بحرية ----------
+  const MR = {
+    inv: { t: 'مراجعة بيانات الفاتورة', h: 'بيانات الإقرار', ks: ['invoice_number', 'invoice_date', 'total', 'tax_amount'] },
+    ven: { t: 'مراجعة بيانات المورد', h: 'بيانات المورد', ks: ['vendor_name', 'vendor_tax_number'] },
+  };
+  const MRC = { invoice_number: '#1838b8', invoice_date: '#7a2fb8', total: '#0b6a35', tax_amount: '#b35a00', vendor_name: '#1838b8', vendor_tax_number: '#b3121f' };
+  const MRL = { invoice_number: 'رقم الفاتورة', invoice_date: 'تاريخ الفاتورة', total: 'الإجمالي', tax_amount: 'الضريبة', vendor_name: 'اسم المورد', vendor_tax_number: 'الرقم الضريبي' };
+  const MRN = { invoice_number: 'رقم فاتورة', invoice_date: 'تاريخًا', total: 'مبلغًا', tax_amount: 'مبلغًا', vendor_name: 'نصًا', vendor_tax_number: 'رقمًا ضريبيًا من 15 رقمًا' };
+  const nice = s => unspace(String(s).normalize('NFKC').replace(/\s+/g, ' ').trim());
+  const isAr = s => /[\u0600-\u06FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(s);
+  const fmtV = (k, v) => blank(v) ? '' : (k === 'total' || k === 'tax_amount') && typeof n2(v) === 'number' ? n2(v).toFixed(2) : k === 'invoice_date' ? (P.findDate(String(v)) || String(v)) : String(v);
+  const pkTile = $('pkTile'), pkMk = $('pkMk');
+  function mrFind(id) { return list.find(y => y.id === id); }
+  async function openReview(id, m, k0) {
+    const x = mrFind(id); if (!x) return;
+    const rec = await getRec(id, x);
+    if (!rec || !rec.pages || !rec.pages.length) {
+      toast('لا توجد صورة محفوظة لهذه الفاتورة على هذا الجهاز. أرفق ملفها من «مراجعة الفاتورة»');
+      rv.open[id] = true; draw(); const h = $('rvh-' + id); if (h) h.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); return; }
+    const n = rec.pages.length;
+    Object.assign(pk, { x, k: '', rec, pages: rec.pages, src: [], pdf: null, rect: null, mode: 'draw', last: document.activeElement, multi: m, link: '', cands: null, d: {} });
+    MR[m].ks.forEach(k => { const zr = x.zrect && x.zrect[k]; pk.d[k] = { v: fmtV(k, x[k]), src: '', r: zr ? { ...zr } : null, pi: zr ? pgIndex(zr.pg, n) : -1 }; });
+    pk.k = MR[m].ks.includes(k0) ? k0 : MR[m].ks.find(k => mrStat(k)[0] === 'bad') || '';
+    $('pkT').textContent = MR[m].t;
+    $('pk').classList.add('multi'); pkTile.hidden = false; pkTile.classList.remove('min');
+    $('pk').hidden = false; document.body.style.overflow = 'hidden';
+    setMode('draw'); drawTile(); tilePlace();
+    const d = pk.k && pk.d[pk.k], first = MR[m].ks.map(k => pk.d[k].pi).find(i => i >= 0);
+    await showPg(d && d.pi >= 0 ? d.pi : first >= 0 ? first : 0);
+    if (d && d.r) mrShow(pk.k);
+    pkVp.focus({ preventScroll: true });
+  }
+  function mrStat(k) {
+    const d = pk.d[k], v = String(d.v ?? '').trim(), x = pk.x;
+    if (d.busy) return ['', d.busy];
+    if (k === 'vendor_tax_number' && v) { const s = P.normDigits(v).replace(/\D/g, ''); if (P.blockedVat(s)) return ['bad', '⚠ هذا رقمنا كمشترٍ، لا يُقبل']; if (!/^3\d{13}3$/.test(s)) return ['bad', '⚠ يجب أن يكون 15 رقمًا يبدأ وينتهي بـ 3']; }
+    if (k === 'invoice_date' && v && !P.findDate(v)) return ['bad', '⚠ التاريخ غير واضح'];
+    if ((k === 'total' || k === 'tax_amount') && v && typeof n2(v) !== 'number') return ['bad', '⚠ ليس رقمًا'];
+    if (!v) return ['bad', 'فارغة، حدّد مكانها'];
+    if (d.src === 'pick') return ['ok', '✓ قُرئت من المكان المحدد'];
+    if (d.src === 'hand') return ['ok', '✎ كتابة يدوية'];
+    if (x.zsrc && x.zsrc[k] === 'tpl') return ['', 'من قالب المورد'];
+    if (x.edited && x.edited[k]) return ['', 'معدّلة سابقًا'];
+    return ['', 'كما قرأها التطبيق'];
+  }
+  function mrLinkTxt(k) {
+    const d = pk.d[k];
+    if (pk.link === k) return pk.cands ? '👆 المس العنوان الصحيح على الفاتورة (المحاط بإطار رمادي)' : 'جارٍ قراءة نصوص الصفحة…';
+    if (!d.picked) return '';
+    if (d.aBusy) return 'جارٍ البحث عن العنوان المجاور…';
+    return d.a ? `🔗 مرتبط بالعنوان «${nice(d.a.t)}»` : '📍 بلا عنوان، يُحفظ بمكانه في الصفحة';
+  }
+  function drawTile() {
+    const m = pk.multi; if (!m) return;
+    const ks = MR[m].ks, cur = pk.k, focus = !!cur && (pk.mode === 'draw' || pk.link === cur);
+    pkTile.classList.toggle('focus', focus);
+    const rows = ks.map(k => { const d = pk.d[k], [c, t] = mrStat(k), lk = mrLinkTxt(k);
+      const lb = !d.picked || d.aBusy ? '' : pk.link === k ? `<button type="button" class="lkb" data-mnolink="${k}">بلا عنوان</button><button type="button" class="lkb" data-mlinkx="1">إلغاء</button>` : `<button type="button" class="lkb" data-mlink="${k}">✎ ${d.a ? 'غيّر العنوان' : 'اربط بعنوان'}</button>`;
+      return `<div class="mr-r${cur === k ? ' on' : ''}" data-mk="${k}" style="--c:${MRC[k]}"><span class="sw"></span>
+        <span class="mrlb"><label for="mr-${k}">${MRL[k]}</label> <span class="st ${c}">${esc(t)}</span></span>
+        <button type="button" class="pick" data-mpick="${k}" aria-pressed="${cur === k}">${cur === k ? (pk.mode === 'draw' ? '✕ إيقاف' : '▭ ارسم') : d.r && d.pi >= 0 ? '↻ أعد التحديد' : '▭ حدّد'}</button>
+        <input id="mr-${k}" data-min="${k}" value="${esc(d.v)}" dir="${k === 'vendor_name' ? 'rtl' : 'ltr'}" inputmode="${k === 'total' || k === 'tax_amount' ? 'decimal' : k === 'vendor_tax_number' ? 'numeric' : 'text'}" autocomplete="off">
+        ${lk ? `<span class="lk">${esc(lk)} ${lb}</span>` : ''}</div>`; }).join('');
+    const chips = `<div class="mr-ch">خانة أخرى: ${ks.filter(k => k !== cur).map(k => `<button type="button" data-mpick="${k}" style="--c:${MRC[k]}">${MRL[k]}${mrStat(k)[0] === 'bad' ? ' ⚠' : ''}</button>`).join('')}<button type="button" class="primary" data-mdone="1">✓ تم</button></div>`;
+    let ck = '', bad = false;
+    if (m === 'inv') { const t = n2(pk.d.total.v), v = n2(pk.d.tax_amount.v);
+      if (typeof t === 'number' && typeof v === 'number' && t > 0 && v > 0) {
+        const exp = t * 15 / 115, ok = Math.abs(exp - v) < 0.05, pre = Math.abs(t * 0.15 - v) < 0.05, sug = (t + v).toFixed(2);
+        ck = ok ? `✓ الضريبة = 15% من المبلغ قبل الضريبة (${(t - v).toFixed(2)})`
+          : pre ? `⚠ الإجمالي (${t.toFixed(2)}) هو المبلغ قبل الضريبة، والإقرار يحتاج الإجمالي شامل الضريبة = ${sug} <button type="button" class="lkb" data-mfix="${sug}">استخدم ${sug}</button>`
+          : `⚠ الضريبة لا تساوي 15% من المبلغ قبل الضريبة (المتوقع ${exp.toFixed(2)}). راجع الإجمالي والضريبة.`;
+        bad = !ok; } }
+    else ck = 'الرقم الضريبي للمورد هو المكتوب بجانب «البائع» أو «المورد»، وليس رقمنا كمشترٍ.';
+    const x = pk.x, canSave = !!(vendorKey(x) || zoneFor(x) || (m === 'ven' && (nameKey(pk.d.vendor_name.v).length >= 3 || /^3\d{13}3$/.test(P.normDigits(String(pk.d.vendor_tax_number.v)).replace(/\D/g, '')))));
+    const nm = (m === 'ven' && String(pk.d.vendor_name.v).trim()) || x.vendor_name || 'هذا المورد';
+    const kept = $('mrTpl') ? $('mrTpl').checked : true;
+    $('mrH').textContent = MR[m].h;
+    $('mrB').innerHTML = rows + chips; $('mrF').innerHTML = `<span class="chk${bad ? ' bad' : ''}">${ck}</span>
+      ${canSave ? `<label class="pkchk"><input type="checkbox" id="mrTpl"${kept ? ' checked' : ''}><span>احفظ الأماكن المحددة لكل فواتير «${esc(nm)}»</span></label>` : '<small class="note">لن تُحفظ الأماكن قالبًا لأن اسم المورد ورقمه الضريبي غير معروفين.</small>'}
+      <div class="pkbtns"><button type="button" class="primary" id="mrSave">حفظ التعديلات</button><button type="button" id="mrCancel">إلغاء</button></div>`;
+    mrMarks(); mrHint(); tileClamp();
+  }
+  function mrHint() {
+    const h = $('mrHint'), f = pk.link || (pk.mode === 'draw' && pk.k);
+    h.hidden = !pk.multi || !f; if (h.hidden) return;
+    h.textContent = pk.link ? (pk.cands ? `المس العنوان الصحيح لـ «${MRL[pk.link]}»` : 'جارٍ قراءة نصوص الصفحة…') : `ارسم مستطيلًا حول: ${MRL[pk.k]}`;
+  }
+  const pct = r => `left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%`;
+  function mrMarks() {
+    if (!pk.multi) { pkMk.innerHTML = ''; return; }
+    let h = '';
+    MR[pk.multi].ks.forEach(k => { const d = pk.d[k]; if (!d.r || d.pi !== pk.pg) return;
+      h += `<div class="mk${pk.k === k ? ' cur' : ''}" style="--c:${MRC[k]};${pct(d.r)}"><i>${MRL[k]}</i></div>`;
+      if (d.a && d.a.b && pk.link !== k) h += `<div class="mka" style="--c:${MRC[k]};${pct({ x: d.a.b.x - 0.004, y: d.a.b.y - 0.003, w: d.a.b.w + 0.008, h: d.a.b.h + 0.006 })}" title="العنوان المرتبط بـ ${MRL[k]}"><i>🔗</i></div>`; });
+    if (pk.link && pk.cands) { const sel = pk.d[pk.link].a && pk.d[pk.link].a.b;
+      h += pk.cands.map((p, i) => `<button type="button" class="mkc${sel && Math.abs(sel.x - p.x) < 1e-4 && Math.abs(sel.y - p.y) < 1e-4 ? ' sel' : ''}" data-mcand="${i}" style="--c:${MRC[pk.link]};${pct({ x: p.x - 0.004, y: p.y - 0.003, w: p.w + 0.008, h: p.h + 0.006 })}" aria-label="اجعل «${esc(nice(p.t))}» العنوان"></button>`).join(''); }
+    pkMk.innerHTML = h;
+  }
+  function mrShow(k) { // نحرك العارض إلى مكان الخانة
+    const d = pk.d[k]; if (!d || !d.r || d.pi !== pk.pg) return;
+    const b = pkPaper.getBoundingClientRect(), v = pkVp.getBoundingClientRect();
+    pkVp.scrollTo({ top: pkVp.scrollTop + b.top + d.r.y * b.height - v.top - 70, left: pkVp.scrollLeft + b.left + d.r.x * b.width - v.left - 40, behavior: RM ? 'auto' : 'smooth' });
+  }
+  async function mrGo(k) { const d = pk.d[k]; if (d.r && d.pi >= 0 && d.pi !== pk.pg) await showPg(d.pi); mrShow(k); }
+  const union = ws => { const x0 = Math.min(...ws.map(w => w.x)), y0 = Math.min(...ws.map(w => w.y)); return { x: x0, y: y0, w: Math.max(...ws.map(w => w.x + w.w)) - x0, h: Math.max(...ws.map(w => w.y + w.h)) - y0 }; };
+  const lineTxt = ws => wLines(ws).map(l => (isAr(l.map(w => w.s).join('')) ? l : l.slice().reverse()).map(w => w.s).join(' ')).join('\n');
+  async function mrPicked(r) {
+    const k = pk.k; if (pk.link) return;
+    if (!k) { toast('اختر الخانة من البلاطة أولًا، ثم ارسم حولها'); return; }
+    const tok = ++pk.tok, d = pk.d[k], prev = { r: d.r, pi: d.pi }, pi = pk.pg;
+    const ok = v => !blank(v) && !(k === 'vendor_tax_number' && P.blockedVat(String(v)));
+    let rr = { ...r, pg: pgFor(k, pi, pk.pages.length) };
+    d.r = rr; d.pi = pi; d.busy = 'جارٍ قراءة المنطقة…'; drawTile();
+    let v = '', fb = null, viaLab = null, src = null;
+    try {
+      src = await pageSrc(pi);
+      const ws = await regionWords(src, rr); if (tok !== pk.tok) return;
+      v = extract(k, lineTxt(ws));
+      const vw = ws.filter(w => ok(extract(k, w.s))); if (vw.length) fb = union(vw);
+      if (!ok(v) && !(src.items && src.items.length)) { v = extract(k, await readRegion(src, rr)); if (tok !== pk.tok) return; }
+      if (!ok(v) && k !== 'vendor_name') { // حُدد العنوان فقط: نقرأ القيمة التي بجانبه على نفس السطر
+        for (const L of labPhrases(ws)) {
+          const band = await regionWords(src, { x: 0, y: L.y - L.h, w: 1, h: L.h * 3 }); if (tok !== pk.tok) return;
+          const cy = L.y + L.h / 2, ar = isAr(L.t);
+          const c = band.filter(w => Math.abs(w.y + w.h / 2 - cy) < Math.max(L.h, w.h) * 0.7 && (ar ? w.x + w.w <= L.x + 0.01 : w.x >= L.x + L.w - 0.01) && ok(extract(k, w.s)))
+            .sort((p, q) => Math.abs(p.x + p.w / 2 - (L.x + L.w / 2)) - Math.abs(q.x + q.w / 2 - (L.x + L.w / 2)));
+          if (c.length) { const w = c[0]; v = extract(k, w.s); viaLab = L; fb = w;
+            rr = d.r = { pg: rr.pg, x: Math.max(0, w.x - 0.006), y: Math.max(0, w.y - 0.004), w: Math.min(1, w.w + 0.012), h: Math.min(1, w.h + 0.008) }; break; }
+        }
+      }
+    } catch (e) { console.error(e); }
+    if (tok !== pk.tok) return;
+    d.busy = '';
+    if (!ok(v)) { Object.assign(d, prev); drawTile();
+      toast(k === 'vendor_tax_number' && P.blockedVat(String(v)) ? 'هذا رقمنا كمشترٍ ولا يُقبل رقمًا للمورد. حدّد رقم المورد.' : `لم أجد ${MRN[k]} داخل المستطيل. ارسمه حول القيمة نفسها أو حول عنوانها.`); return; }
+    d.v = fmtV(k, v); d.src = 'pick'; d.picked = true; d.nolink = false; d.a = null;
+    if (viaLab) toast(`حدّدت العنوان «${nice(viaLab.t)}»، فقرأت القيمة التي بجانبه`);
+    // العنوان المجاور: يُحفظ مع القالب ليجد البرنامج الخانة نسبةً له في الفواتير القادمة
+    const ar = src.canvas.height / src.canvas.width, at = d.at = (d.at || 0) + 1;
+    if (viaLab) d.a = anchorFrom(viaLab, rr, ar);
+    else { d.aBusy = true;
+      d.aP = (async () => { try { const up = Math.max(4 * rr.h, 0.06); const band = await regionWords(src, { x: 0, y: rr.y - up, w: 1, h: rr.h + up + rr.h * 0.5 });
+        if (d.at === at) d.a = pickAnchor(band, rr, ar, fb); } catch (e) { console.warn(e); } finally { if (d.at === at) { d.aBusy = false; d.aP = null; if (pk.multi) drawTile(); } } })(); }
+    drawTile();
+  }
+  function mrTap(r) { // لمس الإطار المتقطع للعنوان المرتبط يفتح تغييره
+    if (!pk.multi || pk.link) return;
+    const k = MR[pk.multi].ks.find(k => { const d = pk.d[k], b = d.a && d.a.b; return b && d.pi === pk.pg && r.x >= b.x - 0.006 && r.x <= b.x + b.w + 0.006 && r.y >= b.y - 0.006 && r.y <= b.y + b.h + 0.006; });
+    if (k) mrLink(k);
+  }
+  async function mrLink(k) {
+    const d = pk.d[k]; if (!d.r) return;
+    pk.link = k; pk.k = k; pk.cands = null; d.at = (d.at || 0) + 1; d.aBusy = false;
+    if (d.pi !== pk.pg) await showPg(d.pi);
+    drawTile();
+    try { const src = await pageSrc(pk.pg), ws = await regionWords(src, { x: 0, y: 0, w: 1, h: 1 }); if (pk.link !== k) return;
+      const r = d.r, inR = p => p.x + p.w / 2 > r.x && p.x + p.w / 2 < r.x + r.w && p.y + p.h / 2 > r.y && p.y + p.h / 2 < r.y + r.h;
+      pk.cands = labPhrases(ws).filter(p => aNorm(p.t).length >= 2 && !inR(p)); pk.ar = src.canvas.height / src.canvas.width;
+    } catch (e) { console.error(e); pk.cands = []; }
+    drawTile();
+  }
+  pkMk.addEventListener('click', e => {
+    const c = e.target.closest('[data-mcand]'); if (!c || !pk.link || !pk.cands) return;
+    const k = pk.link, d = pk.d[k], p = pk.cands[+c.dataset.mcand];
+    d.a = anchorFrom(p, d.r, pk.ar); d.nolink = false; pk.link = ''; pk.cands = null; drawTile();
+    toast(`رُبطت «${MRL[k]}» بالعنوان «${nice(p.t)}»`);
+  });
+  pkTile.addEventListener('click', e => {
+    const t = e.target, b = t.closest('button');
+    if (b && b.dataset.mpick) { const k = b.dataset.mpick; pk.link = ''; pk.cands = null;
+      if (pk.k === k && pk.mode === 'draw') pk.k = ''; else { pk.k = k; setMode('draw'); }
+      drawTile(); if (pk.k) mrGo(k); return; }
+    if (b && b.dataset.mdone) { pk.k = ''; pk.link = ''; pk.cands = null; drawTile(); return; }
+    if (b && b.dataset.mlink) { mrLink(b.dataset.mlink); return; }
+    if (b && b.dataset.mlinkx) { pk.link = ''; pk.cands = null; drawTile(); return; }
+    if (b && b.dataset.mnolink) { const d = pk.d[b.dataset.mnolink]; d.a = null; d.nolink = true; d.at = (d.at || 0) + 1; pk.link = ''; pk.cands = null; drawTile(); toast('أُلغي الربط، سيُحفظ المكان ثابتًا في الصفحة'); return; }
+    if (b && b.dataset.mfix) { pk.d.total.v = b.dataset.mfix; pk.d.total.src = 'hand'; drawTile(); return; }
+    if (b && b.id === 'mrSave') { mrSave(); return; }
+    if (b && b.id === 'mrCancel') { const x = pk.x, k0 = MR[pk.multi].ks[0]; closePick(); if (x) backTo(x.id, k0); return; }
+    if (b && b.id === 'mrMin') { const m = pkTile.classList.toggle('min'); b.textContent = m ? '▴ إظهار' : '▾ تصغير'; b.setAttribute('aria-expanded', !m); tileClamp(); return; }
+    if (b && b.id === 'mrDock') { tpos = null; tilePlace(); try { localStorage.removeItem(TPK); } catch (e) { } return; }
+    const row = t.closest('[data-mk]'); if (row && !b && !t.closest('input,label')) { pk.k = row.dataset.mk; pk.link = ''; drawTile(); mrGo(pk.k); }
+  });
+  pkTile.addEventListener('input', e => { const i = e.target.closest('[data-min]'); if (!i) return; const k = i.dataset.min, d = pk.d[k]; d.v = i.value; d.src = 'hand';
+    const st = i.parentElement.querySelector('.st'), [c, t] = mrStat(k); st.className = 'st ' + c; st.textContent = t; });
+  pkTile.addEventListener('change', e => { if (e.target.closest('[data-min]')) drawTile(); });
+  pkTile.addEventListener('focusin', e => { const i = e.target.closest('[data-min]'); if (i && pk.k !== i.dataset.min) { pk.k = i.dataset.min; pkTile.querySelectorAll('[data-mk]').forEach(r => r.classList.toggle('on', r.dataset.mk === pk.k)); mrMarks(); mrHint(); } });
+  async function mrSave() {
+    const x = pk.x, m = pk.multi, ks = MR[m].ks; if (!x) return;
+    const bad = ks.filter(k => pk.d[k].src && mrStat(k)[0] === 'bad');
+    if (bad.length) { toast('صحّح أولًا: ' + bad.map(k => MRL[k]).join('، ')); pk.k = bad[0]; drawTile(); return; }
+    const pend = ks.map(k => pk.d[k].aP).filter(Boolean);
+    if (pend.length) { $('mrSave').disabled = true; $('mrSave').textContent = 'جارٍ حفظ العناوين…'; await Promise.race([Promise.all(pend), new Promise(res => setTimeout(res, 8000))]); if (pk.x !== x) return; }
+    const oldKey = zoneFor(x), tplOn = !!($('mrTpl') && $('mrTpl').checked);
+    const changed = ks.filter(k => pk.d[k].src);
+    changed.forEach(k => { let v = String(pk.d[k].v).trim();
+      if (k === 'total' || k === 'tax_amount') v = n2(v);
+      if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\D/g, '');
+      if (k === 'invoice_date') v = P.findDate(v) || v;
+      x[k] = v; (x.edited = x.edited || {})[k] = 1; (x.zsrc = x.zsrc || {})[k] = 'pick'; });
+    const picked = ks.filter(k => pk.d[k].picked && pk.d[k].r);
+    picked.forEach(k => { const r = pk.d[k].r; (x.zrect = x.zrect || {})[k] = { pg: r.pg, x: r.x, y: r.y, w: r.w, h: r.h }; });
+    let saved = 0;
+    if (tplOn && picked.length) {
+      const key = vendorKey(x) || oldKey;
+      if (key) {
+        if (oldKey && oldKey !== key && zones[oldKey]) { zones[key] = { ...zones[oldKey], fields: { ...zones[oldKey].fields, ...((zones[key] || {}).fields || {}) } }; delete zones[oldKey]; zMark(oldKey); }
+        const t = zones[key] = zones[key] || { fields: {} };
+        Object.assign(t, { name: x.vendor_name || t.name || '', vat: vatOf(x) || t.vat || '', nameKey: nameKey(x.vendor_name) || t.nameKey || '', at: new Date().toISOString() });
+        picked.forEach(k => { const d = pk.d[k], r = d.r;
+          const fld = t.fields[k] = { pg: r.pg, x: +r.x.toFixed(4), y: +r.y.toFixed(4), w: +r.w.toFixed(4), h: +r.h.toFixed(4) };
+          if (d.a) fld.a = JSON.parse(JSON.stringify(d.a)); else if (d.nolink) fld.fx = 1;
+          x.zsrc[k] = 'tpl'; saved++; });
+        saveZones(); zMark(key);
+        const n = list.filter(y => y !== x && zoneFor(y) === key).length;
+        if (n && !(rrS[x.id] && (rrS[x.id].state === 'run' || rrS[x.id].state === 'pick'))) rrS[x.id] = { state: 'offer', key, ks: [...new Set([...((rrS[x.id] && rrS[x.id].state === 'offer' && rrS[x.id].ks) || []), ...picked])] };
+      }
+    }
+    if (changed.length || picked.length) save();
+    closePick(); draw(); backTo(x.id, (changed[0] || ks[0]));
+    toast(!changed.length && !picked.length ? 'لم يتغير شيء' : saved ? `حُفظت التعديلات، وحُفظ ${saved === 1 ? 'مكان واحد' : saved === 2 ? 'مكانان' : saved + ' أماكن'} في قالب ${x.vendor_name || 'المورد'}` : 'حُفظت التعديلات');
+  }
+  // سحب البلاطة بحرية من شريط عنوانها؛ إفلاتها قرب أسفل الشاشة يعيدها لمكانها
+  const TPK = 'invoice-simple-tile-v1';
+  let tpos = null; try { tpos = JSON.parse(localStorage.getItem(TPK) || 'null'); } catch (e) { }
+  function tilePlace() { pkTile.classList.toggle('free', !!tpos); $('mrDock').hidden = !tpos; if (!tpos) { pkTile.style.left = pkTile.style.top = ''; return; } tileClamp(); }
+  function tileClamp() { if (!tpos || pkTile.hidden) return; const w = pkTile.offsetWidth, h = pkTile.offsetHeight;
+    tpos.x = Math.max(4, Math.min(innerWidth - w - 4, tpos.x)); tpos.y = Math.max(4, Math.min(innerHeight - Math.min(h, 56) - 4, tpos.y));
+    pkTile.style.left = tpos.x + 'px'; pkTile.style.top = tpos.y + 'px'; }
+  {
+    const th = $('mrTh'); let tg = null, raf = 0;
+    th.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; e.preventDefault(); th.setPointerCapture(e.pointerId);
+      const r = pkTile.getBoundingClientRect(); tg = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+      if (!tpos) { tpos = { x: r.left, y: r.top }; tilePlace(); } pkTile.classList.add('drag'); });
+    th.addEventListener('pointermove', e => { if (!tg) return; tpos.x = e.clientX - tg.dx; tpos.y = e.clientY - tg.dy; cancelAnimationFrame(raf); raf = requestAnimationFrame(tileClamp); });
+    const te = () => { if (!tg) return; tg = null; pkTile.classList.remove('drag');
+      if (tpos && tpos.y + pkTile.offsetHeight > innerHeight - 24) tpos = null;
+      tilePlace(); try { tpos ? localStorage.setItem(TPK, JSON.stringify(tpos)) : localStorage.removeItem(TPK); } catch (e) { } };
+    th.addEventListener('pointerup', te); th.addEventListener('pointercancel', te);
+    th.addEventListener('dblclick', e => { if (!e.target.closest('button')) $('mrMin').click(); });
+    addEventListener('resize', tileClamp);
+  }
   document.addEventListener('keyup', e => { if (e.code === 'Space' && spaceHeld) { spaceHeld = false; setMode(pk.mode); } });
 
   // ---------- مراجعة الفاتورة داخل البطاقة ----------
@@ -1531,8 +1767,8 @@
           return `<div class="rrinv"><h4>📄 <a href="#c-${esc(xid)}">${esc(y.file || 'فاتورة')}</a> <small>${cs.length} تعديل</small><label><input type="checkbox" data-rrx="${id}|${esc(xid)}"${all ? ' checked' : ''}> كل تعديلات الفاتورة</label></h4>
             ${cs.map((c, i) => `<div class="rrch${c.on ? '' : ' off'}${i % 2 ? ' odd' : ''}"><input type="checkbox" data-rron="${id}|${esc(c.cid)}"${c.on ? ' checked' : ''} aria-label="${esc(label(c.k))}: ${esc(shown(c.k, c.from))} إلى ${esc(shown(c.k, c.to))}">
               <span><span class="rrlb">${esc(label(c.k))}:</span> <s>${vv(c.k, c.from)}</s> ← <ins>${vv(c.k, c.to)}</ins></span>
-              <span class="row"><button type="button" class="sm" data-rrcrop="${id}|${esc(c.cid)}" aria-pressed="${!!c.crop}">${c.crop ? 'إخفاء المقتطع' : '✂ إظهار المقتطع'}</button><button type="button" class="sm" data-rrrev="${id}|${esc(c.cid)}">👁 مراجعة</button></span>
-              ${c.crop ? `<canvas data-rrcv="${id}|${esc(c.cid)}" width="1" height="1"></canvas>` : ''}</div>`).join('')}
+              <span class="row"><button type="button" class="sm" data-rrrev="${id}|${esc(c.cid)}">👁 مراجعة</button></span>
+</div>`).join('')}
             ${r.skipped.filter(s => s.id === xid).map(s => `<div class="rrch sk">${esc(label(s.k))}: ${s.why}</div>`).join('')}</div>`; }).join('')}
         ${r.skipped.filter(s => !byX.has(s.id)).length ? `<ul>${r.skipped.filter(s => !byX.has(s.id)).map(c => `<li class="sk">فاتورة ${fn(c.id)}: ${esc(label(c.k))} ${c.why}</li>`).join('')}</ul>` : ''}
         <div class="row rrapply"><button type="button" class="primary" data-rrapply="${id}"${on ? '' : ' disabled'}>طبّق المحدد (${on} من ${r.changes.length})</button><button type="button" data-rrno="${id}">إغلاق بدون تطبيق</button></div></div>`;
@@ -1592,7 +1828,6 @@
     const sc = Math.min(3, maxW / sw); cv.width = Math.round(sw * sc); cv.height = Math.round(sh * sc);
     const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(im, sx, sy, sw, sh, 0, 0, cv.width, cv.height); return true;
   }
-  function mountRrCrops() { document.querySelectorAll('canvas[data-rrcv]').forEach(cv => { const [id, cid] = cv.dataset.rrcv.split('|'), r = rrS[id], c = r && r.changes.find(q => q.cid === cid); if (c) cropChange(cv, c, 520); }); }
   // نافذة مراجعة كل تعديل مع ملفه
   let rvw = null;
   async function openRvw(id, i) {
@@ -1626,7 +1861,6 @@
     if (d.rrk) { const [id, k] = d.rrk.split('|'), r = rrS[id]; if (!r) return; const a = r.changes.filter(c => c.k === k), v = !a.every(c => c.on); a.forEach(c => c.on = v); draw(); rrFocus(`[data-rrk="${CSS.escape(d.rrk)}"]`); }
     if (d.rrall) { const r = rrS[d.rrall]; if (r) { r.changes.forEach(c => c.on = true); draw(); rrFocus(`[data-rrall="${CSS.escape(d.rrall)}"]`); } }
     if (d.rrnone) { const r = rrS[d.rrnone]; if (r) { r.changes.forEach(c => c.on = false); draw(); rrFocus(`[data-rrnone="${CSS.escape(d.rrnone)}"]`); } }
-    if (d.rrcrop) { const [id, cid] = d.rrcrop.split('|'), r = rrS[id], c = r && r.changes.find(q => q.cid === cid); if (!c) return; c.crop = !c.crop; draw(); rrFocus(`[data-rrcrop="${CSS.escape(d.rrcrop)}"]`); }
     if (d.rrrev) { const [id, cid] = d.rrrev.split('|'), r = rrS[id]; if (r) openRvw(id, r.changes.findIndex(c => c.cid === cid)); }
     if (d.rrrevall) openRvw(d.rrrevall, 0);
     if (d.rrapply) applyPicked(d.rrapply);
@@ -1734,7 +1968,7 @@
     b.hidden = !GURL || (!list.length && !trash.some(x => x.sentAt));
     const n = toSend().length;
     b.disabled = sending;
-    b.textContent = sending ? 'جارٍ الإرسال والنقل إلى InvoiceT…' : n ? `☁️ إرسال ونقل إلى InvoiceT (${n})` : '☁️ نقل إلى InvoiceT';
+    b.textContent = sending ? 'جارٍ النقل إلى الإقرار…' : n ? `☁️ نقل إلى الإقرار (${n})` : '☁️ نقل إلى الإقرار';
   }
   $('gsSend').onclick = async () => {
     if (!gs) { toast('اربط التطبيق بالإقرار أولًا: اكتب بريدك ورمز الدخول'); showTab('z'); const f = $('zsEmail'); if (f) { f.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); setTimeout(() => f.focus({ preventScroll: true }), 300); } return; }
@@ -1755,8 +1989,8 @@
         x.sentAt = now; x.sentRow = o.row; x.sentSig = sig.get(x.id); delete x.sendErr; ok++; });
       save(); saveTrash();
       const head = items.length ? (sk ? `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق»، ولم تُرسل ${sk} لأنها مكررة في الإقرار.` : `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق».`) : '';
-      if (!j.copy) showRep(head + '\n\nلم يتم النقل إلى InvoiceT: حدّث كود Apps Script في الإقرار وانشر نسخة جديدة (New version).', true);
-      else if (j.copy.error) showRep(head + '\n\nتعذّر النقل إلى InvoiceT: ' + j.copy.error, true);
+      if (!j.copy) showRep(head + '\n\nلم يتم النقل إلى الإقرار: حدّث كود Apps Script في الإقرار وانشر نسخة جديدة (New version).', true);
+      else if (j.copy.error) showRep(head + '\n\nتعذّر النقل إلى الإقرار: ' + j.copy.error, true);
       else showRep((head ? head + '\n\n' : '') + j.copy.msg, false);
     } catch (e) { console.warn(e); showRep('تعذّر الإرسال: ' + ((e && e.message) || 'تحقق من الاتصال'), true); }
     sending = false; draw();
@@ -1766,7 +2000,7 @@
   function showRep(t, bad) {
     const b = $('gsRep'); if (!b) { toast(t); return; }
     b.hidden = false; b.classList.toggle('bad', !!bad);
-    b.innerHTML = `<div class="gsrep-h"><b>${bad ? 'نتيجة الإرسال' : 'تم الإرسال والنقل إلى InvoiceT'}</b><button type="button" class="ghost" id="gsRepX" aria-label="إغلاق">✕ إغلاق</button></div><div class="gsrep-b">${esc(t)}</div>`;
+    b.innerHTML = `<div class="gsrep-h"><b>${bad ? 'نتيجة الإرسال' : 'تم النقل إلى الإقرار'}</b><button type="button" class="ghost" id="gsRepX" aria-label="إغلاق">✕ إغلاق</button></div><div class="gsrep-b">${esc(t)}</div>`;
     $('gsRepX').onclick = () => { b.hidden = true; };
     b.scrollIntoView({ block: 'nearest', behavior: RM ? 'auto' : 'smooth' });
   }
@@ -1799,5 +2033,5 @@
   // إزالة أي Service Worker قديم حتى تظهر آخر نسخة دائمًا
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => { });
   draw();
-  window.__invoiceApp = { addFiles, zones: () => zones, rr: rrS, tpl: { pickAnchor, readZone, regionWords }, redraw: () => draw(), extract, get busy() { return busy || queue.length > 0; }, get list() { return list; } };
+  window.__invoiceApp = { addFiles, zones: () => zones, rr: rrS, tpl: { pickAnchor, readZone, regionWords, anchorRect, loadSrc, getRec }, redraw: () => draw(), extract, get busy() { return busy || queue.length > 0; }, get list() { return list; } };
 })();
