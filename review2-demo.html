@@ -93,7 +93,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
 .tf{display:grid;gap:6px;padding:8px}
 .tf label{display:flex;gap:8px;align-items:center;font-size:14px}
 .tf input[type=checkbox]{width:22px;height:22px;accent-color:var(--blue)}
-.tf .chk{font-size:13px;color:var(--mute)}.tf .chk.bad{color:var(--stamp);font-weight:700}
+.tf .chk{font-size:13px;color:var(--mute)}.tf .chk button{min-height:36px;padding:2px 10px;font-size:13px;margin-inline-start:6px;border-color:var(--blue);color:var(--blue)}.tf .chk.bad{color:var(--stamp);font-weight:700}
 .tile.min .tb,.tile.min .tf{display:none}
 .hint{position:sticky;top:8px;margin:0 auto -36px;height:36px;line-height:24px;width:max-content;max-width:92vw;background:var(--ink);color:#fff;padding:6px 12px;border-radius:20px;font-size:14px;z-index:24;pointer-events:none}
 .toast{position:fixed;bottom:16px;inset-inline:0;margin:auto;width:max-content;max-width:92vw;background:var(--ok);color:#fff;padding:8px 14px;border-radius:8px;z-index:30}
@@ -103,7 +103,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
 <body>
 <header class="top">
   <h1>نموذج: مراجعة بيانات الفاتورة والمورد</h1>
-  <p>نموذج تفاعلي فقط، لا يغيّر التطبيق ولا يحفظ شيئًا. (التحديث الثاني)</p>
+  <p>نموذج تفاعلي فقط، لا يغيّر التطبيق ولا يحفظ شيئًا. (الإصدار 4: إن لم ترَ هذا الرقم فحدّث الصفحة)</p>
 </header>
 <main>
   <section class="slip">
@@ -296,9 +296,10 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
     const vn = INV().v.vn || 'هذا المورد';
     $('tplL').textContent = `احفظ هذه الأماكن لكل فواتير «${mode === 'ven' ? draft.vn || vn : vn}»`;
     let ck = '';
-    if (mode === 'inv') { const t = +draft.total, x = +draft.tax; $('chk').className = 'chk'; if (t && x) { const exp = t * 15 / 115, ok = Math.abs(exp - x) < .05; ck = ok ? `✓ الضريبة = 15% من المبلغ قبل الضريبة (${(t - x).toFixed(2)})` : `⚠ الضريبة لا تساوي 15/115 من الإجمالي (المتوقع ${exp.toFixed(2)}). تأكد أن الإجمالي شامل الضريبة.`; if (!ok) $('chk').className = 'chk bad'; } }
+    if (mode === 'inv') { const t = +draft.total, x = +draft.tax; $('chk').className = 'chk'; if (t && x) { const exp = t * 15 / 115, ok = Math.abs(exp - x) < .05; const pre = Math.abs(t * .15 - x) < .05, sug = (t + x).toFixed(2);
+      ck = ok ? `✓ الضريبة = 15% من المبلغ قبل الضريبة (${(t - x).toFixed(2)})` : pre ? `⚠ الإجمالي المقروء (${t.toFixed(2)}) هو المبلغ قبل الضريبة. الإجمالي المطلوب في الإقرار شامل الضريبة = ${sug} <button type="button" id="fixT" data-v="${sug}">استخدم ${sug}</button>` : `⚠ الضريبة لا تساوي 15% من المبلغ قبل الضريبة (المتوقع ${exp.toFixed(2)}). راجع الإجمالي والضريبة.`; if (!ok) $('chk').className = 'chk bad'; } }
     else { $('chk').className = 'chk'; ck = 'الرقم الضريبي للمورد هو المكتوب بجانب «البائع» وليس «العميل».'; }
-    $('chk').textContent = ck;
+    $('chk').innerHTML = ck; const fx = $('fixT'); if (fx) fx.onclick = () => { draft.total = fx.dataset.v; src.total = 'hand'; drawTile(); };
     drawRects(); $('tile').classList.toggle('focus', !!cur && drawM); clampTile();
   }
   function drawRects() {
@@ -339,10 +340,16 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
     const undo = () => { if (prev) rects[k] = prev; else delete rects[k]; drawRects(); };
     if (r.w < 8 || r.h < 8) { undo(); return; } // لمسة خفيفة لا تمسح التحديد السابق
     const bx = boxesOf(INV()), ins = bx.filter(b => inside(b, r)).sort((a, b) => Math.abs(a.y - b.y) > 6 ? a.y - b.y : b.x - a.x);
-    const vs = ins.filter(b => !b.L && isVal(k, b.t)), use = vs.length ? (k === 'date' || k === 'total' || k === 'tax' || k === 'vat' ? [vs[0]] : vs) : ins;
-    if (!use.length) { undo(); toast('لم أجد نصًا داخل المستطيل، ارسمه حول القيمة'); return; }
+    let vs = ins.filter(b => !b.L && isVal(k, b.t)), viaLab = null;
+    if (!vs.length) { // حُدد العنوان فقط: نقرأ القيمة التي بجانبه على نفس السطر
+      for (const L of ins.filter(b => b.L)) { const ln = bx.filter(b => !b.L && Math.abs(cy(b) - cy(L)) < L.h * .7 && isVal(k, b.t)).sort((p, q) => Math.abs(cx(p) - cx(L)) - Math.abs(cx(q) - cx(L)));
+        if (ln.length) { vs = [ln[0]]; viaLab = L; break; } } }
+    const use = k === 'vn' ? (vs.length ? vs : ins) : vs.length ? (k === 'no' ? vs : [vs[0]]) : [];
+    const TN = { no: 'رقم فاتورة', date: 'تاريخًا', total: 'مبلغًا', tax: 'مبلغًا', vat: 'رقمًا ضريبيًا من 15 رقمًا', vn: 'نصًا' };
+    if (!use.length) { undo(); toast(`لم أجد ${TN[k]} داخل المستطيل. ارسمه حول القيمة نفسها أو حول عنوانها.`); return; }
+    if (viaLab) { const v = use[0]; rects[k] = { x: v.x - 5, y: v.y - 5, w: v.w + 10, h: v.h + 10 }; toast(`حدّدت العنوان «${viaLab.t}»، فقرأت القيمة التي بجانبه`); }
     const fb = { x: Math.min(...use.map(b => b.x)), y: Math.min(...use.map(b => b.y)) }; fb.w = Math.max(...use.map(b => b.x + b.w)) - fb.x; fb.h = Math.max(...use.map(b => b.y + b.h)) - fb.y;
-    draft[k] = norm(k, use.map(b => b.t).join(' ')); src[k] = 'pick'; anc[k] = anchorFor(bx, r, fb); delete how[k];
+    draft[k] = norm(k, use.map(b => b.t).join(' ')); src[k] = 'pick'; anc[k] = viaLab ? anchorFor(bx, rects[k], fb) : anchorFor(bx, r, fb); delete how[k];
     cur = nextEmpty(k); drawTile(); hint(); };
   pg.addEventListener('pointerup', end); pg.addEventListener('pointercancel', end);
 
