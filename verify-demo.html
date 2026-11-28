@@ -70,8 +70,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
       <li>عند تعليمها «مدقق» وفيها ملاحظات (خانة ناقصة مثلًا) يظهر تنبيه، لكن التعليم يتم.</li>
       <li>في «عرض» خياران جديدان: المدققة فقط، وغير المدققة فقط. وفي «تجميع حسب» خيار «التدقيق». والشريط الأسود يعرض عدد كل منهما.</li>
       <li>يُصدَّر في ملف Excel عمود «التدقيق».</li>
+      <li><b>عند تحديث القالب وإعادة القراءة لا تتغير الفواتير المدققة إطلاقًا.</b> تُحدَّث غير المدققة فقط، وتظهر على المدققة ملاحظة بما اقترحه القالب دون تطبيقه.</li>
     </ul></div>
-    <p class="note" style="margin:0">جرّب: اضغط «✓ مدقق» على أي فاتورة، ثم غيّر رقمًا فيها، وجرّب «عرض» و«تجميع حسب».</p>
+    <p class="note" style="margin:0">جرّب: اضغط «✓ مدقق» على أي فاتورة، ثم غيّر رقمًا فيها، وجرّب «عرض» و«تجميع حسب». ثم جرّب زر «إعادة القراءة بالقالب الجديد» تحت.</p>
   </section>
 
   <section class="slip">
@@ -80,6 +81,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
       <label><span>تجميع حسب</span><select id="grp"><option value="">الكل</option><option value="v">التدقيق</option></select></label>
       <label><span>عرض</span><select id="show"><option value="">كل الفواتير</option><option value="ok">المدققة فقط</option><option value="no">غير المدققة فقط</option></select></label>
     </div>
+    <div class="lbar" style="align-items:center"><span>محاكاة: حدّثت قالب «شركة المثال للتجارة»</span><button type="button" class="primary" id="rr">🔁 إعادة القراءة بالقالب الجديد</button></div>
     <div class="ltot" id="tot"></div>
     <div id="list" style="display:grid;gap:12px"></div>
   </section>
@@ -106,6 +108,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
       <span class="vseg" role="group" aria-label="حالة التدقيق"><button type="button" class="ok" data-v="ok" data-id="${x.id}" aria-pressed="${x.v === 'ok'}">✓ مدقق</button><button type="button" class="no" data-v="no" data-id="${x.id}" aria-pressed="${x.v === 'no'}">✗ غير مدقق</button></span></header>
     <div class="grid">${FL.map(([k, l]) => `<label class="f"><span>${l}</span><input data-id="${x.id}" data-k="${k}" value="${esc(x[k])}"></label>`).join('')}</div>
     ${x.why ? `<p class="vnote warn">${esc(x.why)}</p>` : ''}
+    ${x.sug ? `<p class="vnote">🔒 لم تتغير لأنها مدققة. اقترح القالب: ${esc(x.sug)}</p>` : ''}
     <div class="foot"><button type="button" class="primary">🧾 مراجعة بيانات الفاتورة</button><button type="button">🏪 مراجعة بيانات المورد</button><button type="button" class="del">حذف الفاتورة</button></div></article>`;
   function draw() {
     const show = $('show').value, grp = $('grp').value;
@@ -117,10 +120,19 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
     $('list').innerHTML = ['no', 'ok'].map(v => { const g = a.filter(x => x.v === v); if (!g.length) return '';
       return `<h3 style="font-size:16px;padding:6px 10px;border-radius:6px;background:${v === 'ok' ? 'var(--okline)' : 'var(--noline)'};color:#fff">${v === 'ok' ? '✓ المدققة' : '✗ غير المدققة'} · ${g.length} فاتورة · ${sum(g)}</h3>${g.map(card).join('')}`; }).join('');
   }
+  const TPL = { 1: { tax: '45.85', date: '2026-10-22' }, 2: { date: '2026-11-06', tax: '90.50' } };
+  $('rr').onclick = () => {
+    const snap = L.map(x => ({ ...x })); let up = 0, kept = 0;
+    L.forEach(x => { const t = TPL[x.id]; if (!t) return;
+      const ch = Object.entries(t).filter(([k, v]) => x[k] !== v); if (!ch.length) return;
+      if (x.v === 'ok') { kept++; x.sug = ch.map(([k, v]) => FL.find(f => f[0] === k)[1] + ' ' + v).join('، '); }
+      else { up++; ch.forEach(([k, v]) => x[k] = v); x.why = 'حُدّثت من القالب الجديد.'; } });
+    draw(); toast(`حُدّثت ${up} فاتورة غير مدققة، ولم تتغير ${kept} مدققة`, () => { L.splice(0, L.length, ...snap); draw(); });
+  };
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-v]'); if (!b) return;
     const x = L.find(y => y.id === +b.dataset.id), v = b.dataset.v; if (x.v === v) return;
-    const prev = { v: x.v, why: x.why }; x.v = v; x.why = '';
+    const prev = { v: x.v, why: x.why, sug: x.sug }; x.v = v; x.why = ''; x.sug = '';
     if (v === 'ok') { const m = miss(x); if (m.length) x.why = '⚠ عُلّمت مدققة وفيها خانات ناقصة: ' + m.join('، '); }
     draw(); toast(v === 'ok' ? 'عُلّمت الفاتورة مدققة' : 'عُلّمت الفاتورة غير مدققة', () => { Object.assign(x, prev); draw(); });
     const n = document.querySelector(`[data-id="${x.id}"][data-v="${v}"]`); if (n) n.focus({ preventScroll: true });
