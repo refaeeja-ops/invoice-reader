@@ -227,13 +227,14 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
     return 1 - m[a.length][b.length] / Math.max(a.length, b.length); }
   function sim(a, b) { const ta = toks(a), tb = toks(b); const rec = ta.length ? ta.filter(x => tb.some(y => chr(x, y) >= .8)).length / ta.length : 0; return Math.max(chr(a, b), rec * .95); }
   const isVal = (k, t) => k === 'date' ? /\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{1,4}/.test(t) : k === 'total' || k === 'tax' ? /^\d[\d,]*\.?\d*$/.test(t) : k === 'vat' ? /\d{15}/.test(t) : k === 'no' ? /\d/.test(t) && !/^\d{1,2}$/.test(t) : true;
-  function anchorFor(bx, r) {
-    const labs = bx.filter(b => b.L && !inside(b, r));
+  // r = المستطيل المرسوم، f = صندوق القيمة نفسها داخله (لاختيار العنوان الصحيح لو شمل المستطيل أكثر من سطر)
+  function anchorFor(bx, r0, f) {
+    const r = f || r0, labs = bx.filter(b => b.L && !inside(b, r0));
     const same = labs.filter(b => Math.abs(cy(b) - (r.y + r.h / 2)) < Math.max(r.h, b.h) * .6);
     const above = labs.filter(b => cy(b) < r.y && cy(b) > r.y - 3 * Math.max(r.h, 20) && b.x < r.x + r.w && b.x + b.w > r.x);
     const d = b => Math.hypot(cx(b) - (r.x + r.w / 2), cy(b) - (r.y + r.h / 2));
     const a = (same.length ? same : above).sort((p, q) => d(p) - d(q))[0];
-    return a ? { t: a.t, y: a.y, off: { x: (r.x - a.x) / a.h, y: (r.y - a.y) / a.h, w: r.w / a.h, h: r.h / a.h } } : null;
+    return a ? { t: a.t, y: a.y, off: { x: (r0.x - a.x) / a.h, y: (r0.y - a.y) / a.h, w: r0.w / a.h, h: r0.h / a.h } } : null;
   }
   function readTpl(inv, k, f) {
     const bx = boxesOf(inv), txt = r => bx.filter(b => inside(b, r) && isVal(k, b.t)).sort((a, b) => Math.abs(a.y - b.y) > 6 ? a.y - b.y : b.x - a.x).map(b => b.t).join(' ');
@@ -331,14 +332,17 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
   // ---------- الرسم على الصفحة ----------
   let dr = null;
   const pt = e => { const r = pg.getBoundingClientRect(); return { x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom }; };
-  pg.addEventListener('pointerdown', e => { if (!drawM || !cur) return; e.preventDefault(); pg.setPointerCapture(e.pointerId); const p = pt(e); dr = { x0: p.x, y0: p.y }; rects[cur] = { x: p.x, y: p.y, w: 0, h: 0 }; drawRects(); });
+  pg.addEventListener('pointerdown', e => { if (!drawM || !cur) return; e.preventDefault(); pg.setPointerCapture(e.pointerId); const p = pt(e); dr = { x0: p.x, y0: p.y, prev: rects[cur] }; rects[cur] = { x: p.x, y: p.y, w: 0, h: 0 }; drawRects(); });
   pg.addEventListener('pointermove', e => { if (!dr) return; const p = pt(e); rects[cur] = { x: Math.min(p.x, dr.x0), y: Math.min(p.y, dr.y0), w: Math.abs(p.x - dr.x0), h: Math.abs(p.y - dr.y0) }; drawRects();
     const sc = $('sc'), r = sc.getBoundingClientRect(), m = 40; if (e.clientY > r.bottom - m) sc.scrollTop += 12; else if (e.clientY < r.top + m) sc.scrollTop -= 12; });
-  const end = () => { if (!dr) return; dr = null; const k = cur, r = rects[k];
-    if (r.w < 8 || r.h < 8) { delete rects[k]; drawRects(); return; }
-    const bx = boxesOf(INV()), raw = bx.filter(b => inside(b, r)).sort((a, b) => Math.abs(a.y - b.y) > 6 ? a.y - b.y : b.x - a.x).map(b => b.t).join(' ');
-    if (!raw) { delete rects[k]; drawRects(); toast('لم أجد نصًا داخل المستطيل، ارسمه حول القيمة'); return; }
-    draft[k] = norm(k, raw); src[k] = 'pick'; anc[k] = anchorFor(bx, r); delete how[k];
+  const end = () => { if (!dr) return; const prev = dr.prev; dr = null; const k = cur, r = rects[k];
+    const undo = () => { if (prev) rects[k] = prev; else delete rects[k]; drawRects(); };
+    if (r.w < 8 || r.h < 8) { undo(); return; } // لمسة خفيفة لا تمسح التحديد السابق
+    const bx = boxesOf(INV()), ins = bx.filter(b => inside(b, r)).sort((a, b) => Math.abs(a.y - b.y) > 6 ? a.y - b.y : b.x - a.x);
+    const vs = ins.filter(b => !b.L && isVal(k, b.t)), use = vs.length ? (k === 'date' || k === 'total' || k === 'tax' || k === 'vat' ? [vs[0]] : vs) : ins;
+    if (!use.length) { undo(); toast('لم أجد نصًا داخل المستطيل، ارسمه حول القيمة'); return; }
+    const fb = { x: Math.min(...use.map(b => b.x)), y: Math.min(...use.map(b => b.y)) }; fb.w = Math.max(...use.map(b => b.x + b.w)) - fb.x; fb.h = Math.max(...use.map(b => b.y + b.h)) - fb.y;
+    draft[k] = norm(k, use.map(b => b.t).join(' ')); src[k] = 'pick'; anc[k] = anchorFor(bx, r, fb); delete how[k];
     cur = nextEmpty(k); drawTile(); hint(); };
   pg.addEventListener('pointerup', end); pg.addEventListener('pointercancel', end);
 
