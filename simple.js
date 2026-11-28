@@ -406,7 +406,8 @@
       ${rvHtml(x)}</article>`;
     const dup = twinsOf(x).length > 0;
     return `<article class="inv${dup ? ' isdup' : ''}${opt && opt.odd ? ' odd' : ''}" id="c-${esc(x.id)}">
-      <header><div>${hide.includes('vendor_name') ? '' : `<b>${esc(x.vendor_name || 'مورد غير معروف')}</b>`}<small class="fp">📄 ${esc(x.file || '')}</small>${dupBadge(x)}${hide.includes('sent') ? '' : sentBadge(x)}</div><span class="amt">${esc(money(x.total))}</span></header>
+      <header><div>${hide.includes('vendor_name') ? '' : `<b>${esc(x.vendor_name || 'مورد غير معروف')}</b>`}<small class="fp">📄 ${esc(x.file || '')}</small>${dupBadge(x)}${hide.includes('sent') ? '' : sentBadge(x)}</div><span class="hr"><span class="amt">${esc(money(x.total))}</span>${verSeg(x)}</span></header>
+      ${x.vNote ? `<p class="vnote">${esc(x.vNote)}</p>` : ''}
       <div class="grid">${showF.map(f => fieldHtml(x, f)).join('')}${hide.includes('project') ? '' : projHtml(x)}
         <label class="f wide"><span>ملاحظات</span><textarea data-id="${esc(x.id)}" data-k="note" rows="2" placeholder="اكتب أي إشكالية في الفاتورة">${esc(x.note || '')}</textarea></label></div>
       <div class="nosupbox">${noSupHtml(x)}</div>${w.length ? `<ul class="warn">${w.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="okline">✓ البيانات الأساسية مكتملة</p>'}
@@ -417,6 +418,21 @@
         <small>تنتقل الفاتورة إلى «الفواتير المحذوفة» أسفل الصفحة مع السبب، ويمكن استرجاعها.</small>
         <div class="zbtns"><button type="button" class="del" data-delok="${esc(x.id)}" disabled>احذف الفاتورة</button><button type="button" data-delno="">تراجع</button></div></div>` : ''}
     </article>`;
+  }
+  // ---------- التدقيق: مدقق / غير مدقق (اللون على الزر فقط) ----------
+  const verSeg = x => `<span class="vseg" role="group" aria-label="حالة التدقيق"><button type="button" class="ok" data-ver="${esc(x.id)}" data-v="1" aria-pressed="${!!x.verified}">✓ مدقق</button><button type="button" class="no" data-ver="${esc(x.id)}" data-v="0" aria-pressed="${!x.verified}">✗ غير مدقق</button></span>`;
+  // أي تعديل على فاتورة مدققة يرجعها «غير مدققة» مع إمكانية التراجع
+  function unverify(x, undoFn) {
+    if (!x || !x.verified) return;
+    x.verified = false; x.vNote = 'عُدّلت بعد التدقيق، فرجعت «غير مدققة». دقّقها من جديد.'; save();
+    undoBar('عدّلت فاتورة مدققة فرجعت غير مدققة', () => { if (undoFn) undoFn(); x.verified = true; x.vNote = ''; save(); draw(); });
+  }
+  function setVerified(x, v) {
+    const prev = { verified: !!x.verified, vNote: x.vNote || '' }; if (prev.verified === v) return;
+    x.verified = v; x.vNote = ''; save(); draw();
+    const w = v ? issues(x) : [];
+    undoBar(v ? (w.length ? '⚠ عُلّمت مدققة وفيها ملاحظات: ' + w[0] : 'عُلّمت الفاتورة مدققة') : 'عُلّمت الفاتورة غير مدققة', () => { Object.assign(x, prev); save(); draw(); });
+    const n = document.querySelector(`[data-ver="${CSS.escape(x.id)}"][data-v="${v ? 1 : 0}"]`); if (n) n.focus({ preventScroll: true });
   }
   const dupBadge = x => twinsOf(x).length ? `<small class="db">⚠ مكررة: نفس المورد ونفس رقم الفاتورة</small>` : '';
   // ---------- التجميع (المورد، المشروع، طريقة الدفع، الشهر، التصدير) والترتيب ----------
@@ -434,6 +450,7 @@
     project: { k: x => x.project || '?', name: k => k === '?' ? 'بدون مشروع' : 'المشروع ' + k, hide: ['project'], order: (a, b) => a === '?' ? 1 : b === '?' ? -1 : cmpAr(a, b) },
     pay: { k: x => x.payment_method || '?', name: k => k === '?' ? 'بدون طريقة دفع' : k, hide: ['payment_method'], order: (a, b) => a === '?' ? 1 : b === '?' ? -1 : (PAYS.indexOf(a) + 1 || 99) - (PAYS.indexOf(b) + 1 || 99) || cmpAr(a, b) },
     month: { k: x => dOf(x).slice(0, 7) || '?', name: k => k === '?' ? 'بدون تاريخ' : MONTHS[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4), hide: [], order: (a, b) => a === '?' ? 1 : b === '?' ? -1 : cmpAr(b, a) },
+    ver: { k: x => x.verified ? '1' : '0', name: k => k === '1' ? '✓ المدققة' : '✗ غير المدققة', hide: [], order: (a, b) => cmpAr(a, b) },
     sent: { k: x => sendState(x) === 'ok' ? '1' : '0', name: k => k === '1' ? '✓ المصدرة إلى الإقرار' : 'لم تُصدّر إلى الإقرار بعد', hide: ['sent'], order: (a, b) => cmpAr(a, b) },
   };
   if (vw.group && !GR[vw.group]) vw.group = '';
@@ -444,6 +461,8 @@
     else if (vw.show === 'unsent') a = a.filter(x => sendState(x) !== 'ok');
     else if (vw.show === 'dup') a = a.filter(x => twinsOf(x).length);
     else if (vw.show === 'iss') a = a.filter(x => issues(x).length);
+    else if (vw.show === 'ver') a = a.filter(x => x.verified);
+    else if (vw.show === 'unver') a = a.filter(x => !x.verified);
     if (vw.sort === 'date') a.sort((p, q) => (dOf(q) ? 1 : 0) - (dOf(p) ? 1 : 0) || cmpAr(dOf(q), dOf(p)));
     else if (vw.sort === 'amount') a.sort((p, q) => (+q.total || 0) - (+p.total || 0));
     else if (vw.sort === 'no') a.sort((p, q) => cmpAr(invKey(p.invoice_number), invKey(q.invoice_number)));
@@ -458,15 +477,15 @@
   const statsHtml = s => `<span>${s.n} فاتورة</span><span>الإجمالي <b>${esc(money(s.t))}</b></span><span>الضريبة <b>${esc(money(s.v))}</b></span>`;
   function drawBar() {
     const bar = $('lbar'), tot = $('ltot'); if (!bar) return; bar.hidden = list.length < 2 && !vw.show && !vw.group;
-    const nd = list.filter(x => twinsOf(x).length).length, ns = list.filter(x => sendState(x) === 'ok').length;
+    const nd = list.filter(x => twinsOf(x).length).length, ns = list.filter(x => sendState(x) === 'ok').length, nv = list.filter(x => x.verified).length;
     const o = (v, t, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(t)}</option>`;
     const act = document.activeElement && ['vwGroup', 'vwSort', 'vwShow'].includes(document.activeElement.id) ? document.activeElement.id : '';
-    bar.innerHTML = `<label><span>تجميع حسب</span><select id="vwGroup">${o('vendor', 'المورد', vw.group)}${o('project', 'المشروع', vw.group)}${o('pay', 'طريقة الدفع', vw.group)}${o('month', 'شهر الفاتورة', vw.group)}${o('sent', 'التصدير إلى الإقرار', vw.group)}${o('', 'الكل', vw.group)}</select></label>
+    bar.innerHTML = `<label><span>تجميع حسب</span><select id="vwGroup">${o('vendor', 'المورد', vw.group)}${o('project', 'المشروع', vw.group)}${o('pay', 'طريقة الدفع', vw.group)}${o('month', 'شهر الفاتورة', vw.group)}${o('sent', 'التصدير إلى الإقرار', vw.group)}${o('ver', 'التدقيق', vw.group)}${o('', 'الكل', vw.group)}</select></label>
       <label><span>${vw.group ? 'الترتيب داخل المجموعة' : 'الترتيب'}</span><select id="vwSort">${o('new', 'الأحدث إضافة', vw.sort)}${o('old', 'الأقدم إضافة', vw.sort)}${o('date', 'تاريخ الفاتورة (الأحدث)', vw.sort)}${o('amount', 'المبلغ (الأكبر)', vw.sort)}${o('no', 'رقم الفاتورة', vw.sort)}</select></label>
-      <label><span>عرض</span><select id="vwShow">${o('', 'كل الفواتير', vw.show)}${o('dup', 'المكررة فقط (' + nd + ')', vw.show)}${GURL || ns ? o('sent', 'المصدرة إلى الإقرار (' + ns + ')', vw.show) + o('unsent', 'غير المصدرة إلى الإقرار (' + (list.length - ns) + ')', vw.show) : ''}${o('iss', 'التي فيها ملاحظات', vw.show)}</select></label>`;
+      <label><span>عرض</span><select id="vwShow">${o('', 'كل الفواتير', vw.show)}${o('dup', 'المكررة فقط (' + nd + ')', vw.show)}${GURL || ns ? o('sent', 'المصدرة إلى الإقرار (' + ns + ')', vw.show) + o('unsent', 'غير المصدرة إلى الإقرار (' + (list.length - ns) + ')', vw.show) : ''}${o('iss', 'التي فيها ملاحظات', vw.show)}${o('ver', 'المدققة فقط (' + nv + ')', vw.show)}${o('unver', 'غير المدققة فقط (' + (list.length - nv) + ')', vw.show)}</select></label>`;
     if (act) $(act).focus({ preventScroll: true });
     if (tot) { const a = viewList(), ds = a.map(dOf).filter(Boolean).sort(); tot.hidden = !list.length;
-      tot.innerHTML = `<span>المعروض:</span>${statsHtml(sumOf(a))}${ds.length ? `<span>تاريخ أول فاتورة <b>${ds[0]}</b></span><span>تاريخ آخر فاتورة <b>${ds[ds.length - 1]}</b></span>` : ''}`; }
+      tot.innerHTML = `<span>المعروض:</span>${statsHtml(sumOf(a))}${ds.length ? `<span>تاريخ أول فاتورة <b>${ds[0]}</b></span><span>تاريخ آخر فاتورة <b>${ds[ds.length - 1]}</b></span>` : ''}<span class="vg">✓ مدققة ${nv}</span><span class="vr">✗ غير مدققة ${list.length - nv}</span>`; }
   }
   // نسخ مطابقة تمامًا: نفس اسم الملف ونفس البيانات. نُبقي واحدة (المرسلة أو المعدّلة أولًا) وننقل الباقي إلى المحذوفات
   const copyKey = x => JSON.stringify([String(x.file || '').toLowerCase(), invKey(x.invoice_number), x.invoice_date || '', String(x.total ?? ''), vKey(x)]);
@@ -570,10 +589,14 @@
     let v = el.value.trim();
     if (k === 'total' || k === 'tax_amount') v = n2(v);
     if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\s/g, '');
+    if (x.verified && String(x[k] ?? '') !== String(v ?? '')) { const old = x[k], oe = !!(x.edited && x.edited[k]);
+      unverify(x, () => { x[k] = old; if (!oe && x.edited) delete x.edited[k]; });
+      x[k] = v; (x.edited = x.edited || {})[k] = 1; if (x.zsrc) delete x.zsrc[k]; save(); draw(); const f = document.querySelector(`[data-id="${CSS.escape(id)}"][data-k="${CSS.escape(k)}"]`); if (f) { f.focus({ preventScroll: true }); try { f.setSelectionRange(f.value.length, f.value.length); } catch { } } return; }
     x[k] = v; (x.edited = x.edited || {})[k] = 1; if (x.zsrc) delete x.zsrc[k]; save(); refreshCard(x);
   });
   document.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.ver) { const x = list.find(y => y.id === b.dataset.ver); if (x) setVerified(x, b.dataset.v === '1'); return; }
     if (b.dataset.del) {
       const x = list.find(y => y.id === b.dataset.del); if (!x) return;
       delAsk = x.id; draw(); const t = $('dr-' + x.id); if (t) { t.focus({ preventScroll: true }); t.scrollIntoView({ block: 'center', behavior: RM ? 'auto' : 'smooth' }); }
@@ -693,6 +716,7 @@
   document.addEventListener('click', e => { if (e.target.closest('#upSumX')) { upSum = null; drawSum(); } });
   async function reread(id) {
     const x = list.find(y => y.id === id); if (!x || live[id]) return;
+    if (x.verified) { toast('هذه الفاتورة مدققة فلا تتغير. علّمها «غير مدقق» أولًا ثم أعد قراءتها.'); return; }
     const rec = await IMG.get(id);
     let file = rec && rec.blob;
     if (!file) { // فواتير منقولة من النسخة السابقة: نعيد القراءة من الصورة المحفوظة
@@ -785,9 +809,10 @@
 
   // ---------- Excel ----------
   const XL = [['invoice_number', 'رقم الفاتورة', 18], ['invoice_date', 'تاريخ الفاتورة', 14], ['total', 'المبلغ الإجمالي', 16], ['tax_amount', 'مبلغ الضريبة', 14],
-    ['vendor_name', 'اسم المورد', 32], ['vendor_tax_number', 'الرقم الضريبي', 20], ['payment_method', 'طريقة الدفع', 14], ['project', 'المشروع', 12], ['note', 'ملاحظات', 50], ['file', 'الملف', 30]];
+    ['vendor_name', 'اسم المورد', 32], ['vendor_tax_number', 'الرقم الضريبي', 20], ['payment_method', 'طريقة الدفع', 14], ['project', 'المشروع', 12], ['verified', 'التدقيق', 12], ['note', 'ملاحظات', 50], ['file', 'الملف', 30]];
   const xlCell = (x, k) => {
     if (k === 'note') return noteOf(x);
+    if (k === 'verified') return x.verified ? 'مدقق' : 'غير مدقق';
     if (k === 'total' || k === 'tax_amount') { const v = n2(x[k]); return typeof v === 'number' ? v : (v || ''); }
     return x[k] || '';
   };
@@ -1313,6 +1338,7 @@
     if (k === 'invoice_date') v = P.findDate(v) || v;
     if (k === 'payment_method') v = payNorm(v);
     const oldKey = zoneFor(x);
+    if (String(x[k] ?? '') !== String(v ?? '')) { const old = x[k], oe = !!(x.edited && x.edited[k]); unverify(x, () => { x[k] = old; if (!oe && x.edited) delete x.edited[k]; }); }
     x[k] = v; (x.edited = x.edited || {})[k] = 1;
     let saved = false;
     if (!$('pkSaveL').hidden && $('pkSave').checked) {
@@ -1556,11 +1582,13 @@
     if (pend.length) { $('mrSave').disabled = true; $('mrSave').textContent = 'جارٍ حفظ العناوين…'; await Promise.race([Promise.all(pend), new Promise(res => setTimeout(res, 8000))]); if (pk.x !== x) return; }
     const oldKey = zoneFor(x), tplOn = !!($('mrTpl') && $('mrTpl').checked);
     const changed = ks.filter(k => pk.d[k].src);
+    const before = Object.fromEntries(ks.map(k => [k, x[k]])), bEd = { ...(x.edited || {}) };
     changed.forEach(k => { let v = String(pk.d[k].v).trim();
       if (k === 'total' || k === 'tax_amount') v = n2(v);
       if (k === 'vendor_tax_number') v = P.normDigits(v).replace(/\D/g, '');
       if (k === 'invoice_date') v = P.findDate(v) || v;
       x[k] = v; (x.edited = x.edited || {})[k] = 1; (x.zsrc = x.zsrc || {})[k] = 'pick'; });
+    if (changed.some(k => String(before[k] ?? '') !== String(x[k] ?? ''))) unverify(x, () => { Object.assign(x, before); x.edited = bEd; });
     const picked = ks.filter(k => pk.d[k].picked && pk.d[k].r);
     picked.forEach(k => { const r = pk.d[k].r; (x.zrect = x.zrect || {})[k] = { pg: r.pg, x: r.x, y: r.y, w: r.w, h: r.h }; });
     let saved = 0;
@@ -1785,6 +1813,14 @@
     const others = list.filter(y => y !== x && zoneFor(y) === key);
     const r = rrS[id] = { state: 'run', key, n: others.length, done: 0, changes: [], skipped: [], same: [], before: [] }; draw();
     for (const y of others) {
+      if (y.verified) { // المدققة لا تتغير أبدًا: نقرأ اقتراح القالب ونعرضه فقط
+        try { const rec = await getRec(y.id, y);
+          if (rec && rec.pages && rec.pages.length) { const c = { rec, pages: rec.pages, src: [], pdf: null };
+            for (const [k, z] of Object.entries(T.fields || {})) { const i = pgIndex(z.pg, c.pages.length); if (i < 0) continue;
+              const v = (await readZone(await loadSrc(c, i), k, z)).v;
+              if (!blank(v) && String(v) !== String(y[k] ?? '')) r.skipped.push({ id: y.id, k, why: '🔒 لم يتغير لأن الفاتورة مدققة. اقترح القالب: ' + esc(shown(k, v)) }); }
+            if (c.pdf) try { c.pdf.destroy(); } catch { } } } catch (e) { console.warn(e); }
+        r.done++; if (rrS[id] === r) draw(); continue; }
       r.before.push({ id: y.id, vals: Object.fromEntries(F.map(([k]) => [k, y[k]])), zsrc: { ...(y.zsrc || {}) }, zrect: JSON.parse(JSON.stringify(y.zrect || {})) });
       try {
         const rec = await getRec(y.id, y);

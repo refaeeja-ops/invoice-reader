@@ -255,6 +255,15 @@ button,.btn{touch-action:manipulation}
 .ltot b{font-family:"Readex Pro",sans-serif;direction:ltr;unicode-bidi:isolate}
 .flat{display:grid;gap:14px}
 .inv.odd{background:#eaf0ff}
+.inv .hr{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.vseg{display:inline-flex;border:2px solid var(--ink);border-radius:8px;overflow:hidden;background:#fff;flex:none}
+.vseg button{border:0;border-radius:0;min-height:44px;padding:4px 12px;font-weight:700;background:#fff;margin:0}
+.vseg button+button{border-inline-start:2px solid var(--ink)}
+.vseg .ok{color:#0b6a35}.vseg .no{color:#b3121f}
+.vseg .ok[aria-pressed="true"]{background:#0b6a35;color:#fff}
+.vseg .no[aria-pressed="true"]{background:#b3121f;color:#fff}
+.vnote{margin:0 0 10px;padding:6px 10px;border-radius:6px;background:#fff4d6;border:1px solid #8a5a00;color:#4a3000;font-size:14px}
+.ltot .vg{color:#7fe0a5;font-weight:700}.ltot .vr{color:#ffb3bb;font-weight:700}
 .grp{margin:0}
 .gh{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;width:100%;text-align:start;padding:10px 12px;background:var(--blue);color:#fff;border:0;border-radius:6px 6px 0 0;min-height:52px}
 .grp.closed .gh{border-radius:6px}
@@ -425,7 +434,7 @@ body:not(.tab-z) #zSec{display:none!important}
 <div class="toast" id="toast" role="status"></div>
 <script>
 /* تحديث تلقائي: إن كانت هذه الصفحة نسخة قديمة محفوظة في المتصفح نعيد فتحها بأحدث نسخة */
-(function () { var V = '202611281106'; window.APP_VERSION = V;
+(function () { var V = '202611281207'; window.APP_VERSION = V;
   try { fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.v && j.v !== V && location.search.indexOf('v=' + j.v) < 0) location.replace(location.pathname + '?v=' + j.v + location.hash);
   }).catch(function () { }); } catch (e) { } })();
@@ -433,12 +442,12 @@ body:not(.tab-z) #zSec{display:none!important}
 <script src="vendor/pdf.min.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/tesseract.min.js"></script>
-<script src="config.js?v=202611281106"></script>
-<script src="parse.js?v=202611281106"></script>
-<script src="export.js?v=202611281106"></script>
-<script src="digits.js?v=202611281106"></script>
-<script src="split.js?v=202611281106"></script>
-<script src="simple.js?v=202611281106"></script>
+<script src="config.js?v=202611281207"></script>
+<script src="parse.js?v=202611281207"></script>
+<script src="export.js?v=202611281207"></script>
+<script src="digits.js?v=202611281207"></script>
+<script src="split.js?v=202611281207"></script>
+<script src="simple.js?v=202611281207"></script>
 <script>document.getElementById('ver').textContent = window.APP_VERSION;</script>
 </body>
 </html>
