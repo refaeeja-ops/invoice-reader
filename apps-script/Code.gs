@@ -89,6 +89,14 @@ function fillAppShort_(sh) {
   const col = v.slice(1).map(r => { const n = vatShort_(r[6]), d = vatDigits_(r[6]); return [n !== null ? n : d ? 'غير صالح: ' + d : '']; });
   const rg = sh.getRange(2, c + 1, col.length, 1); rg.setNumberFormat('0'); rg.setValues(col);
 }
+// عمود «التدقيق»: مدقق / غير مدقق. يُضاف في نهاية الترويسة إن لم يوجد
+const VER_COL = 'التدقيق', INV_VER_COL = 'Verified';
+const verTxt_ = v => v === true || v === 'مدقق' ? 'مدقق' : 'غير مدقق';
+function colOf_(sh, name) {
+  const h = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(str_);
+  let c = h.indexOf(name); if (c < 0) { c = h.filter(Boolean).length ? sh.getLastColumn() : 0; sh.getRange(1, c + 1).setValue(name); }
+  return c;
+}
 function appInvoices_(ss, list, who) {
   const sh = appSheet_(ss), rows = values_(sh), now = new Date();
   const byId = {}, byKey = {};
@@ -113,6 +121,10 @@ function appInvoices_(ss, list, who) {
     out.forEach(o => { if (o.add !== undefined) { o.row = r0 + o.add; delete o.add; } });
   }
   fillAppShort_(sh);
+  // حالة التدقيق لكل فاتورة أُرسلت
+  const vc = colOf_(sh, VER_COL), vById = {};
+  (list || []).forEach(d => { if (str_(d.id)) vById[str_(d.id)] = verTxt_(d.Verified); });
+  out.forEach(o => { if (o.row && vById[o.id]) sh.getRange(o.row, vc + 1).setValue(vById[o.id]); });
   return out;
 }
 
@@ -227,15 +239,18 @@ function copyApp_(ss) {
   // الفواتير
   const iv = values_(invSh), ih = iv[0].map(str_);
   ['InvID', 'InvoiceNo', 'SupID', 'InvDate', 'Invamount', 'InvVat', 'Paymethod', 'EnteredBy', 'InvNote', 'RevDate', 'VATID', 'ProjectID'].forEach(n => { if (hIdx_(ih, n) < 0) ensureCol_(invSh, ih, n); });
+  if (hIdx_(ih, INV_VER_COL) < 0) ensureCol_(invSh, ih, INV_VER_COL);
   const I = n => hIdx_(ih, n);
+  const avc = ah.indexOf(VER_COL), invRowById = {};
   let maxInv = 0; const existing = {};
-  iv.slice(1).forEach(r => { const id = Number(r[I('InvID')]); if (id > maxInv) maxInv = id; if (str_(r[I('InvoiceNo')])) existing[str_(r[I('SupID')]) + '|' + invKey_(r[I('InvoiceNo')])] = r[I('InvID')]; });
-  const newSup = [], newInv = [], marks = [], now = new Date();
+  iv.slice(1).forEach((r, k) => { const id = Number(r[I('InvID')]); if (id > maxInv) maxInv = id; if (str_(r[I('InvID')])) invRowById[str_(r[I('InvID')])] = k + 2; if (str_(r[I('InvoiceNo')])) existing[str_(r[I('SupID')]) + '|' + invKey_(r[I('InvoiceNo')])] = r[I('InvID')]; });
+  const newSup = [], newInv = [], marks = [], verUpd = [], now = new Date();
   let copied = 0, dup = 0, skippedDel = 0, skippedNo = 0, skippedVat = 0, already = 0;
   const supLines = [], invLines = [], skipLines = [];
   av.slice(1).forEach((r, k) => {
     const rowNo = k + 2;
-    if (str_(r[ac])) { already++; return; }
+    if (str_(r[ac])) { already++; // نُسخت سابقًا: نحدّث حالة التدقيق فقط في InvoiceT
+      const ir = invRowById[str_(r[ac])]; if (avc >= 0 && ir && str_(r[avc])) { const v = verTxt_(str_(r[avc])); if (str_(iv[ir - 1][I(INV_VER_COL)]) !== v) { verUpd.push([ir, v]); } } return; }
     if (/^محذوفة/.test(str_(r[11]))) { skippedDel++; skipLines.push('صف ' + rowNo + ' (' + str_(r[5]) + ' ' + str_(r[1]) + '): محذوفة في التطبيق'); return; }
     const no = str_(r[1]); if (!no) { skippedNo++; skipLines.push('صف ' + rowNo + ' (' + str_(r[5]) + '): بلا رقم فاتورة'); return; }
     const vat = vatDigits_(r[6]), name = str_(r[5]) || 'مورد بدون اسم', who = str_(r[12]);
@@ -256,7 +271,7 @@ function copyApp_(ss) {
     const id = ++maxInv, row = ih.map(() => '');
     row[I('InvID')] = id; row[I('InvoiceNo')] = no; row[I('SupID')] = sup; row[I('InvDate')] = r[2]; row[I('Invamount')] = r[3]; row[I('InvVat')] = r[4];
     row[I('Paymethod')] = r[7]; row[I('EnteredBy')] = 'application'; row[I('InvNote')] = [str_(r[10]), str_(r[0])].filter(Boolean).join(' | ');
-    row[I('RevDate')] = r[13] || now; row[I('VATID')] = vat;
+    row[I('RevDate')] = r[13] || now; row[I('VATID')] = vat; row[I(INV_VER_COL)] = verTxt_(avc >= 0 ? str_(r[avc]) : '');
     const pj = str_(r[8]); row[I('ProjectID')] = /^\d+$/.test(pj) ? Number(pj) : pj;
     newInv.push(row); existing[key] = id; marks.push([rowNo, id]); copied++;
     invLines.push('InvID ' + id + ': فاتورة ' + no + ' | ' + name + ' | SupID ' + sup);
@@ -264,11 +279,13 @@ function copyApp_(ss) {
   if (newSup.length) { const r0 = supSh.getLastRow() + 1; supSh.getRange(r0, S('VATID') + 1, newSup.length, 1).setNumberFormat('0'); supSh.getRange(r0, 1, newSup.length, sh.length).setValues(newSup); }
   if (newInv.length) { const r0 = invSh.getLastRow() + 1; invSh.getRange(r0, I('InvoiceNo') + 1, newInv.length, 1).setNumberFormat('@'); invSh.getRange(r0, I('VATID') + 1, newInv.length, 1).setNumberFormat('@'); invSh.getRange(r0, 1, newInv.length, ih.length).setValues(newInv); }
   marks.forEach(([rn, id]) => app.getRange(rn, ac + 1).setValue(id));
+  verUpd.forEach(([ir, v]) => invSh.getRange(ir, I(INV_VER_COL) + 1).setValue(v));
   const lim = (a, n) => a.length > n ? a.slice(0, n).concat(['... و' + (a.length - n) + ' أخرى (التفاصيل كاملة في ورقة «سجل النسخ»)']) : a;
   const msg = 'نُسخت ' + copied + ' فاتورة إلى InvoiceT' + (copied ? ' (InvID من ' + (maxInv - copied + 1) + ' إلى ' + maxInv + ')' : '') + '.' +
     '\n\nموردون جدد أُضيفوا إلى SuppliersT: ' + newSup.length + (supLines.length ? '\n' + lim(supLines, 15).join('\n') : ' (كل الموردين موجودون مسبقًا)') +
     (invLines.length ? '\n\nالفواتير المنسوخة:\n' + lim(invLines, 15).join('\n') : '') +
     (already ? '\n\nنُسخت في مرة سابقة فلم تُكرر: ' + already : '') +
+    (verUpd.length ? '\n\nحُدّثت حالة التدقيق في الإقرار لـ ' + verUpd.length + ' فاتورة.' : '') +
     (skipLines.length ? '\n\nلم تُنسخ:\n' + lim(skipLines, 15).join('\n') : '') +
     (warn.length ? '\n\n⚠ تحذيرات:\n' + lim(warn, 10).join('\n') : '');
   log_(ss, [supLines.map(l => ['مورد جديد', l]), invLines.map(l => ['فاتورة منسوخة', l]), skipLines.map(l => ['لم تُنسخ', l]), warn.map(l => ['تحذير', l])].flat(), copied, newSup.length);
@@ -359,7 +376,7 @@ function doPost(e) {
       const results = appInvoices_(ss, body.invoices, who);
       if (!body.copy) return json_({ ok: true, results });
       let copy; try { copy = copyApp_(ss); } catch (er) { copy = { error: String(er && er.message || er) }; }
-      return json_({ ok: true, results, copy });
+      return json_({ ok: true, results, copy, ver: true });
     }
     if (body.action === 'copyToInvoiceT') { try { return json_({ ok: true, results: [], copy: copyApp_(ss) }); } catch (er) { return json_({ ok: false, error: String(er && er.message || er) }); } }
     if (body.action === 'zones') { zonesWrite_(ss, body.put, who); const z = zonesRead_(ss); return json_({ ok: true, zones: z.zones, deleted: z.deleted }); }

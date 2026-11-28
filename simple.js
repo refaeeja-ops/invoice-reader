@@ -1985,7 +1985,7 @@
   if (gs) setTimeout(supSync, 2500);
 
   // ---------- إرسال الفواتير إلى Google Sheet (ورقة «فواتير التطبيق») ----------
-  const sentSig = x => JSON.stringify([x.invoice_number, x.invoice_date, x.total, x.tax_amount, x.vendor_name, x.vendor_tax_number, x.payment_method, x.project || '', noteOf(x), x.file || '', !!x.deletedAt, x.delReason || '']);
+  const sentSig = x => JSON.stringify([x.invoice_number, x.invoice_date, x.total, x.tax_amount, x.vendor_name, x.vendor_tax_number, x.payment_method, x.project || '', noteOf(x), x.file || '', !!x.deletedAt, x.delReason || '']) + (x.verified ? '|v' : '');
   const sendState = x => !x.sentAt ? (x.sendErr ? 'err' : 'new') : x.sentSig === sentSig(x) ? 'ok' : 'dirty';
   function sentBadge(x) {
     if (!GURL && !x.sentAt) return '';
@@ -2014,7 +2014,7 @@
     try {
       const n2s = v => { const t = n2(v); return typeof t === 'number' ? t : (t || ''); };
       const invoices = items.map(x => ({ id: x.id, InvoiceNo: String(x.invoice_number || ''), Date: x.invoice_date || '', Total: n2s(x.total), Vat: n2s(x.tax_amount), Vendor: x.vendor_name || '',
-        VATID: x.vendor_tax_number || '', Payment: x.payment_method || '', Project: x.project || '', Note: noteOf(x), File: x.file || '', Deleted: !!x.deletedAt, DeleteReason: x.delReason || '' }));
+        VATID: x.vendor_tax_number || '', Payment: x.payment_method || '', Project: x.project || '', Note: noteOf(x), File: x.file || '', Deleted: !!x.deletedAt, DeleteReason: x.delReason || '', Verified: !!x.verified }));
       const r = await fetch(GURL, { method: 'POST', body: JSON.stringify(items.length ? { email: gs.email, token: gs.token, action: 'appInvoices', invoices, copy: true } : { email: gs.email, token: gs.token, action: 'copyToInvoiceT' }), redirect: 'follow' });
       let j; try { j = await r.json(); } catch { throw new Error('رد غير متوقع من الإقرار'); }
       if (!j.ok) throw new Error(j.error || 'تعذّر الإرسال');
@@ -2025,6 +2025,7 @@
         x.sentAt = now; x.sentRow = o.row; x.sentSig = sig.get(x.id); delete x.sendErr; ok++; });
       save(); saveTrash();
       const head = items.length ? (sk ? `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق»، ولم تُرسل ${sk} لأنها مكررة في الإقرار.` : `أُرسلت ${ok} فاتورة إلى «فواتير التطبيق».`) : '';
+      if (j.copy && !j.copy.error && !j.ver && items.some(x => x.verified)) j.copy.msg += '\n\n⚠ حالة التدقيق لم تُنقل: حدّث كود Apps Script في الإقرار وانشر نسخة جديدة (New version).';
       if (!j.copy) showRep(head + '\n\nلم يتم النقل إلى الإقرار: حدّث كود Apps Script في الإقرار وانشر نسخة جديدة (New version).', true);
       else if (j.copy.error) showRep(head + '\n\nتعذّر النقل إلى الإقرار: ' + j.copy.error, true);
       else showRep((head ? head + '\n\n' : '') + j.copy.msg, false);
