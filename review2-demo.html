@@ -57,13 +57,29 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
 .zr.cur{border-style:dashed}
 /* البلاطة العائمة */
 .tile{position:fixed;inset-inline:8px;bottom:8px;max-width:560px;margin-inline:auto;background:#fff;border:2px solid var(--ink);border-radius:10px;box-shadow:0 10px 30px #0008;z-index:25;display:grid}
-.tile.up{bottom:auto;top:110px}
+.tile.free{inset:auto;margin:0;width:min(560px,calc(100vw - 16px));will-change:left,top}
+.tile.drag{box-shadow:0 18px 44px #000a;outline:3px solid var(--blue)}
+.th{touch-action:none;cursor:grab}.tile.drag .th{cursor:grabbing}
+.grip{display:inline-flex;flex-direction:column;justify-content:center;gap:3px;padding:6px 4px;flex:none}
+.grip i{display:block;width:22px;height:3px;border-radius:2px;background:var(--mute)}
+.za{position:absolute;border:2px dashed var(--c);border-radius:3px;pointer-events:none;background:color-mix(in srgb,var(--c) 8%,transparent)}
+.za i{position:absolute;top:50%;inset-inline-start:-22px;transform:translateY(-50%);font:14px/1 sans-serif;font-style:normal}
+.tr .lk{grid-column:2;font-size:12px;color:var(--blue);font-weight:500;line-height:1.3}
+.offer{border:2px solid var(--blue);background:#eef2ff;border-radius:8px;padding:10px 12px;display:grid;gap:8px}
+.offer ol,.how ol{margin:0;padding-inline-start:22px;display:grid;gap:4px}
+.res{font-size:14px;display:grid;gap:6px}
+.res div{background:#fff;border:1px solid var(--cardline);border-radius:6px;padding:6px 8px}
+.res small{display:block;color:var(--mute)}
+.res .fb{color:#8a4b00}
+.fld .tag.tpl{color:var(--blue)}
 .th{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 4px;border-bottom:1px solid var(--cardline);background:var(--soft);border-radius:8px 8px 0 0}
 .th b{flex:1;font-size:15px;padding-inline-start:6px}
 .th button{min-height:40px;padding:4px 10px;font-size:14px}
 .tb{display:grid;gap:0;max-height:38vh;overflow:auto}
 .rv{-webkit-user-select:none;user-select:none}.rv input{-webkit-user-select:text;user-select:text}
 .tile.focus .tr:not(.on),.tile.focus .tf{display:none}
+.fch{display:none;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 8px;font-size:13px;color:var(--mute)}.tile.focus .fch{display:flex}
+.fch button{min-height:38px;padding:2px 10px;font-size:13px;border-color:var(--c);border-inline-start-width:5px}
 .tr{display:grid;grid-template-columns:6px 1fr auto;gap:2px 8px;align-items:center;padding:4px 8px 4px 6px;border-bottom:1px solid var(--cardline);cursor:pointer}
 .tr .sw{grid-row:1/3;align-self:stretch;border-radius:3px;background:var(--c)}
 .tr.on{background:#eef2ff;box-shadow:inset 0 0 0 2px var(--blue)}
@@ -87,32 +103,35 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
 <body>
 <header class="top">
   <h1>نموذج: مراجعة بيانات الفاتورة والمورد</h1>
-  <p>نموذج تفاعلي فقط، لا يغيّر التطبيق ولا يحفظ شيئًا.</p>
+  <p>نموذج تفاعلي فقط، لا يغيّر التطبيق ولا يحفظ شيئًا. (التحديث الثاني)</p>
 </header>
 <main>
   <section class="slip">
-    <h2>ما الذي يتغير</h2>
+    <h2>ما الجديد في هذا التحديث</h2>
     <div class="demo"><ul>
-      <li>إلغاء المقتطعات وأزرارها نهائيًا (زر «إظهار المقتطعات» وزر كل بطاقة).</li>
-      <li>زر «فتح الملف للمراجعة» يصبح <b>«مراجعة بيانات الفاتورة»</b>، ويفتح الملف كاملًا مع بلاطة عائمة فيها: رقم الفاتورة، تاريخ الفاتورة، الإجمالي، الضريبة.</li>
-      <li>زر جديد <b>«مراجعة بيانات المورد»</b> بنفس الطريقة، وفيه: اسم المورد والرقم الضريبي.</li>
-      <li>زر النقل يصبح «☁️ نقل إلى الإقرار».</li>
+      <li><b>سحب البلاطة بحرية:</b> امسك شريط عنوان البلاطة (⠿) واسحبها إلى أي مكان في الشاشة بإصبع واحد أو بالفأرة. إذا أفلتّها قرب أسفل الشاشة ترجع لمكانها الأصلي، وزر «⤓» يرجعها أيضًا. وتبقى في المكان الذي تركتها فيه عند فتح فاتورة أخرى.</li>
+      <li><b>القالب الذكي يعمل مع الشاشة الجديدة:</b> كل مستطيل ترسمه يربطه التطبيق بأقرب عنوان بجانبه (مثل «رقم الفاتورة:») ويظهر لك تحت الخانة «🔗 مرتبط بـ ...»، ويظهر العنوان بإطار متقطع على الفاتورة.</li>
+      <li>المقتطعات ملغاة، وزر النقل صار «☁️ نقل إلى الإقرار».</li>
     </ul></div>
-    <p class="note" style="margin:0">جرّب: اضغط «مراجعة بيانات الفاتورة»، ثم اختر خانة في البلاطة وارسم مستطيلًا على مكانها في الفاتورة. القيم المقروءة خطأ في هذا المثال عمدًا (الإجمالي والرقم الضريبي).</p>
+    <p class="note" style="margin:0">جرّب: افتح «مراجعة بيانات الفاتورة» في الفاتورة الأولى، صحّح الخانات برسم المستطيلات، واحفظ. سيعرض عليك تطبيق القالب على الفاتورة الثانية من نفس المورد، وتصميمها مختلف وعناوينها مكتوبة بشكل مختلف قليلًا.</p>
+  </section>
+
+  <section class="slip how">
+    <h2>كيف يعمل القالب الذكي (وهو يعمل الآن في التطبيق)</h2>
+    <ol>
+      <li>عند تحديد مكان خانة، يبحث التطبيق عن أقرب عنوان بجانبها على نفس السطر، وإن لم يجد فالعنوان الذي فوقها مباشرة.</li>
+      <li>يحفظ نص العنوان، ومكان الخانة <b>بالنسبة للعنوان</b> (يسار العنوان بمسافة كذا)، وليس مكانها الثابت في الصفحة فقط.</li>
+      <li>في فاتورة جديدة من نفس المورد يبحث عن نص العنوان حتى لو اختلفت كتابته قليلًا (تشابه 75% أو أكثر، مثل «الفاتورة» و«الفاتوره»)، ثم يقرأ القيمة في نفس الموضع النسبي منه.</li>
+      <li>إن لم يجد قيمة هناك يبحث في نفس سطر العنوان، وإن لم يجد العنوان أصلًا يرجع للمكان الثابت في الصفحة.</li>
+      <li>اسم المورد في رأس الفاتورة غالبًا بلا عنوان بجانبه، فيُحفظ بمكانه في الصفحة.</li>
+    </ol>
   </section>
 
   <section class="slip">
-    <h2>بطاقة الفاتورة بعد التعديل</h2>
-    <article class="inv">
-      <h3>📄 <bdi>فاتورة-0457.pdf</bdi> <small>صفحة واحدة</small></h3>
-      <div class="flds" id="flds"></div>
-      <div class="foot">
-        <button type="button" class="primary" data-open="inv">🧾 مراجعة بيانات الفاتورة</button>
-        <button type="button" data-open="ven">🏪 مراجعة بيانات المورد</button>
-        <button type="button" class="del">حذف</button>
-      </div>
-    </article>
-    <div class="sync"><button type="button" class="primary" id="syncBtn">☁️ نقل إلى الإقرار (1)</button><span class="note">كان: «إرسال ونقل إلى InvoiceT»</span></div>
+    <h2>فواتير المورد في التطبيق</h2>
+    <div id="cards" style="display:grid;gap:12px"></div>
+    <div class="offer" id="offer" hidden></div>
+    <div class="sync"><button type="button" class="primary" id="syncBtn">☁️ نقل إلى الإقرار (2)</button><span class="note">كان: «إرسال ونقل إلى InvoiceT»</span></div>
   </section>
 </main>
 
@@ -126,9 +145,10 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
   </div>
   <div class="sc" id="sc"><div class="hint" id="hint" hidden></div><div class="pgw"><div class="pgbox" id="pgbox"><div class="pg draw" id="pg"></div></div></div></div>
   <section class="tile" id="tile" aria-label="البلاطة">
-    <div class="th">
+    <div class="th" id="th" title="اسحب لتحريك البلاطة">
+      <span class="grip" aria-hidden="true"><i></i><i></i><i></i></span>
       <b id="tT">بيانات الإقرار</b>
-      <button type="button" id="tMove" title="نقل البلاطة للأعلى أو للأسفل">⇅ نقل</button>
+      <button type="button" id="tDock" title="إرجاع البلاطة لأسفل الشاشة" hidden>⤓</button>
       <button type="button" id="tMin" aria-expanded="true">▾ تصغير</button>
     </div>
     <div class="tb" id="tb"></div>
@@ -139,65 +159,118 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
     </div>
   </section>
 </div>
+<div class="pg" id="meas" style="visibility:hidden;position:fixed;left:0;top:0;z-index:-1;pointer-events:none" aria-hidden="true"></div>
 <div class="toast" id="toast" hidden></div>
 
 <script>
 (() => {
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  const W = 600, H = 820;
-  // صفحة فاتورة تجريبية (بيانات وهمية). كل عنصر: نص، x، y، حجم، محاذاة، نوع
-  const WORDS = [
-    ['شركة المثال للتجارة المحدودة', 575, 22, 22, 'r', 'vn', '#fff'],
-    ['EXAMPLE TRADING CO.', 25, 26, 16, 'l', '', '#fff'],
+  const W = 600, H = 820, BAD_VAT = '311273401600003';
+  // فاتورتان وهميتان من نفس المورد بتصميمين مختلفين. كل عنصر: نص، x، y، حجم، محاذاة، نوع (L = عنوان)
+  const P1 = [
+    ['شركة المثال للتجارة المحدودة', 575, 22, 22, 'r', 'vn', '#fff'], ['EXAMPLE TRADING CO.', 25, 26, 16, 'l', '', '#fff'],
     ['فاتورة ضريبية', 300, 90, 20, 'c'],
-    ['رقم الفاتورة:', 575, 130, 14, 'r', 'L'], ['INV-2026-0457', 440, 130, 14, 'r', 'no'],
-    ['تاريخ الفاتورة:', 575, 155, 14, 'r', 'L'], ['21/10/2026', 440, 155, 14, 'r', 'date'],
-    ['الرقم الضريبي للبائع:', 575, 180, 14, 'r', 'L'], ['300123456700003', 410, 180, 14, 'r', 'vat'],
+    ['رقم الفاتورة:', 575, 130, 14, 'r', 'L'], ['INV-2026-0457', 440, 130, 14, 'r'],
+    ['تاريخ الفاتورة:', 575, 155, 14, 'r', 'L'], ['21/10/2026', 440, 155, 14, 'r'],
+    ['الرقم الضريبي للبائع:', 575, 180, 14, 'r', 'L'], ['300123456700003', 410, 180, 14, 'r'],
     ['السجل التجاري:', 260, 130, 13, 'r', 'L'], ['1010998877', 150, 130, 13, 'r'],
     ['العنوان: الرياض - حي العليا', 260, 155, 13, 'r'],
     ['العميل:', 575, 225, 14, 'r', 'L'], ['مؤسسة العميل للمقاولات', 520, 225, 14, 'r'],
-    ['الرقم الضريبي للعميل:', 575, 250, 14, 'r', 'L'], ['311273401600003', 410, 250, 14, 'r'],
+    ['الرقم الضريبي للعميل:', 575, 250, 14, 'r', 'L'], [BAD_VAT, 410, 250, 14, 'r'],
     ['الصنف', 575, 300, 13, 'r', 'L'], ['الكمية', 330, 300, 13, 'r', 'L'], ['سعر الوحدة', 240, 300, 13, 'r', 'L'], ['المبلغ', 110, 300, 13, 'r', 'L'],
     ['كوع 25 مم ذهبي', 575, 330, 13, 'r'], ['100', 320, 330, 13, 'r'], ['2.99', 230, 330, 13, 'r'], ['299.00', 110, 330, 13, 'r'],
     ['الإجمالي قبل الضريبة', 575, 420, 14, 'r', 'L'], ['299.00', 200, 420, 14, 'r'],
-    ['ضريبة القيمة المضافة 15%', 575, 448, 14, 'r', 'L'], ['44.85', 200, 448, 14, 'r', 'tax'],
-    ['الإجمالي شامل الضريبة', 575, 478, 16, 'r', 'L'], ['343.85', 200, 478, 16, 'r', 'total'],
+    ['ضريبة القيمة المضافة 15%', 575, 448, 14, 'r', 'L'], ['44.85', 200, 448, 14, 'r'],
+    ['الإجمالي شامل الضريبة', 575, 478, 16, 'r', 'L'], ['343.85', 200, 478, 16, 'r'],
     ['ثلاثمائة وثلاثة وأربعون ريالًا وخمسة وثمانون هللة', 575, 510, 12, 'r'],
     ['شكرًا لتعاملكم معنا', 300, 760, 13, 'c'],
   ];
-  const pg = $('pg');
-  pg.innerHTML = '<div class="hdr"></div>' + [285, 315, 345, 405, 465, 495].map(y => `<div class="ln" style="top:${y}px"></div>`).join('') +
-    WORDS.map((w, i) => { const [t, x, y, fs, al, , col] = w; const pos = al === 'r' ? `right:${W - x}px` : al === 'l' ? `left:${x}px` : `left:${x}px;transform:translateX(-50%)`;
-      return `<span class="w" data-i="${i}" style="${pos};top:${y}px;font-size:${fs}px;${fs > 15 ? 'font-weight:700;' : ''}${col ? 'color:' + col : ''}">${esc(t)}</span>`; }).join('');
-  // صناديق الكلمات بإحداثيات الصفحة
-  let boxes = [];
-  const measure = () => { const pr = pg.getBoundingClientRect(), s = pr.width / W;
-    boxes = [...pg.querySelectorAll('.w')].map(e => { const r = e.getBoundingClientRect(); return { t: e.textContent, x: (r.left - pr.left) / s, y: (r.top - pr.top) / s, w: r.width / s, h: r.height / s }; }); };
+  // الفاتورة الثانية: الكتلة نزلت للأسفل، الأعمدة تحركت، وبعض العناوين مكتوبة بشكل مختلف
+  const P2 = [
+    ['شركة المثال للتجارة المحدودة', 575, 22, 22, 'r', 'vn', '#fff'], ['EXAMPLE TRADING CO.', 25, 26, 16, 'l', '', '#fff'],
+    ['فاتورة ضريبية مبسطة', 300, 95, 20, 'c'],
+    ['العميل:', 575, 140, 14, 'r', 'L'], ['مؤسسة العميل للمقاولات', 520, 140, 14, 'r'],
+    ['الرقم الضريبي للعميل:', 575, 165, 14, 'r', 'L'], [BAD_VAT, 410, 165, 14, 'r'],
+    ['رقم الفاتوره:', 575, 215, 14, 'r', 'L'], ['INV-2026-0512', 460, 215, 14, 'r'],
+    ['تاريخ الفاتوره:', 575, 240, 14, 'r', 'L'], ['05/11/2026', 460, 240, 14, 'r'],
+    ['الرقم الضريبي للبائع:', 575, 265, 14, 'r', 'L'], ['300123456700003', 410, 265, 14, 'r'],
+    ['الصنف', 575, 320, 13, 'r', 'L'], ['الكمية', 330, 320, 13, 'r', 'L'], ['سعر الوحدة', 240, 320, 13, 'r', 'L'], ['المبلغ', 110, 320, 13, 'r', 'L'],
+    ['محبس 1 بوصة', 575, 350, 13, 'r'], ['50', 320, 350, 13, 'r'], ['12.00', 230, 350, 13, 'r'], ['600.00', 110, 350, 13, 'r'],
+    ['الإجمالي قبل الضريبة', 575, 470, 14, 'r', 'L'], ['600.00', 250, 470, 14, 'r'],
+    ['ضريبة القيمة المضافة (15%)', 575, 498, 14, 'r', 'L'], ['90.00', 250, 498, 14, 'r'],
+    ['الإجمالي شامل ضريبة القيمة المضافة', 575, 528, 16, 'r', 'L'], ['690.00', 250, 528, 16, 'r'],
+    ['شكرًا لتعاملكم معنا', 300, 760, 13, 'c'],
+  ];
+  const LINES = { 1: [285, 315, 345, 405, 465, 495], 2: [305, 335, 365, 455, 515, 545] };
+  const INVS = [
+    { id: 1, file: 'فاتورة-0457.pdf', words: P1, v: { vn: 'شركة المثال', vat: BAD_VAT, no: 'INV-2026-O457', date: '', total: '299.00', tax: '44.85' }, ed: {}, how: {} },
+    { id: 2, file: 'فاتورة-0512.pdf', words: P2, v: { vn: 'شركة المثال', vat: BAD_VAT, no: '', date: '2026-11-05', total: '600.00', tax: '' }, ed: {}, how: {} },
+  ];
+  const pageHtml = inv => '<div class="hdr"></div>' + LINES[inv.id].map(y => `<div class="ln" style="top:${y}px"></div>`).join('') +
+    inv.words.map(w => { const [t, x, y, fs, al, k, col] = w; const pos = al === 'r' ? `right:${W - x}px` : al === 'l' ? `left:${x}px` : `left:${x}px;transform:translateX(-50%)`;
+      return `<span class="w" data-k="${k || ''}" style="${pos};top:${y}px;font-size:${fs}px;${fs > 15 ? 'font-weight:700;' : ''}${col ? 'color:' + col : ''}">${esc(t)}</span>`; }).join('');
+  // صناديق النصوص بإحداثيات الصفحة (في التطبيق تأتي من طبقة نص PDF أو من OCR)
+  function boxesOf(inv) { if (inv.bx) return inv.bx; const m = $('meas'); m.innerHTML = pageHtml(inv); const pr = m.getBoundingClientRect();
+    return inv.bx = [...m.querySelectorAll('.w')].map(e => { const r = e.getBoundingClientRect(); return { t: e.textContent, L: e.dataset.k === 'L', x: r.left - pr.left, y: r.top - pr.top, w: r.width, h: r.height }; }); }
 
+  // ---------- القالب الذكي ----------
+  const cx = b => b.x + b.w / 2, cy = b => b.y + b.h / 2, inside = (b, r) => cx(b) > r.x && cx(b) < r.x + r.w && cy(b) > r.y && cy(b) < r.y + r.h;
+  const nrm = s => String(s).replace(/[ً-ْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[:：()\[\].,،]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  const toks = s => nrm(s).split(' ').map(w => w.replace(/^ال/, '')).filter(Boolean);
+  function chr(a, b) { a = nrm(a); b = nrm(b); if (!a || !b) return 0; if (a === b) return 1;
+    const m = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) m[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return 1 - m[a.length][b.length] / Math.max(a.length, b.length); }
+  function rawSim(a, b) { if (a === b) return 1; const m = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) m[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return 1 - m[a.length][b.length] / Math.max(a.length, b.length); }
+  function sim(a, b) { const ta = toks(a), tb = toks(b); const rec = ta.length ? ta.filter(x => tb.some(y => chr(x, y) >= .8)).length / ta.length : 0; return Math.max(chr(a, b), rec * .95); }
+  const isVal = (k, t) => k === 'date' ? /\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{1,4}/.test(t) : k === 'total' || k === 'tax' ? /^\d[\d,]*\.?\d*$/.test(t) : k === 'vat' ? /\d{15}/.test(t) : k === 'no' ? /\d/.test(t) && !/^\d{1,2}$/.test(t) : true;
+  function anchorFor(bx, r) {
+    const labs = bx.filter(b => b.L && !inside(b, r));
+    const same = labs.filter(b => Math.abs(cy(b) - (r.y + r.h / 2)) < Math.max(r.h, b.h) * .6);
+    const above = labs.filter(b => cy(b) < r.y && cy(b) > r.y - 3 * Math.max(r.h, 20) && b.x < r.x + r.w && b.x + b.w > r.x);
+    const d = b => Math.hypot(cx(b) - (r.x + r.w / 2), cy(b) - (r.y + r.h / 2));
+    const a = (same.length ? same : above).sort((p, q) => d(p) - d(q))[0];
+    return a ? { t: a.t, y: a.y, off: { x: (r.x - a.x) / a.h, y: (r.y - a.y) / a.h, w: r.w / a.h, h: r.h / a.h } } : null;
+  }
+  function readTpl(inv, k, f) {
+    const bx = boxesOf(inv), txt = r => bx.filter(b => inside(b, r) && isVal(k, b.t)).sort((a, b) => Math.abs(a.y - b.y) > 6 ? a.y - b.y : b.x - a.x).map(b => b.t).join(' ');
+    if (!f.a) { const v = txt(f.r); return { r: f.r, v, how: 'بالمكان في الصفحة (لا يوجد عنوان بجانبه)' }; }
+    const c = bx.filter(b => b.L).map(b => ({ b, s: sim(f.a.t, b.t) })).filter(o => o.s >= .75).sort((p, q) => q.s - p.s || Math.abs(p.b.y - f.a.y) - Math.abs(q.b.y - f.a.y));
+    if (!c.length) return { r: f.r, v: txt(f.r), how: `لم يوجد العنوان «${f.a.t}»، فاستُخدم المكان الثابت`, fb: 1 };
+    const A = c[0].b, o = f.a.off, r = { x: A.x + o.x * A.h, y: A.y + o.y * A.h, w: o.w * A.h, h: o.h * A.h };
+    const rs = rawSim(f.a.t, A.t), pct = Math.round((c[0].s < 1 ? Math.max(c[0].s, rs) : rs) * 100);
+    let r2 = r, v = txt(r), how = A.t === f.a.t ? `وُجد العنوان «${A.t}»` : `وُجد العنوان «${A.t}» بدل «${f.a.t}» (تشابه ${pct}%)`;
+    if (!v) { const line = bx.filter(b => b !== A && !b.L && Math.abs(cy(b) - cy(A)) < A.h * .7 && isVal(k, b.t)).sort((p, q) => Math.abs(cx(p) - (r.x + r.w / 2)) - Math.abs(cx(q) - (r.x + r.w / 2)));
+      if (line.length) { const b = line[0]; v = b.t; r2 = { x: b.x - 5, y: b.y - 5, w: b.w + 10, h: b.h + 10 }; how += '، والقيمة على نفس السطر'; } }
+    return { r: r2, A, v, how };
+  }
+  let TPL = {}; // k -> {r, a}
+
+  // ---------- البطاقات ----------
   const FIELDS = {
     inv: [{ k: 'no', l: 'رقم الفاتورة', c: '#1838b8' }, { k: 'date', l: 'تاريخ الفاتورة', c: '#7a2fb8' }, { k: 'total', l: 'الإجمالي', c: '#0b6a35' }, { k: 'tax', l: 'الضريبة', c: '#b35a00' }],
     ven: [{ k: 'vn', l: 'اسم المورد', c: '#1838b8', ar: 1 }, { k: 'vat', l: 'الرقم الضريبي', c: '#b3121f' }],
   };
   const LBL = { vn: 'اسم المورد', vat: 'الرقم الضريبي', no: 'رقم الفاتورة', date: 'تاريخ الفاتورة', total: 'الإجمالي', tax: 'الضريبة' };
-  // ما قرأه التطبيق أول مرة (فيه أخطاء مقصودة)
-  const inv = { vn: 'شركة المثال', vat: '311273401600003', no: 'INV-2026-O457', date: '', total: '299.00', tax: '44.85', edited: {} };
-  const BAD_VAT = '311273401600003';
-
-  function drawCard() {
-    $('flds').innerHTML = ['vn', 'vat', 'no', 'date', 'total', 'tax'].map(k => { const v = inv[k], bad = k === 'vat' && v === BAD_VAT;
-      return `<div class="fld${bad ? ' bad' : ''}"><b>${LBL[k]}</b><span>${v ? esc(v) : '—'}</span>${bad ? '<span class="tag" style="color:var(--stamp)">⚠ رقم العميل وليس المورد</span>' : inv.edited[k] ? '<span class="tag">✎ عُدّل بالمراجعة</span>' : ''}</div>`; }).join('');
-  }
-  drawCard();
-
-  // حالة الشاشة
-  let mode = '', cur = '', draft = {}, rects = {}, src = {}, zoom = 1, drawM = true, fitZ = 1;
-  const flds = () => FIELDS[mode];
   const normDate = s => { const m = String(s).match(/(\d{1,4})[\/\-.](\d{1,2})[\/\-.](\d{1,4})/); if (!m) return s.trim(); let [, a, b, c] = m; if (a.length === 4) return `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`; return `${c}-${b.padStart(2, '0')}-${a.padStart(2, '0')}`; };
   const normNum = s => { const m = String(s).replace(/,/g, '').match(/\d+(?:\.\d+)?/g); return m ? (+m[m.length - 1]).toFixed(2) : String(s).trim(); };
   const norm = (k, s) => k === 'date' ? normDate(s) : k === 'total' || k === 'tax' ? normNum(s) : k === 'vat' ? (String(s).match(/\d{15}/) || [String(s).replace(/\D/g, '')])[0] : String(s).trim();
   const vatOk = v => /^3\d{13}3$/.test(v) && v !== BAD_VAT;
 
+  function drawCards() {
+    $('cards').innerHTML = INVS.map((x, i) => `<article class="inv"><h3>📄 <bdi>${esc(x.file)}</bdi> <small>صفحة واحدة</small></h3>
+      <div class="flds">${['vn', 'vat', 'no', 'date', 'total', 'tax'].map(k => { const v = x.v[k], bad = k === 'vat' && v === BAD_VAT;
+        return `<div class="fld${bad ? ' bad' : ''}"><b>${LBL[k]}</b><span>${v ? esc(v) : '—'}</span>${bad ? '<span class="tag" style="color:var(--stamp)">⚠ رقم العميل وليس المورد</span>' : x.ed[k] === 'tpl' ? '<span class="tag tpl">🔗 من القالب</span>' : x.ed[k] ? '<span class="tag">✎ عُدّل بالمراجعة</span>' : ''}</div>`; }).join('')}</div>
+      <div class="foot"><button type="button" class="primary" data-open="inv" data-i="${i}">🧾 مراجعة بيانات الفاتورة</button><button type="button" data-open="ven" data-i="${i}">🏪 مراجعة بيانات المورد</button><button type="button" class="del">حذف</button></div></article>`).join('');
+  }
+  drawCards();
+
+  // ---------- شاشة المراجعة ----------
+  let mode = '', ci = 0, cur = '', draft = {}, rects = {}, anc = {}, src = {}, how = {}, zoom = 1, drawM = true, fitZ = 1;
+  const pg = $('pg'), flds = () => FIELDS[mode], INV = () => INVS[ci];
   function status(k) {
     const v = (draft[k] || '').trim();
     if (k === 'vat' && v === BAD_VAT) return ['bad', '⚠ هذا رقم العميل، لا يُقبل'];
@@ -205,87 +278,129 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
     if (k === 'date' && v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return ['bad', '⚠ صيغة التاريخ غير واضحة'];
     if (!v) return ['bad', 'فارغة، حدّد مكانها'];
     if (src[k] === 'pick') return ['ok', '✓ قُرئت من المكان المحدد'];
+    if (src[k] === 'tpl') return ['ok', '✓ من قالب المورد'];
     if (src[k] === 'hand') return ['ok', '✎ كتابة يدوية'];
     return ['', 'كما قرأها التطبيق'];
   }
+  const linkTxt = k => src[k] === 'tpl' && how[k] ? '🔗 ' + how[k] : anc[k] ? `🔗 مرتبط بالعنوان «${anc[k].t}»` : rects[k] ? '📍 بلا عنوان بجانبه، يُحفظ بمكانه في الصفحة' : '';
   function drawTile() {
     $('tT').textContent = mode === 'inv' ? 'بيانات الإقرار' : 'بيانات المورد';
-    $('tb').innerHTML = flds().map(f => { const [c, t] = status(f.k);
+    $('tb').innerHTML = flds().map(f => { const [c, t] = status(f.k), lk = linkTxt(f.k);
       return `<div class="tr${cur === f.k ? ' on' : ''}" data-k="${f.k}" style="--c:${f.c}"><span class="sw"></span>
         <span class="lb">${f.l} <span class="st ${c}">${t}</span></span>
         <button type="button" class="pick" data-pick="${f.k}" aria-pressed="${cur === f.k}">${cur === f.k ? (drawM ? '✕ إيقاف' : '▭ ارسم') : rects[f.k] ? '↻ أعد التحديد' : '▭ حدّد'}</button>
-        <input ${f.ar ? 'class="ar" ' : ''}data-in="${f.k}" value="${esc(draft[f.k] || '')}" aria-label="${f.l}" inputmode="${['total', 'tax', 'vat'].includes(f.k) ? 'decimal' : 'text'}"></div>`; }).join('');
-    const vn = mode === 'ven' ? (draft.vn || 'هذا المورد') : (inv.vn || 'هذا المورد');
-    $('tplL').textContent = `احفظ هذه الأماكن لكل فواتير «${vn}»`;
+        <input ${f.ar ? 'class="ar" ' : ''}data-in="${f.k}" value="${esc(draft[f.k] || '')}" aria-label="${f.l}" inputmode="${['total', 'tax', 'vat'].includes(f.k) ? 'decimal' : 'text'}">
+        ${lk ? `<span class="lk">${esc(lk)}</span>` : ''}</div>`; }).join('') +
+      `<div class="fch">خانة أخرى: ${flds().filter(f => f.k !== cur).map(f => `<button type="button" data-pick="${f.k}" style="--c:${f.c}">${f.l}${status(f.k)[0] === 'bad' ? ' ⚠' : ''}</button>`).join('')}</div>`;
+    const vn = INV().v.vn || 'هذا المورد';
+    $('tplL').textContent = `احفظ هذه الأماكن لكل فواتير «${mode === 'ven' ? draft.vn || vn : vn}»`;
     let ck = '';
-    if (mode === 'inv') { const t = +draft.total, x = +draft.tax; if (t && x) { const exp = t * 15 / 115; ck = Math.abs(exp - x) < .05 ? `✓ الضريبة = 15% من الإجمالي قبل الضريبة (${(t - x).toFixed(2)})` : `⚠ الضريبة لا تساوي 15/115 من الإجمالي (المتوقع ${exp.toFixed(2)}). تأكد أن الإجمالي شامل الضريبة.`; $('chk').className = 'chk' + (Math.abs(exp - x) < .05 ? '' : ' bad'); } }
+    if (mode === 'inv') { const t = +draft.total, x = +draft.tax; $('chk').className = 'chk'; if (t && x) { const exp = t * 15 / 115, ok = Math.abs(exp - x) < .05; ck = ok ? `✓ الضريبة = 15% من المبلغ قبل الضريبة (${(t - x).toFixed(2)})` : `⚠ الضريبة لا تساوي 15/115 من الإجمالي (المتوقع ${exp.toFixed(2)}). تأكد أن الإجمالي شامل الضريبة.`; if (!ok) $('chk').className = 'chk bad'; } }
     else { $('chk').className = 'chk'; ck = 'الرقم الضريبي للمورد هو المكتوب بجانب «البائع» وليس «العميل».'; }
     $('chk').textContent = ck;
-    drawRects(); focusT();
+    drawRects(); $('tile').classList.toggle('focus', !!cur && drawM); clampTile();
   }
   function drawRects() {
-    pg.querySelectorAll('.zr').forEach(e => e.remove());
+    pg.querySelectorAll('.zr,.za').forEach(e => e.remove());
+    const bx = boxesOf(INV());
     flds().forEach(f => { const r = rects[f.k]; if (!r) return; const d = document.createElement('div'); d.className = 'zr' + (cur === f.k ? ' cur' : '');
-      d.style.cssText = `--c:${f.c};left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px`; d.innerHTML = `<i>${f.l}</i>`; pg.appendChild(d); });
+      d.style.cssText = `--c:${f.c};left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px`; d.innerHTML = `<i>${f.l}</i>`; pg.appendChild(d);
+      const at = src[f.k] === 'tpl' ? how[f.k + 'A'] : anc[f.k] && bx.find(b => b.t === anc[f.k].t);
+      if (at) { const e = document.createElement('div'); e.className = 'za'; e.style.cssText = `--c:${f.c};left:${at.x - 3}px;top:${at.y - 3}px;width:${at.w + 6}px;height:${at.h + 6}px`; e.innerHTML = '<i>🔗</i>'; e.title = 'العنوان المرتبط'; pg.appendChild(e); } });
   }
   function hint() { const f = flds().find(f => f.k === cur); $('hint').hidden = !f || !drawM; if (f) $('hint').textContent = `ارسم مستطيلًا حول: ${f.l}`; }
   function setCur(k) { cur = k; drawTile(); hint(); }
-  const focusT = () => $('tile').classList.toggle('focus', !!cur && drawM);
   function nextEmpty(after) { const ks = flds().map(f => f.k), i = ks.indexOf(after); return ks.slice(i + 1).find(k => status(k)[0] === 'bad') || ''; }
-
   function setZoom(z) { zoom = Math.max(.4, Math.min(4, z)); pg.style.transform = `scale(${zoom})`; $('pgbox').style.width = W * zoom + 'px'; $('pgbox').style.height = H * zoom + 'px'; $('zLbl').textContent = Math.round(zoom * 100) + '%'; }
   function fit() { fitZ = Math.min(1.6, ($('sc').clientWidth - 24) / W); setZoom(fitZ); }
   function setDraw(on) { drawM = on; $('mDraw').setAttribute('aria-pressed', on); $('mMove').setAttribute('aria-pressed', !on); pg.classList.toggle('draw', on); hint(); if (mode) drawTile(); }
 
-  function open(m) {
-    mode = m; draft = {}; src = {}; rects = {}; flds().forEach(f => draft[f.k] = inv[f.k]);
-    $('rvT').textContent = m === 'inv' ? 'مراجعة بيانات الفاتورة' : 'مراجعة بيانات المورد';
-    $('rv').hidden = false; document.body.style.overflow = 'hidden'; $('tile').classList.remove('min', 'up'); $('tMin').textContent = '▾ تصغير';
-    fit(); setDraw(true); measure();
-    // نبدأ بأول خانة فيها مشكلة
-    const first = flds().map(f => f.k).find(k => status(k)[0] === 'bad') || flds()[0].k; setCur(first);
+  function open(m, i) {
+    mode = m; ci = i; const x = INV(); draft = {}; src = {}; rects = {}; anc = {}; how = {};
+    flds().forEach(f => { draft[f.k] = x.v[f.k]; if (x.ed[f.k] === 'tpl' && x.how[f.k]) { src[f.k] = 'tpl'; how[f.k] = x.how[f.k].how; how[f.k + 'A'] = x.how[f.k].A; rects[f.k] = x.how[f.k].r; } });
+    pg.innerHTML = pageHtml(x);
+    $('rvT').textContent = (m === 'inv' ? 'مراجعة بيانات الفاتورة' : 'مراجعة بيانات المورد') + ' · ' + x.file;
+    $('rv').hidden = false; document.body.style.overflow = 'hidden'; $('tile').classList.remove('min'); $('tMin').textContent = '▾ تصغير';
+    fit(); setDraw(true);
+    setCur(flds().map(f => f.k).find(k => status(k)[0] === 'bad') || '');
     $('sc').scrollTop = 0;
   }
   function close() { $('rv').hidden = true; document.body.style.overflow = ''; $('hint').hidden = true; mode = ''; }
-  const toast = t => { $('toast').textContent = t; $('toast').hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => $('toast').hidden = true, 2600); };
+  const toast = t => { $('toast').textContent = t; $('toast').hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => $('toast').hidden = true, 3000); };
 
-  // الرسم على الصفحة
+  // ---------- الرسم على الصفحة ----------
   let dr = null;
   const pt = e => { const r = pg.getBoundingClientRect(); return { x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom }; };
-  pg.addEventListener('pointerdown', e => { if (!drawM || !cur) return; e.preventDefault(); pg.setPointerCapture(e.pointerId); const p = pt(e); dr = { x0: p.x, y0: p.y };
-    rects[cur] = { x: p.x, y: p.y, w: 0, h: 0 }; drawRects(); });
+  pg.addEventListener('pointerdown', e => { if (!drawM || !cur) return; e.preventDefault(); pg.setPointerCapture(e.pointerId); const p = pt(e); dr = { x0: p.x, y0: p.y }; rects[cur] = { x: p.x, y: p.y, w: 0, h: 0 }; drawRects(); });
   pg.addEventListener('pointermove', e => { if (!dr) return; const p = pt(e); rects[cur] = { x: Math.min(p.x, dr.x0), y: Math.min(p.y, dr.y0), w: Math.abs(p.x - dr.x0), h: Math.abs(p.y - dr.y0) }; drawRects();
     const sc = $('sc'), r = sc.getBoundingClientRect(), m = 40; if (e.clientY > r.bottom - m) sc.scrollTop += 12; else if (e.clientY < r.top + m) sc.scrollTop -= 12; });
-  const end = () => { if (!dr) return; dr = null; const r = rects[cur];
-    if (r.w < 8 || r.h < 8) { delete rects[cur]; drawRects(); return; }
-    measure(); const ws = boxes.filter(b => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; return cx > r.x && cx < r.x + r.w && cy > r.y && cy < r.y + r.h; }).sort((a, b) => Math.abs(a.y - b.y) > 6 ? a.y - b.y : b.x - a.x);
-    const raw = ws.map(b => b.t).join(' ');
-    const k = cur; if (!raw) { toast('لم أجد نصًا داخل المستطيل، ارسمه حول القيمة'); return; }
-    draft[k] = norm(k, raw); src[k] = 'pick';
+  const end = () => { if (!dr) return; dr = null; const k = cur, r = rects[k];
+    if (r.w < 8 || r.h < 8) { delete rects[k]; drawRects(); return; }
+    const bx = boxesOf(INV()), raw = bx.filter(b => inside(b, r)).sort((a, b) => Math.abs(a.y - b.y) > 6 ? a.y - b.y : b.x - a.x).map(b => b.t).join(' ');
+    if (!raw) { delete rects[k]; drawRects(); toast('لم أجد نصًا داخل المستطيل، ارسمه حول القيمة'); return; }
+    draft[k] = norm(k, raw); src[k] = 'pick'; anc[k] = anchorFor(bx, r); delete how[k];
     cur = nextEmpty(k); drawTile(); hint(); };
   pg.addEventListener('pointerup', end); pg.addEventListener('pointercancel', end);
 
-  // البلاطة
+  // ---------- البلاطة: سحب حر ----------
+  const tile = $('tile'), TP = 'demo-tile-pos';
+  let tpos = null; try { tpos = JSON.parse(localStorage.getItem(TP)); } catch { }
+  function placeTile() { if (!tpos) { tile.classList.remove('free'); tile.style.left = tile.style.top = ''; $('tDock').hidden = true; return; }
+    tile.classList.add('free'); $('tDock').hidden = false; clampTile(); }
+  function clampTile() { if (!tpos) return; const w = tile.offsetWidth, h = tile.offsetHeight;
+    tpos.x = Math.max(4, Math.min(innerWidth - w - 4, tpos.x)); tpos.y = Math.max(4, Math.min(innerHeight - Math.min(h, 56) - 4, tpos.y));
+    tile.style.left = tpos.x + 'px'; tile.style.top = tpos.y + 'px'; }
+  let tg = null, raf = 0;
+  $('th').addEventListener('pointerdown', e => { if (e.target.closest('button')) return; e.preventDefault(); $('th').setPointerCapture(e.pointerId);
+    const r = tile.getBoundingClientRect(); tg = { dx: e.clientX - r.left, dy: e.clientY - r.top, moved: 0 };
+    if (!tpos) { tpos = { x: r.left, y: r.top }; placeTile(); } tile.classList.add('drag'); });
+  $('th').addEventListener('pointermove', e => { if (!tg) return; tg.moved = 1; tpos.x = e.clientX - tg.dx; tpos.y = e.clientY - tg.dy;
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(clampTile); });
+  const tEnd = () => { if (!tg) return; tg = null; tile.classList.remove('drag');
+    if (tpos && tpos.y + tile.offsetHeight > innerHeight - 24) tpos = null; // إفلاتها قرب الأسفل يرجعها لمكانها
+    placeTile(); try { tpos ? localStorage.setItem(TP, JSON.stringify(tpos)) : localStorage.removeItem(TP); } catch { } };
+  $('th').addEventListener('pointerup', tEnd); $('th').addEventListener('pointercancel', tEnd);
+  $('th').addEventListener('dblclick', e => { if (!e.target.closest('button')) $('tMin').click(); });
+  $('tDock').onclick = () => { tpos = null; placeTile(); try { localStorage.removeItem(TP); } catch { } };
+  $('tMin').onclick = () => { const m = tile.classList.toggle('min'); $('tMin').textContent = m ? '▴ إظهار' : '▾ تصغير'; $('tMin').setAttribute('aria-expanded', !m); clampTile(); };
+  placeTile();
+
   $('tb').addEventListener('click', e => { const b = e.target.closest('[data-pick]'); if (b) { setDraw(true); setCur(cur === b.dataset.pick ? '' : b.dataset.pick); return; }
-    const row = e.target.closest('.tr'); if (row && !e.target.closest('input')) { const r = rects[row.dataset.k]; if (r) { const sc = $('sc'); sc.scrollTo({ top: r.y * zoom - 80, left: 0, behavior: 'smooth' }); } setCur(row.dataset.k); } });
-  $('tb').addEventListener('focusin', e => { const i = e.target.closest('[data-in]'); if (i && cur !== i.dataset.in) { cur = i.dataset.in; [...$('tb').children].forEach(r => r.classList.toggle('on', r.dataset.k === cur)); drawRects(); hint(); } });
+    const row = e.target.closest('.tr'); if (row && !e.target.closest('input')) { const r = rects[row.dataset.k]; if (r) $('sc').scrollTo({ top: r.y * zoom - 80, behavior: 'smooth' }); setCur(row.dataset.k); } });
   $('tb').addEventListener('input', e => { const i = e.target.closest('[data-in]'); if (!i) return; draft[i.dataset.in] = i.value; src[i.dataset.in] = 'hand';
     const st = i.parentElement.querySelector('.st'), [c, t] = status(i.dataset.in); st.className = 'st ' + c; st.textContent = t; });
   $('tb').addEventListener('change', () => drawTile());
-  $('tMin').onclick = () => { const m = $('tile').classList.toggle('min'); $('tMin').textContent = m ? '▴ إظهار' : '▾ تصغير'; $('tMin').setAttribute('aria-expanded', !m); };
-  $('tMove').onclick = () => $('tile').classList.toggle('up');
+
+  // ---------- الحفظ وعرض تطبيق القالب ----------
   $('save').onclick = () => { const bad = flds().filter(f => status(f.k)[0] === 'bad');
     if (bad.length) { toast('صحّح أولًا: ' + bad.map(f => f.l).join('، ')); setCur(bad[0].k); return; }
-    flds().forEach(f => { if (draft[f.k] !== inv[f.k]) { inv[f.k] = draft[f.k]; inv.edited[f.k] = 1; } });
-    const n = Object.keys(rects).length; close(); drawCard();
-    toast(n && $('tpl').checked ? `حُفظت التعديلات، وحُفظ ${n === 1 ? 'مكان واحد' : n === 2 ? 'مكانان' : n + ' أماكن'} في قالب المورد` : 'حُفظت التعديلات'); };
+    const x = INV(); flds().forEach(f => { if (draft[f.k] !== x.v[f.k] || src[f.k] === 'pick') { x.v[f.k] = draft[f.k]; x.ed[f.k] = src[f.k] === 'tpl' ? 'tpl' : 1; } });
+    const ks = Object.keys(rects).filter(k => src[k] === 'pick'); let saved = 0;
+    if ($('tpl').checked) ks.forEach(k => { TPL[k] = { r: { ...rects[k] }, a: anc[k] }; saved++; });
+    close(); drawCards();
+    toast(saved ? `حُفظت التعديلات، وحُفظ ${saved === 1 ? 'مكان واحد' : saved === 2 ? 'مكانان' : saved + ' أماكن'} في قالب المورد` : 'حُفظت التعديلات');
+    if (saved) offer(ks, ci); };
+  function offer(ks, from) {
+    const others = INVS.filter((_, i) => i !== from);
+    $('offer').hidden = false;
+    $('offer').innerHTML = `<b>حُفظ قالب «${esc(INVS[from].v.vn)}» (${ks.map(k => LBL[k]).join('، ')})</b>
+      <div class="note" style="margin:0">${ks.map(k => TPL[k].a ? `${LBL[k]} ← مرتبط بالعنوان «${esc(TPL[k].a.t)}»` : `${LBL[k]} ← بمكانه في الصفحة`).join('<br>')}</div>
+      <div class="row"><button type="button" class="primary" id="applyT">طبّق القالب على ${others.length === 1 ? 'الفاتورة الأخرى' : others.length + ' فواتير'} من نفس المورد</button></div>`;
+    $('applyT').onclick = () => {
+      const out = others.map(x => { const ch = Object.keys(TPL).map(k => { const r = readTpl(x, k, TPL[k]), nv = r.v ? norm(k, r.v) : ''; return { k, old: x.v[k], nv, r }; });
+        ch.forEach(c => { if (c.nv && !(x.ed[c.k] && x.ed[c.k] !== 'tpl')) { x.v[c.k] = c.nv; x.ed[c.k] = 'tpl'; x.how[c.k] = { how: c.r.how, A: c.r.A, r: c.r.r }; } });
+        return `<div><b>📄 <bdi>${esc(x.file)}</bdi></b>${ch.map(c => `<div style="border:0;padding:2px 0"><b>${LBL[c.k]}:</b> ${c.old ? `<s>${esc(c.old)}</s> ← ` : ''}<b>${c.nv ? esc(c.nv) : 'لم تُقرأ'}</b><small class="${c.r.fb ? 'fb' : ''}">${esc(c.r.how)}</small></div>`).join('')}</div>`; }).join('');
+      $('offer').innerHTML = `<b>✓ طُبّق القالب</b><div class="res">${out}</div><div class="note" style="margin:0">افتح «مراجعة بيانات الفاتورة» في الفاتورة الثانية لترى المستطيلات والعناوين المرتبطة عليها.</div>`;
+      drawCards(); };
+  }
+
   $('cancel').onclick = $('rvX').onclick = close;
   $('mDraw').onclick = () => setDraw(true); $('mMove').onclick = () => setDraw(false);
   $('zIn').onclick = () => setZoom(zoom * 1.25); $('zOut').onclick = () => setZoom(zoom / 1.25); $('zFit').onclick = fit;
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('rv').hidden) close(); });
-  document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => open(b.dataset.open));
+  $('cards').addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) open(b.dataset.open, +b.dataset.i); });
   $('syncBtn').onclick = () => toast('في النموذج فقط: هنا يبدأ النقل إلى الإقرار');
-  addEventListener('resize', () => { if (!$('rv').hidden && Math.abs(zoom - fitZ) < .01) fit(); });
+  addEventListener('resize', () => { clampTile(); if (!$('rv').hidden && Math.abs(zoom - fitZ) < .01) fit(); });
 })();
 </script>
 </body>
