@@ -31,8 +31,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .ltot .g{color:#7ee2a0;font-weight:700}.ltot .r{color:#ff9aa5;font-weight:700}
 /* البطاقة */
 .inv{border:2px solid var(--cardline);border-radius:8px;overflow:hidden;background:#fff;transition:background .2s,border-color .2s}
-.inv.v-ok{background:var(--okbg);border-color:var(--okline)}
-.inv.v-no{background:var(--nobg);border-color:var(--noline)}
+.inv.odd{background:#eaf0ff}
 .inv header{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:8px 10px;border-bottom:1px solid #0001}
 .inv header .t{flex:1;min-width:180px}
 .inv header b{display:block}.inv header small{color:var(--mute);font-size:12px}
@@ -40,10 +39,11 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .vseg{display:inline-flex;border:2px solid var(--ink);border-radius:8px;overflow:hidden;background:#fff}
 .vseg button{border:0;border-radius:0;min-height:44px;padding:4px 14px;font-weight:700;background:#fff}
 .vseg button+button{border-inline-start:2px solid var(--ink)}
+.vseg .ok{color:var(--okline)}.vseg .no{color:var(--noline)}
 .vseg .ok[aria-pressed="true"]{background:var(--okline);color:#fff}
 .vseg .no[aria-pressed="true"]{background:var(--noline);color:#fff}
 .vtag{display:inline-block;font-size:12px;font-weight:700;padding:1px 8px;border-radius:10px;margin-top:2px}
-.v-ok .vtag{background:var(--okline);color:#fff}.v-no .vtag{background:var(--noline);color:#fff}
+
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px 14px;padding:10px}
 .f{display:grid;gap:2px}.f span{font-size:13px;font-weight:700;color:var(--lbl)}
 .f input{font:inherit;font-size:15px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:42px}
@@ -64,7 +64,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
   <section class="slip">
     <h2>ما الذي يُضاف</h2>
     <div class="demo"><ul>
-      <li>في رأس كل فاتورة زران: <b>«✓ مدقق»</b> و<b>«✗ غير مدقق»</b>. الفاتورة المدققة خلفيتها خضراء، وغير المدققة خلفيتها حمراء فاتحة.</li>
+      <li>في رأس كل فاتورة زران: <b>«✓ مدقق»</b> و<b>«✗ غير مدقق»</b>. اللون يظهر على الزر فقط: «مدقق» أخضر و«غير مدقق» أحمر. أما بطاقة الفاتورة فتبقى بألوانها المعتادة المتبادلة (أبيض / أزرق فاتح).</li>
       <li>كل فاتورة جديدة تبدأ «غير مدقق».</li>
       <li>إذا عدّلت أي خانة في فاتورة مدققة ترجع تلقائيًا «غير مدقق» حتى تدققها من جديد، مع زر «تراجع».</li>
       <li>عند تعليمها «مدقق» وفيها ملاحظات (خانة ناقصة مثلًا) يظهر تنبيه، لكن التعليم يتم.</li>
@@ -102,8 +102,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
   let toastT;
   function toast(t, undo) { const e = $('toast'); e.innerHTML = `<span>${esc(t)}</span>${undo ? '<button type="button" id="tu">تراجع</button>' : ''}`; e.hidden = false;
     if (undo) $('tu').onclick = () => { undo(); e.hidden = true; }; clearTimeout(toastT); toastT = setTimeout(() => e.hidden = true, undo ? 6000 : 2600); }
-  const card = x => `<article class="inv v-${x.v}" id="c-${x.id}">
-    <header><div class="t"><b>${esc(x.vn)}</b><small>📄 <bdi>${esc(x.file)}</bdi></small><br><span class="vtag">${x.v === 'ok' ? '✓ مدققة' : '✗ غير مدققة'}</span></div>
+  const card = (x, i) => `<article class="inv v-${x.v}${i % 2 ? ' odd' : ''}" id="c-${x.id}">
+    <header><div class="t"><b>${esc(x.vn)}</b><small>📄 <bdi>${esc(x.file)}</bdi></small></div>
       <span class="amt">${esc(x.total)}</span>
       <span class="vseg" role="group" aria-label="حالة التدقيق"><button type="button" class="ok" data-v="ok" data-id="${x.id}" aria-pressed="${x.v === 'ok'}">✓ مدقق</button><button type="button" class="no" data-v="no" data-id="${x.id}" aria-pressed="${x.v === 'no'}">✗ غير مدقق</button></span></header>
     <div class="grid">${FL.map(([k, l]) => `<label class="f"><span>${l}</span><input data-id="${x.id}" data-k="${k}" value="${esc(x[k])}"></label>`).join('')}</div>
@@ -118,7 +118,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
     if (!a.length) { $('list').innerHTML = '<p class="note">لا توجد فواتير تطابق الاختيار.</p>'; return; }
     if (!grp) { $('list').innerHTML = a.map(card).join(''); return; }
     $('list').innerHTML = ['no', 'ok'].map(v => { const g = a.filter(x => x.v === v); if (!g.length) return '';
-      return `<h3 style="font-size:16px;padding:6px 10px;border-radius:6px;background:${v === 'ok' ? 'var(--okline)' : 'var(--noline)'};color:#fff">${v === 'ok' ? '✓ المدققة' : '✗ غير المدققة'} · ${g.length} فاتورة · ${sum(g)}</h3>${g.map(card).join('')}`; }).join('');
+      return `<h3 style="font-size:16px;padding:6px 10px;border-radius:6px;background:var(--ink);color:#fff">${v === 'ok' ? '✓ المدققة' : '✗ غير المدققة'} · ${g.length} فاتورة · ${sum(g)}</h3>${g.map(card).join('')}`; }).join('');
   }
   const TPL = { 1: { tax: '45.85', date: '2026-10-22' }, 2: { date: '2026-11-06', tax: '90.50' } };
   $('rr').onclick = () => {
