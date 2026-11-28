@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1838b8">
+<title>نموذج: تعليم الفاتورة مدققة أو غير مدققة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&family=Readex+Pro:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;--bg:#dfe3ee;--band:#1838b8;--paper:#fff;--ink:#0f1222;--mute:#4a5068;--line:#a9b1c8;--cardline:#c3c9da;--lbl:#2f3550;--blue:#1838b8;--stamp:#b3121f;--ok:#0b6a35;--soft:#f3f5fa;
+  --okbg:#dff3e6;--okline:#0b6a35;--nobg:#ffe3e6;--noline:#b3121f}
+*{box-sizing:border-box;min-width:0}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans Arabic",system-ui,sans-serif}
+h1,h2,h3{font-family:"Readex Pro","IBM Plex Sans Arabic",sans-serif;line-height:1.25;margin:0}
+.top{background:var(--band);color:#fff;padding:24px max(5vw,16px) 76px}
+.top h1{font-size:clamp(22px,5vw,30px)}.top p{margin:6px 0 0}
+main{max-width:900px;margin:-56px auto 48px;padding:0 max(3vw,12px);display:grid;gap:18px}
+.slip{background:var(--paper);border-radius:6px;padding:clamp(14px,3vw,22px);box-shadow:0 1px 0 var(--cardline),0 18px 40px -24px #0b1550aa;display:grid;gap:12px}
+.slip>h2{font-size:19px}
+.demo{background:#fffbd6;border:1px solid #c9b400;border-radius:6px;padding:10px 12px;font-size:14px}
+.demo ul{margin:6px 0 0;padding-inline-start:20px}
+button,select{font:inherit;font-weight:500;min-height:44px;padding:6px 14px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.del{color:var(--stamp);border-color:currentColor}
+/* شريط العرض والإجمالي */
+.lbar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:10px;border:1px solid var(--cardline);border-radius:6px;background:var(--soft)}
+.lbar label{display:grid;gap:2px;font-size:13px;font-weight:700;color:var(--lbl)}
+.ltot{display:flex;flex-wrap:wrap;gap:6px 16px;background:#0f1222;color:#fff;border-radius:6px;padding:8px 12px;font-size:14px}
+.ltot .g{color:#7ee2a0;font-weight:700}.ltot .r{color:#ff9aa5;font-weight:700}
+/* البطاقة */
+.inv{border:2px solid var(--cardline);border-radius:8px;overflow:hidden;background:#fff;transition:background .2s,border-color .2s}
+.inv.v-ok{background:var(--okbg);border-color:var(--okline)}
+.inv.v-no{background:var(--nobg);border-color:var(--noline)}
+.inv header{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:8px 10px;border-bottom:1px solid #0001}
+.inv header .t{flex:1;min-width:180px}
+.inv header b{display:block}.inv header small{color:var(--mute);font-size:12px}
+.amt{font-weight:700;color:var(--blue);font-size:17px}
+.vseg{display:inline-flex;border:2px solid var(--ink);border-radius:8px;overflow:hidden;background:#fff}
+.vseg button{border:0;border-radius:0;min-height:44px;padding:4px 14px;font-weight:700;background:#fff}
+.vseg button+button{border-inline-start:2px solid var(--ink)}
+.vseg .ok[aria-pressed="true"]{background:var(--okline);color:#fff}
+.vseg .no[aria-pressed="true"]{background:var(--noline);color:#fff}
+.vtag{display:inline-block;font-size:12px;font-weight:700;padding:1px 8px;border-radius:10px;margin-top:2px}
+.v-ok .vtag{background:var(--okline);color:#fff}.v-no .vtag{background:var(--noline);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px 14px;padding:10px}
+.f{display:grid;gap:2px}.f span{font-size:13px;font-weight:700;color:var(--lbl)}
+.f input{font:inherit;font-size:15px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:42px}
+.vnote{margin:0 10px 10px;font-size:13px;color:var(--mute)}
+.vnote.warn{color:var(--stamp);font-weight:700}
+.foot{display:flex;flex-wrap:wrap;gap:8px;padding:10px;border-top:1px solid #0001}
+.toast{position:fixed;bottom:16px;inset-inline:0;margin:auto;width:max-content;max-width:92vw;background:var(--ink);color:#fff;padding:8px 14px;border-radius:8px;z-index:30;display:flex;gap:10px;align-items:center}
+.toast button{min-height:36px;background:#fff;color:var(--ink)}
+.note{font-size:13px;color:var(--mute)}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>نموذج: تعليم الفاتورة مدققة أو غير مدققة</h1>
+  <p>نموذج تفاعلي فقط، لا يغيّر التطبيق ولا يحفظ شيئًا.</p>
+</header>
+<main>
+  <section class="slip">
+    <h2>ما الذي يُضاف</h2>
+    <div class="demo"><ul>
+      <li>في رأس كل فاتورة زران: <b>«✓ مدقق»</b> و<b>«✗ غير مدقق»</b>. الفاتورة المدققة خلفيتها خضراء، وغير المدققة خلفيتها حمراء فاتحة.</li>
+      <li>كل فاتورة جديدة تبدأ «غير مدقق».</li>
+      <li>إذا عدّلت أي خانة في فاتورة مدققة ترجع تلقائيًا «غير مدقق» حتى تدققها من جديد، مع زر «تراجع».</li>
+      <li>عند تعليمها «مدقق» وفيها ملاحظات (خانة ناقصة مثلًا) يظهر تنبيه، لكن التعليم يتم.</li>
+      <li>في «عرض» خياران جديدان: المدققة فقط، وغير المدققة فقط. وفي «تجميع حسب» خيار «التدقيق». والشريط الأسود يعرض عدد كل منهما.</li>
+      <li>يُصدَّر في ملف Excel عمود «التدقيق».</li>
+    </ul></div>
+    <p class="note" style="margin:0">جرّب: اضغط «✓ مدقق» على أي فاتورة، ثم غيّر رقمًا فيها، وجرّب «عرض» و«تجميع حسب».</p>
+  </section>
+
+  <section class="slip">
+    <h2>الفواتير</h2>
+    <div class="lbar">
+      <label><span>تجميع حسب</span><select id="grp"><option value="">الكل</option><option value="v">التدقيق</option></select></label>
+      <label><span>عرض</span><select id="show"><option value="">كل الفواتير</option><option value="ok">المدققة فقط</option><option value="no">غير المدققة فقط</option></select></label>
+    </div>
+    <div class="ltot" id="tot"></div>
+    <div id="list" style="display:grid;gap:12px"></div>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const L = [
+    { id: 1, file: 'فاتورة-0457.pdf', vn: 'شركة المثال للتجارة', no: 'INV-2026-0457', date: '2026-10-21', total: '343.85', tax: '44.85', v: 'ok' },
+    { id: 2, file: 'فاتورة-0512.pdf', vn: 'شركة المثال للتجارة', no: 'INV-2026-0512', date: '2026-11-05', total: '690.00', tax: '90.00', v: 'no' },
+    { id: 3, file: 'مؤسسة-النور-88.jpg', vn: 'مؤسسة النور للمواد', no: '88', date: '', total: '1,150.00', tax: '150.00', v: 'no' },
+    { id: 4, file: 'كهرباء-نوفمبر.pdf', vn: 'شركة الكهرباء', no: '552190', date: '2026-11-12', total: '230.00', tax: '30.00', v: 'ok' },
+  ];
+  const FL = [['no', 'رقم الفاتورة'], ['date', 'تاريخ الفاتورة'], ['total', 'المبلغ الإجمالي'], ['tax', 'مبلغ الضريبة'], ['vn', 'اسم المورد']];
+  const miss = x => FL.filter(([k]) => !String(x[k]).trim()).map(([, l]) => l);
+  let toastT;
+  function toast(t, undo) { const e = $('toast'); e.innerHTML = `<span>${esc(t)}</span>${undo ? '<button type="button" id="tu">تراجع</button>' : ''}`; e.hidden = false;
+    if (undo) $('tu').onclick = () => { undo(); e.hidden = true; }; clearTimeout(toastT); toastT = setTimeout(() => e.hidden = true, undo ? 6000 : 2600); }
+  const card = x => `<article class="inv v-${x.v}" id="c-${x.id}">
+    <header><div class="t"><b>${esc(x.vn)}</b><small>📄 <bdi>${esc(x.file)}</bdi></small><br><span class="vtag">${x.v === 'ok' ? '✓ مدققة' : '✗ غير مدققة'}</span></div>
+      <span class="amt">${esc(x.total)}</span>
+      <span class="vseg" role="group" aria-label="حالة التدقيق"><button type="button" class="ok" data-v="ok" data-id="${x.id}" aria-pressed="${x.v === 'ok'}">✓ مدقق</button><button type="button" class="no" data-v="no" data-id="${x.id}" aria-pressed="${x.v === 'no'}">✗ غير مدقق</button></span></header>
+    <div class="grid">${FL.map(([k, l]) => `<label class="f"><span>${l}</span><input data-id="${x.id}" data-k="${k}" value="${esc(x[k])}"></label>`).join('')}</div>
+    ${x.why ? `<p class="vnote warn">${esc(x.why)}</p>` : ''}
+    <div class="foot"><button type="button" class="primary">🧾 مراجعة بيانات الفاتورة</button><button type="button">🏪 مراجعة بيانات المورد</button><button type="button" class="del">حذف الفاتورة</button></div></article>`;
+  function draw() {
+    const show = $('show').value, grp = $('grp').value;
+    const a = L.filter(x => !show || x.v === show);
+    const nOk = L.filter(x => x.v === 'ok').length, sum = a => a.reduce((s, x) => s + (+String(x.total).replace(/,/g, '') || 0), 0).toFixed(2);
+    $('tot').innerHTML = `<span>المعروض: ${a.length} فاتورة</span><span>الإجمالي <b>${sum(a)}</b></span><span class="g">✓ مدققة ${nOk}</span><span class="r">✗ غير مدققة ${L.length - nOk}</span>`;
+    if (!a.length) { $('list').innerHTML = '<p class="note">لا توجد فواتير تطابق الاختيار.</p>'; return; }
+    if (!grp) { $('list').innerHTML = a.map(card).join(''); return; }
+    $('list').innerHTML = ['no', 'ok'].map(v => { const g = a.filter(x => x.v === v); if (!g.length) return '';
+      return `<h3 style="font-size:16px;padding:6px 10px;border-radius:6px;background:${v === 'ok' ? 'var(--okline)' : 'var(--noline)'};color:#fff">${v === 'ok' ? '✓ المدققة' : '✗ غير المدققة'} · ${g.length} فاتورة · ${sum(g)}</h3>${g.map(card).join('')}`; }).join('');
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-v]'); if (!b) return;
+    const x = L.find(y => y.id === +b.dataset.id), v = b.dataset.v; if (x.v === v) return;
+    const prev = { v: x.v, why: x.why }; x.v = v; x.why = '';
+    if (v === 'ok') { const m = miss(x); if (m.length) x.why = '⚠ عُلّمت مدققة وفيها خانات ناقصة: ' + m.join('، '); }
+    draw(); toast(v === 'ok' ? 'عُلّمت الفاتورة مدققة' : 'عُلّمت الفاتورة غير مدققة', () => { Object.assign(x, prev); draw(); });
+    const n = document.querySelector(`[data-id="${x.id}"][data-v="${v}"]`); if (n) n.focus({ preventScroll: true });
+  });
+  document.addEventListener('change', e => {
+    const i = e.target.closest('input[data-k]'); if (i) { const x = L.find(y => y.id === +i.dataset.id), old = x[i.dataset.k]; x[i.dataset.k] = i.value;
+      if (x.v === 'ok') { x.v = 'no'; x.why = 'عُدّلت بعد التدقيق، فرجعت «غير مدققة». دقّقها من جديد.'; draw(); toast('عدّلت فاتورة مدققة فرجعت غير مدققة', () => { x[i.dataset.k] = old; x.v = 'ok'; x.why = ''; draw(); }); }
+      return; }
+    if (e.target.id === 'show' || e.target.id === 'grp') draw();
+  });
+  draw();
+})();
+</script>
+</body>
+</html>
